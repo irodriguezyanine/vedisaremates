@@ -4,10 +4,15 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { heroVideoId } from "@/lib/site-config";
 
-const BTN_CLASS =
-  "flex flex-1 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-[#f4f6f8] px-3 py-3 text-center text-[13px] font-semibold text-[#2c3e50] shadow-sm transition hover:bg-white hover:shadow-md md:text-sm min-h-[48px] cursor-pointer";
+const DEFAULT_TRIGGER =
+  "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-[#f4f6f8] px-3 py-3 text-center text-[13px] font-semibold text-[#2c3e50] shadow-sm transition hover:bg-white hover:shadow-md md:text-sm min-h-[48px]";
 
-export function VideoModal() {
+type Props = {
+  /** Reemplaza el estilo del botón (p. ej. celda del grid a ancho completo). */
+  triggerClassName?: string;
+};
+
+export function VideoModal({ triggerClassName }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -29,12 +34,20 @@ export function VideoModal() {
     };
   }, [close, open]);
 
+  const triggerClass = triggerClassName ?? DEFAULT_TRIGGER;
+
   return (
     <>
-      <button type="button" className={BTN_CLASS} onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span aria-hidden>▶</span>
-        <strong>¿Cómo participar?</strong>
-        <span className="hidden sm:inline">Ver video</span>
+      <button type="button" className={triggerClass} onClick={() => setOpen(true)} aria-haspopup="dialog">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#009ade]/10 text-[#009ade] ring-1 ring-[#009ade]/20">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M8 5v14l11-7L8 5z" />
+          </svg>
+        </span>
+        <span className="max-w-[200px] text-left sm:max-w-none">
+          <span className="block text-[15px] font-bold text-[#0f2938]">¿Cómo participar?</span>
+          <span className="mt-0.5 block text-[13px] font-medium text-neutral-600">Ver video</span>
+        </span>
       </button>
 
       {open ? (
