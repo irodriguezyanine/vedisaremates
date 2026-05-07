@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RegisterForm } from "@/components/auth/register-form";
 import { CtaRegisterBand, RegisterPitch } from "@/components/home-sections";
 import { Reveal } from "@/components/reveal-on-scroll";
 
@@ -17,8 +18,8 @@ export default function RegistroPage() {
           <div>
             <h1 className="text-3xl font-black text-neutral-900">Registrarse</h1>
             <p className="mt-2 max-w-xl text-neutral-600">
-              Aquí tendrás el formulario con Supabase cuando lo conectemos. Mientras tanto, revisá los requisitos y
-              beneficios de tener cuenta en el portal.
+              Cuenta única para este portal y para Tasaciones Vedisa (misma Supabase). Completá el formulario o revisá los
+              requisitos al lado.
             </p>
           </div>
           <Link
@@ -30,7 +31,10 @@ export default function RegistroPage() {
         </div>
 
         <Reveal className="grid gap-12 lg:grid-cols-2 lg:items-start">
-          <CtaRegisterBand />
+          <div className="flex flex-col gap-8">
+            <RegisterForm />
+            <CtaRegisterBand />
+          </div>
           <RegisterPitch />
         </Reveal>
       </div>

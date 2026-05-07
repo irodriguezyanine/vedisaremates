@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { catalogoHref, SITE } from "@/lib/site-config";
 
+import { HeaderAuth } from "@/components/header-auth";
 import { ScrollHeader } from "./scroll-header";
 
 const navClasses = (active: boolean) =>
@@ -94,6 +95,9 @@ export function SiteHeader() {
           <Link href={cat} target="_blank" rel="noopener noreferrer" className={navClasses(false)}>
             Catálogo
           </Link>
+          <Link href="/subastas" className={navClasses(isActive("/subastas") || pathname?.startsWith("/subastas/"))}>
+            Subastas
+          </Link>
           <Link href="/como-participar" className={navClasses(isActive("/como-participar"))}>
             Cómo participar
           </Link>
@@ -112,18 +116,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <Link
-            href="/registro"
-            className="rounded-md border border-white/25 px-4 py-2 text-sm font-semibold text-white hover:border-[#33C7E3] hover:text-[#33C7E3]"
-          >
-            Registrarse
-          </Link>
-          <Link
-            href="/ingreso"
-            className="rounded-md bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] px-4 py-2 text-sm font-bold text-[#0f1f2c] shadow-md hover:brightness-105"
-          >
-            Inicia sesión
-          </Link>
+          <HeaderAuth />
         </div>
 
         <button
@@ -159,6 +152,9 @@ export function SiteHeader() {
             >
               Catálogo
             </Link>
+            <Link href="/subastas" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Subastas en vivo
+            </Link>
             <Link href="/como-participar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
               Cómo participar
             </Link>
@@ -174,21 +170,8 @@ export function SiteHeader() {
             <Link href="/buscar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
               Búsqueda avanzada
             </Link>
-            <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-4">
-              <Link
-                href="/registro"
-                className="rounded-md border border-white/25 py-3 text-center font-semibold"
-                onClick={closeMobile}
-              >
-                Registrarse
-              </Link>
-              <Link
-                href="/ingreso"
-                className="rounded-md bg-[#33C7E3] py-3 text-center font-bold text-[#0f1f2c]"
-                onClick={closeMobile}
-              >
-                Inicia sesión
-              </Link>
+            <div className="mt-2 border-t border-white/10 pt-4">
+              <HeaderAuth onNavigate={closeMobile} />
             </div>
           </div>
         </div>
