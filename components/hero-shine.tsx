@@ -1,7 +1,7 @@
 export function HeroShine() {
   return (
     <section
-      className="relative isolate w-full overflow-hidden bg-[#060d18] pb-14 pt-16 md:pb-20 md:pt-24"
+      className="relative isolate w-full overflow-hidden bg-[#060d18] pb-9 pt-10 md:pb-12 md:pt-14"
       aria-labelledby="hero-title"
     >
       {/* Capas de profundidad */}
@@ -27,11 +27,11 @@ export function HeroShine() {
       />
       <div
         aria-hidden
-        className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#060d18] to-transparent"
+        className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#060d18] to-transparent md:h-24"
       />
 
       <div className="relative mx-auto max-w-5xl px-5 text-center sm:px-8">
-        <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.4em] text-[#33C7E3] sm:text-[11px]">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.4em] text-[#33C7E3] sm:text-[11px]">
           Subastas online · Vehículos siniestrados
         </p>
 
@@ -51,13 +51,13 @@ export function HeroShine() {
           Bienvenidos al portal líder en subastas de vehículos siniestrados
         </h1>
 
-        <p className="animate-hero-shine-sub mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-slate-300 md:text-lg md:leading-relaxed">
+        <p className="animate-hero-shine-sub mx-auto mt-4 max-w-2xl text-pretty text-base leading-snug text-slate-300 md:mt-5 md:text-lg md:leading-relaxed">
           Participa con transparencia:{" "}
           <span className="font-semibold text-white">regístrate</span>, asegura tu{" "}
           <span className="font-semibold text-[#FFC600]">garantía</span> y oferta en remates 100% online.
         </p>
 
-        <div className="mx-auto mt-10 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold uppercase tracking-wider text-slate-400 md:mt-7">
           <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[#33C7E3] backdrop-blur-sm">
             Exhibición Pudahuel
           </span>
