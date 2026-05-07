@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+:root {
+  --vedisa-cyan: #33c7e3;
+  --vedisa-gold: #ffc600;
+  --vedisa-gray: #aaaaaa;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
