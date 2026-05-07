@@ -4,7 +4,7 @@ import { AuctionFeed } from "@/components/auction-feed";
 import { HeroActionBar } from "@/components/hero-action-bar";
 import { HeroCarousel } from "@/components/hero-carousel";
 import { HeroShine } from "@/components/hero-shine";
-import { CtaRegisterBand, RegisterPitch, TrustStrip } from "@/components/home-sections";
+import { TrustStrip } from "@/components/home-sections";
 import { Reveal } from "@/components/reveal-on-scroll";
 import { catalogoHref } from "@/lib/site-config";
 
@@ -28,28 +28,6 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl space-y-14 px-4 py-6 sm:px-6 lg:px-8">
         <Reveal>
           <TrustStrip />
-        </Reveal>
-        <Reveal className="grid gap-12 lg:grid-cols-2 lg:items-start">
-          <CtaRegisterBand />
-          <RegisterPitch />
-        </Reveal>
-
-        <Reveal className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-          <h2 className="text-center text-2xl font-extrabold uppercase tracking-tight text-[#009ade] md:text-3xl">
-            Vedisa <span className="text-[#FFC107]">Remates</span>
-          </h2>
-          <p className="mx-auto mt-4 max-w-3xl text-center text-neutral-600">
-            Expertos en gestión de activos y maximizar recupero. Más de tres décadas conectando compañías de seguros,
-            leasing y compradores en todo Chile con inventario digital trazable.
-          </p>
-          <div className="mt-8 text-center">
-            <Link
-              href="/acerca"
-              className="inline-flex rounded-full bg-[#FFC107] px-8 py-3 text-sm font-bold text-neutral-900 shadow-md hover:bg-[#009ade] hover:text-white"
-            >
-              Conocer la empresa
-            </Link>
-          </div>
         </Reveal>
 
         <Reveal className="text-center">
