@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -37,18 +38,18 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="flex shrink-0 flex-col leading-none hover:opacity-90"
+          className="flex shrink-0 items-center hover:opacity-90"
           aria-label={`${SITE.name} — inicio`}
         >
-          <span className="text-lg font-black tracking-tight sm:text-xl">
-            <span className="bg-gradient-to-r from-[#33C7E3] via-[#5ddbff] to-[#FFC600] bg-clip-text text-transparent">
-              VEDISA
-            </span>
-            <span className="text-white">REMATES</span>
-          </span>
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.25em] text-white/55 sm:text-[10px]">
-            {SITE.tagline}
-          </span>
+          <Image
+            src="/vedisa-logo-navbar.png"
+            alt={`${SITE.name} — ${SITE.tagline}`}
+            width={480}
+            height={96}
+            className="h-9 w-auto max-w-[min(58vw,260px)] sm:h-10 sm:max-w-[300px]"
+            sizes="(max-width: 640px) 58vw, 300px"
+            priority
+          />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Principal">
