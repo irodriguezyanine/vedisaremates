@@ -1,71 +1,68 @@
-import { AuctionFeed } from "@/components/auction-feed";
+import Link from "next/link";
 
-const WHATSAPP = "https://wa.me/56989323397";
-const MAPS =
-  "https://www.google.com/maps/dir/?api=1&destination=Arturo+Prat+6457,+Noviciado,+Pudahuel";
-const VIDEO_PLACEHOLDER = "#";
-const CATALOGO_HREF =
-  process.env.NEXT_PUBLIC_CATALOGO_URL ?? "https://catalogo.vedisaremates.cl/";
+import { AuctionFeed } from "@/components/auction-feed";
+import { HeroActionBar } from "@/components/hero-action-bar";
+import { HeroCarousel } from "@/components/hero-carousel";
+import { HeroShine } from "@/components/hero-shine";
+import { CtaRegisterBand, RegisterPitch, TrustStrip } from "@/components/home-sections";
+import { Reveal } from "@/components/reveal-on-scroll";
+import { catalogoHref } from "@/lib/site-config";
 
 export default function HomePage() {
+  const cat = catalogoHref();
+
   return (
-    <>
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#1e2838] via-[#252f3f] to-[#2d3b52] text-white">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 20% 20%, #33c7e3 0%, transparent 44%), radial-gradient(circle at 85% 10%, #ffc600 0%, transparent 28%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-22 lg:px-8 lg:py-24">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#33C7E3]">
-            Portal de subastas
-          </p>
-          <h1 className="max-w-3xl text-balance text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.65rem] lg:leading-tight">
-            Bienvenidos al portal líder en subastas de vehículos siniestrados
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg text-white/85">
-            Participá fácilmente: registrate y asegurá tu garantía para comenzar a ofertar.
-          </p>
+    <div className="bg-gradient-to-b from-[#e8f4fc] via-[#fdfefe] to-white">
+      <div className="mx-auto max-w-6xl px-4 pb-6 pt-14 sm:px-6 lg:px-8">
+        <HeroShine />
+      </div>
+      <HeroActionBar />
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <HeroCarousel />
+      </div>
 
-          <div className="mt-10 flex flex-wrap gap-3">
-            <a
-              href={WHATSAPP}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md bg-white px-4 py-2.5 text-sm font-semibold text-[#252f3f] shadow hover:bg-[#f3f7fa]"
+      <Reveal className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <AuctionFeed />
+      </Reveal>
+
+      <div className="mx-auto max-w-7xl space-y-14 px-4 py-6 sm:px-6 lg:px-8">
+        <Reveal>
+          <TrustStrip />
+        </Reveal>
+        <Reveal className="grid gap-12 lg:grid-cols-2 lg:items-start">
+          <CtaRegisterBand />
+          <RegisterPitch />
+        </Reveal>
+
+        <Reveal className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
+          <h2 className="text-center text-2xl font-extrabold uppercase tracking-tight text-[#009ade] md:text-3xl">
+            Vedisa <span className="text-[#FFC107]">Remates</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-3xl text-center text-neutral-600">
+            Expertos en gestión de activos y maximizar recupero. Más de tres décadas conectando compañías de seguros,
+            leasing y compradores en todo Chile con inventario digital trazable.
+          </p>
+          <div className="mt-8 text-center">
+            <Link
+              href="/acerca"
+              className="inline-flex rounded-full bg-[#FFC107] px-8 py-3 text-sm font-bold text-neutral-900 shadow-md hover:bg-[#009ade] hover:text-white"
             >
-              Contact Center: +56 9 8932 3397
-            </a>
-            <a
-              href={CATALOGO_HREF}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md border border-[#FFC600]/80 bg-[#FFC600] px-4 py-2.5 text-sm font-semibold text-[#252f3f] hover:bg-[#e6b200]"
-            >
-              Ver catálogo
-            </a>
-            <a
-              href={VIDEO_PLACEHOLDER}
-              className="inline-flex items-center rounded-md border border-white/35 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
-            >
-              ¿Cómo participar? (video)
-            </a>
-            <a
-              href={MAPS}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md border border-white/35 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
-            >
-              Cómo llegar
-            </a>
+              Conocer la empresa
+            </Link>
           </div>
-        </div>
-      </section>
+        </Reveal>
 
-      <AuctionFeed />
-    </>
+        <Reveal className="text-center">
+          <Link
+            href={cat}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-auto inline-flex items-center gap-2 rounded-full border-2 border-neutral-300 px-6 py-3 text-sm font-semibold text-neutral-800 hover:border-[#33C7E3]"
+          >
+            Abrir catálogo en nueva pestaña →
+          </Link>
+        </Reveal>
+      </div>
+    </div>
   );
 }

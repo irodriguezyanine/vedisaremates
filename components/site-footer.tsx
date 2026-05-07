@@ -1,25 +1,101 @@
-export function SiteFooter() {
-  return (
-    <footer className="mt-auto border-t border-black/10 bg-neutral-100 text-neutral-700">
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-10 text-sm sm:px-6 lg:px-8">
-        <p className="text-xs leading-relaxed text-neutral-600">
-          La información publicada es referencial, complementada con fotografías y videos. Los vehículos se
-          encuentran en exhibición para verificar su estado en forma presencial.{" "}
-          <strong className="text-neutral-800">VEDISA REMATES</strong> garantiza la información publicada en
-          nuestros recintos; una vez retirada de nuestras bodegas, se entiende aceptada a entera conformidad,
-          sin derecho a reclamos posteriores respecto a su estado y equipamiento.
-        </p>
+import Link from "next/link";
 
-        <div className="flex flex-wrap gap-4 border-t border-neutral-200 pt-6 text-neutral-600">
-          <span className="hover:text-[#33C7E3] cursor-default">Ayuda</span>
-          <span className="hover:text-[#33C7E3] cursor-default">Contáctenos</span>
-          <span className="hover:text-[#33C7E3] cursor-default">Acerca de</span>
-          <span className="hover:text-[#33C7E3] cursor-default">Términos y condiciones</span>
-          <span className="hover:text-[#33C7E3] cursor-default">Política de privacidad</span>
-          <span className="hover:text-[#33C7E3] cursor-default">Mapa del sitio</span>
+import { catalogoHref, SITE } from "@/lib/site-config";
+
+import { SocialShareBar } from "./social-share-bar";
+
+const link = "text-neutral-600 transition hover:text-[#009ade]";
+
+export function SiteFooter() {
+  const cat = catalogoHref();
+
+  return (
+    <footer className="mt-auto border-t border-neutral-200 bg-[#f7f9fb] text-neutral-700">
+      <SocialShareBar />
+
+      <div className="mx-auto max-w-7xl space-y-8 px-4 py-12 text-sm sm:px-6 lg:px-8">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-base font-black text-[#1a2c4e]">{SITE.name}</p>
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+              Información referencial con fotos y video. Exhibición presencial en bodega antes de rematar.
+            </p>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-neutral-400">Explorar</p>
+            <ul className="space-y-2">
+              <li>
+                <Link href={cat} target="_blank" rel="noopener noreferrer" className={link}>
+                  Catálogo
+                </Link>
+              </li>
+              <li>
+                <Link href="/como-participar" className={link}>
+                  Cómo participar
+                </Link>
+              </li>
+              <li>
+                <Link href="/buscar" className={link}>
+                  Búsqueda avanzada
+                </Link>
+              </li>
+              <li>
+                <Link href="/mapa" className={link}>
+                  Mapa del sitio
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-neutral-400">Legal</p>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/terminos" className={link}>
+                  Términos y condiciones
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacidad" className={link}>
+                  Política de privacidad
+                </Link>
+              </li>
+              <li>
+                <Link href="/faq" className={link}>
+                  Ayuda / FAQ
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-neutral-400">Contacto</p>
+            <ul className="space-y-2 text-neutral-600">
+              <li>
+                <a className={link} href={SITE.whatsappHref}>
+                  WhatsApp {SITE.contactPhoneDisplay}
+                </a>
+              </li>
+              <li>
+                <Link href="/contacto" className={link}>
+                  Formulario y horarios
+                </Link>
+              </li>
+              <li>
+                <a className={link} href={`mailto:${SITE.pagosEmail}`}>
+                  {SITE.pagosEmail}
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
 
-        <div className="space-y-2 border-t border-neutral-200 pt-6 text-sm">
+        <p className="text-xs leading-relaxed text-neutral-600">
+          La información publicada es referencial. Los vehículos se exhiben para verificar estado en forma
+          presencial. <strong className="text-neutral-800">{SITE.name}</strong> garantiza lo publicado en
+          recinto; retirado de bodegas implica aceptación conforme, sin reclamos posteriores por estado ni
+          equipamiento.
+        </p>
+
+        <div className="flex flex-wrap gap-6 border-y border-neutral-200 py-6 text-sm">
           <p>
             <strong>Oficinas:</strong> Américo Vespucio 2880, Piso 7
           </p>
@@ -29,14 +105,17 @@ export function SiteFooter() {
           <p>
             <strong>Horario:</strong> Lun–Vie 9:00–13:00 / 14:00–17:00 · Sáb–Dom cerrado
           </p>
-          <p className="rounded bg-white/80 px-3 py-2 text-neutral-700 ring-1 ring-neutral-200">
-            <strong>Remates 100% online:</strong> puede revisar las unidades pre-compra presencialmente en
-            nuestra bodega sin necesidad de garantía.
-          </p>
         </div>
 
-        <p className="border-t border-neutral-200 pt-6 text-xs text-neutral-500">
-          © Copyright {new Date().getFullYear()} VEDISA REMATES. Todos los derechos reservados.
+        <p className="rounded-lg border border-[#33C7E3]/30 bg-white px-4 py-3 text-center text-sm text-neutral-700 shadow-sm">
+          <span className="text-emerald-600" aria-hidden>
+            ✓
+          </span>{" "}
+          <strong>Remates 100% online:</strong> puede revisar unidades pre‑compra en bodega sin garantía.
+        </p>
+
+        <p className="text-center text-xs text-neutral-500">
+          © {new Date().getFullYear()} {SITE.name}. Todos los derechos reservados.
         </p>
       </div>
     </footer>

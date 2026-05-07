@@ -2,20 +2,71 @@
 
 :root {
   --vedisa-cyan: #33c7e3;
-  --vedisa-gold: #ffc600;
-  --vedisa-gray: #aaaaaa;
-  --background: #ffffff;
-  --foreground: #1a1a1a;
+  --vedisa-sky: #009ade;
+  --vedisa-gold: #ffc107;
+  --vedisa-navy: #1a2c4e;
+  --background: #fdfefe;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+}
+
+@keyframes vds-title-shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes vds-slide-up-title {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vds-slide-up-sub {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-shine-title {
+  background-size: 200% auto;
+  animation: vds-title-shine 7s linear infinite, vds-slide-up-title 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+  opacity: 0;
+}
+
+.animate-hero-shine-sub {
+  animation: vds-slide-up-sub 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-shine-title,
+  .animate-hero-shine-sub {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    background-position: center !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }

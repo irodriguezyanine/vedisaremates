@@ -1,72 +1,197 @@
-import Link from "next/link";
+"use client";
 
-const CATALOGO_HREF =
-  process.env.NEXT_PUBLIC_CATALOGO_URL ?? "https://catalogo.vedisaremates.cl/";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { catalogoHref, SITE } from "@/lib/site-config";
+
+import { ScrollHeader } from "./scroll-header";
+
+const navClasses = (active: boolean) =>
+  `rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+    active ? "bg-white/10 text-[#FFC600]" : "text-white/85 hover:bg-white/10 hover:text-[#33C7E3]"
+  }`;
 
 export function SiteHeader() {
+  const pathname = usePathname();
+  const cat = catalogoHref();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
+  const catRef = useRef<HTMLDivElement>(null);
+
+  const isActive = useCallback((p: string) => pathname === p, [pathname]);
+
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-black/10 bg-[#252f3f] text-white shadow-sm">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-wide">
-          <span className="text-[#33C7E3]">VEDISA</span>
-          <span className="font-semibold text-white/95">REMATES</span>
+    <ScrollHeader>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <Link
+          href="/"
+          className="flex shrink-0 flex-col leading-none hover:opacity-90"
+          aria-label={`${SITE.name} — inicio`}
+        >
+          <span className="text-lg font-black tracking-tight sm:text-xl">
+            <span className="bg-gradient-to-r from-[#33C7E3] via-[#5ddbff] to-[#FFC600] bg-clip-text text-transparent">
+              VEDISA
+            </span>
+            <span className="text-white">REMATES</span>
+          </span>
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.25em] text-white/55 sm:text-[10px]">
+            {SITE.tagline}
+          </span>
         </Link>
 
-        <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <Link href="/" className="text-white/90 hover:text-[#FFC600]">
-            Home
+        <nav className="hidden items-center gap-1 lg:flex" aria-label="Principal">
+          <Link href="/" className={navClasses(isActive("/"))}>
+            Inicio
           </Link>
 
-          <div className="group relative">
+          <div className="relative" ref={catRef}>
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-white/90 hover:text-[#FFC600]"
-              aria-expanded={false}
+              className={navClasses(false)}
+              aria-expanded={catOpen}
+              aria-haspopup="true"
+              onClick={() => setCatOpen((o) => !o)}
             >
-              Ver
-              <span className="text-[10px] opacity-70" aria-hidden>
-                ▼
-              </span>
+              Ver <span aria-hidden className="ml-0.5 text-[10px]">▾</span>
             </button>
-            <div className="invisible absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded border border-black/10 bg-white py-2 text-neutral-800 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100">
-              <Link href="/" className="block px-4 py-2 hover:bg-neutral-50">
-                Todas las categorías
-              </Link>
-              <span className="block px-4 py-1 text-xs text-neutral-500">
-                DESARME <span className="text-neutral-400">0</span>
-              </span>
-              <span className="block px-4 py-1 text-xs text-neutral-500">
-                LIVIANOS <span className="font-medium text-neutral-700">1</span>
-              </span>
-              <span className="block px-4 py-1 text-xs text-neutral-500">
-                PESADOS <span className="text-neutral-400">0</span>
-              </span>
-              <span className="block px-4 py-1 text-xs text-neutral-500">
-                VENTA DIRECTA <span className="font-medium text-neutral-700">17</span>
-              </span>
-            </div>
+            {catOpen ? (
+              <div
+                role="menu"
+                className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+              >
+                <Link href="/" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                  Todas las categorías
+                </Link>
+                <div className="border-t border-neutral-100 px-4 py-2 text-xs text-neutral-500">
+                  DESARME <span className="text-neutral-400">0</span>
+                </div>
+                <div className="px-4 py-2 text-xs text-neutral-500">
+                  LIVIANOS <span className="font-medium text-neutral-800">1</span>
+                </div>
+                <div className="px-4 py-2 text-xs text-neutral-500">
+                  PESADOS <span className="text-neutral-400">0</span>
+                </div>
+                <div className="px-4 py-2 text-xs text-neutral-500">
+                  VENTA DIRECTA <span className="font-medium text-neutral-800">17</span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
+          <Link href={cat} target="_blank" rel="noopener noreferrer" className={navClasses(false)}>
+            Catálogo
+          </Link>
+          <Link href="/como-participar" className={navClasses(isActive("/como-participar"))}>
+            Cómo participar
+          </Link>
+          <Link href="/faq" className={navClasses(isActive("/faq"))}>
+            Ayuda
+          </Link>
+          <Link href="/contacto" className={navClasses(isActive("/contacto"))}>
+            Contacto
+          </Link>
+          <Link href="/acerca" className={navClasses(isActive("/acerca"))}>
+            Acerca de
+          </Link>
+          <Link href="/buscar" className={navClasses(isActive("/buscar"))}>
+            Búsqueda
+          </Link>
+        </nav>
+
+        <div className="hidden items-center gap-2 lg:flex">
           <Link
             href="/registro"
-            className="rounded border border-white/30 px-3 py-1 text-white/95 hover:border-[#33C7E3] hover:text-[#33C7E3]"
+            className="rounded-md border border-white/25 px-4 py-2 text-sm font-semibold text-white hover:border-[#33C7E3] hover:text-[#33C7E3]"
           >
             Registrarse
           </Link>
           <Link
             href="/ingreso"
-            className="rounded border border-transparent bg-[#33C7E3] px-3 py-1 font-medium text-[#252f3f] hover:bg-[#2ab8d1]"
+            className="rounded-md bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] px-4 py-2 text-sm font-bold text-[#0f1f2c] shadow-md hover:brightness-105"
           >
             Inicia sesión
           </Link>
-          <Link href={CATALOGO_HREF} className="text-white/90 hover:text-[#FFC600]">
-            Catálogo
-          </Link>
-          <Link href="/buscar" className="text-white/70 hover:text-white">
-            Búsqueda avanzada
-          </Link>
-        </nav>
+        </div>
+
+        <button
+          type="button"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-white/20 lg:hidden"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
+          onClick={() => setMobileOpen((v) => !v)}
+        >
+          <span className="sr-only">Menú</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+            {mobileOpen ? (
+              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
       </div>
-    </header>
+
+      {mobileOpen ? (
+        <div id="mobile-nav" className="border-t border-white/10 bg-[#141c28] lg:hidden">
+          <div className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-4">
+            <Link href="/" className="rounded-md px-3 py-3 text-white/90 hover:bg-white/5" onClick={closeMobile}>
+              Inicio
+            </Link>
+            <Link
+              href={cat}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md px-3 py-3 hover:bg-white/5"
+              onClick={closeMobile}
+            >
+              Catálogo
+            </Link>
+            <Link href="/como-participar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Cómo participar
+            </Link>
+            <Link href="/faq" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Ayuda / FAQ
+            </Link>
+            <Link href="/contacto" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Contacto
+            </Link>
+            <Link href="/terminos" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Términos
+            </Link>
+            <Link href="/buscar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Búsqueda avanzada
+            </Link>
+            <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-4">
+              <Link
+                href="/registro"
+                className="rounded-md border border-white/25 py-3 text-center font-semibold"
+                onClick={closeMobile}
+              >
+                Registrarse
+              </Link>
+              <Link
+                href="/ingreso"
+                className="rounded-md bg-[#33C7E3] py-3 text-center font-bold text-[#0f1f2c]"
+                onClick={closeMobile}
+              >
+                Inicia sesión
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </ScrollHeader>
   );
 }
