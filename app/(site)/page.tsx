@@ -19,16 +19,9 @@ export default function HomePage() {
         <HeroActionBar />
       </div>
 
-      {/* Puente visual hacia el carrusel (evita corte brusco claro/oscuro) */}
-      <div className="relative w-full overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#f8fafc] via-[#cbd5e1] to-[#0f172a]"
-        />
-        <div className="relative mx-auto w-full max-w-[1920px] px-4 pb-10 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-10">
-          <p className="mb-4 text-center text-[11px] font-bold uppercase tracking-[0.28em] text-slate-600">
-            Campañas y remates
-          </p>
+      {/* Carrusel: solo imágenes, sin tarjeta ni título */}
+      <div className="w-full border-y border-neutral-200/80 bg-white">
+        <div className="mx-auto w-full max-w-[1920px]">
           <HeroCarousel />
         </div>
       </div>
