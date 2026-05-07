@@ -19,6 +19,15 @@ export function AdminSidebar() {
         <p className="text-xs uppercase tracking-wide text-neutral-500">VEDISA Remates</p>
         <p className="text-lg font-bold text-white">Administración</p>
       </div>
+      <Link
+        href="/"
+        className="block rounded-lg border border-white/20 px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:border-[#33C7E3]/60 hover:bg-white/5 hover:text-[#33C7E3]"
+      >
+        ← Volver al inicio público
+      </Link>
+      <p className="text-center text-[11px] leading-snug text-neutral-500">
+        No cierra sesión: seguís logueado como admin.
+      </p>
       <nav className="flex flex-col gap-1">
         {links.map(({ href, label }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
