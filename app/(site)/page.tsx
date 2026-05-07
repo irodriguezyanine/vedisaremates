@@ -4,7 +4,6 @@ import { AuctionFeed } from "@/components/auction-feed";
 import { HeroActionBar } from "@/components/hero-action-bar";
 import { HeroCarousel } from "@/components/hero-carousel";
 import { HeroShine } from "@/components/hero-shine";
-import { TrustStrip } from "@/components/home-sections";
 import { Reveal } from "@/components/reveal-on-scroll";
 import { catalogoHref } from "@/lib/site-config";
 
@@ -31,11 +30,7 @@ export default function HomePage() {
           <AuctionFeed />
         </Reveal>
 
-        <div className="mx-auto max-w-7xl space-y-14 px-4 pb-16 sm:px-6 lg:px-8">
-          <Reveal>
-            <TrustStrip />
-          </Reveal>
-
+        <div className="mx-auto max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8">
           <Reveal className="text-center">
             <Link
               href={cat}

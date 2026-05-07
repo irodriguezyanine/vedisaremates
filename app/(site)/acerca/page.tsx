@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { Reveal } from "@/components/reveal-on-scroll";
+import { TrustStrip } from "@/components/home-sections";
 import { catalogoHref } from "@/lib/site-config";
 
 export const metadata: Metadata = {
@@ -52,6 +53,10 @@ export default function AcercaPage() {
           Expertos en gestión de activos corporativos y maximizar recupero. Transformamos flotas, maquinaria y
           vehículos en capital líquido con agilidad, tecnología, transparencia y más de tres décadas de trayectoria.
         </p>
+      </Reveal>
+
+      <Reveal className="mt-14">
+        <TrustStrip />
       </Reveal>
 
       <Reveal className="mt-16">
