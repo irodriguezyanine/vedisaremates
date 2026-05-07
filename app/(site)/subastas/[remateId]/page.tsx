@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AuctionLiveRoom } from "@/components/subastas/auction-live-room";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,6 +11,17 @@ type Props = { params: Promise<{ remateId: string }> };
 export default async function SubastaDetallePage({ params }: Props) {
   const { remateId } = await params;
   const supabase = await createClient();
+
+  if (!supabase) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-14">
+        <Link href="/subastas" className="text-sm font-semibold text-[#009ade] hover:underline">
+          ← Sala de remates
+        </Link>
+        <SupabaseDeployWarning />
+      </div>
+    );
+  }
 
   const {
     data: { user },

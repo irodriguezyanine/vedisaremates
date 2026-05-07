@@ -1,10 +1,19 @@
 import { redirect } from "next/navigation";
 
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
+  if (!supabase) {
+    return (
+      <div className="flex min-h-screen justify-center bg-[#0c1016] px-4 py-14">
+        <SupabaseDeployWarning />
+      </div>
+    );
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

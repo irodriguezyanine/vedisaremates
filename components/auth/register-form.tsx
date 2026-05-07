@@ -22,6 +22,12 @@ export function RegisterForm() {
     setLoading(true);
     try {
       const supabase = createClient();
+      if (!supabase) {
+        setError(
+          "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en el despliegue. Configúralas en Vercel (Environment Variables) y redesplegar.",
+        );
+        return;
+      }
       const { error: signErr } = await supabase.auth.signUp({
         email: email.trim(),
         password,

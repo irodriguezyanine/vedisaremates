@@ -1,10 +1,21 @@
 import Link from "next/link";
 
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/server";
 import type { PortalRemateRow } from "@/lib/portal-types";
 
 export default async function SubastasIndexPage() {
   const supabase = await createClient();
+
+  if (!supabase) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-14">
+        <h1 className="text-3xl font-black text-neutral-900">Sala de subastas</h1>
+        <SupabaseDeployWarning />
+      </div>
+    );
+  }
+
   const { data, error } = await supabase
     .from("portal_remates")
     .select("*")

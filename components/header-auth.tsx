@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+
 import { createClient } from "@/lib/supabase/client";
 
 export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
@@ -12,16 +14,18 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     setMounted(true);
-    const supabase = createClient();
+    const client = createClient();
+    if (!client) return;
+    const conn = client;
 
     async function hydrate() {
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await conn.auth.getSession();
       const user = session?.user;
       setEmail(user?.email ?? null);
       if (user?.id) {
-        const { data } = await supabase.from("profiles").select("rol").eq("id", user.id).maybeSingle();
+        const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
         setAdmin(data?.rol === "admin");
       } else {
         setAdmin(false);
@@ -32,12 +36,12 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = conn.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const user = session?.user;
       setEmail(user?.email ?? null);
       void (async () => {
         if (user?.id) {
-          const { data } = await supabase.from("profiles").select("rol").eq("id", user.id).maybeSingle();
+          const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
           setAdmin(data?.rol === "admin");
         } else {
           setAdmin(false);
@@ -50,6 +54,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
 
   async function signOut() {
     const supabase = createClient();
+    if (!supabase) return;
     await supabase.auth.signOut();
     setEmail(null);
     setAdmin(false);

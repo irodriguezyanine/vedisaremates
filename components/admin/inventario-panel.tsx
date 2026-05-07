@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow } from "@/lib/portal-types";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type Row = InventarioRow & Record<string, unknown>;
 
@@ -16,6 +18,11 @@ export function InventarioPanel() {
   const load = useCallback(async () => {
     setErr(null);
     const supabase = createClient();
+    if (!supabase) {
+      setErr("Variables NEXT_PUBLIC_SUPABASE_* no disponibles en el entorno del build.");
+      setRows([]);
+      return;
+    }
     const lim = 300;
     const { data, error } = await supabase.from("inventario").select("*").order("created_at", { ascending: false }).limit(lim);
 
@@ -39,6 +46,16 @@ export function InventarioPanel() {
     const modelo = String(r.modelo ?? "").toLowerCase();
     return pat.includes(q) || marca.includes(q) || modelo.includes(q);
   });
+
+  const missingDeploy = !isSupabaseConfigured();
+
+  if (missingDeploy) {
+    return (
+      <div className="max-w-xl space-y-6 py-4">
+        <SupabaseDeployWarning compact />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

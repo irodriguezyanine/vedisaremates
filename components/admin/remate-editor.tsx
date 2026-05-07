@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/client";
+import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type Inv = InventarioRow & { id: string };
 
@@ -19,7 +21,12 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   const [invLoading, setInvLoading] = useState(false);
 
   const load = useCallback(async () => {
+    if (!getPublicSupabaseEnv()) return;
     const sb = createClient();
+    if (!sb) {
+      setErr("Variables NEXT_PUBLIC_SUPABASE_* no están definidas en este despliegue.");
+      return;
+    }
     const { data: r, error: e1 } = await sb.from("portal_remates").select("*").eq("id", remateId).single();
     if (e1) {
       setErr(e1.message);
@@ -51,8 +58,16 @@ export function RemateEditor({ remateId }: { remateId: string }) {
           setHits([]);
           return;
         }
+        if (!getPublicSupabaseEnv()) {
+          setInvLoading(false);
+          return;
+        }
         setInvLoading(true);
         const sb = createClient();
+        if (!sb) {
+          setInvLoading(false);
+          return;
+        }
         const pattern = `%${qSafe}%`;
         const { data, error } = await sb
           .from("inventario")
@@ -81,6 +96,11 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     const ends = String(fd.get("ends_at") ?? "").trim();
 
     const sb = createClient();
+    if (!sb) {
+      setErr("Cliente Supabase no disponible.");
+      setSaving(false);
+      return;
+    }
     const { error } = await sb
       .from("portal_remates")
       .update({
@@ -102,6 +122,10 @@ export function RemateEditor({ remateId }: { remateId: string }) {
 
   async function addLote(inv: Inv) {
     const sb = createClient();
+    if (!sb) {
+      setErr("Cliente Supabase no disponible.");
+      return;
+    }
     const next = lotes.length ? Math.max(...lotes.map((x) => x.orden)) + 1 : 0;
     const titulo = [inv.marca, inv.modelo, inv.patente].filter(Boolean).join(" · ") || inv.patente || "Lote";
     const base = Number(inv.valor_minimo ?? 0) || 0;
@@ -123,6 +147,10 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   async function removeLote(id: string) {
     if (!window.confirm("¿Eliminar este lote?")) return;
     const sb = createClient();
+    if (!sb) {
+      setErr("Cliente Supabase no disponible.");
+      return;
+    }
     const { error } = await sb.from("portal_remate_lotes").delete().eq("id", id);
     if (error) {
       setErr(error.message);
@@ -132,6 +160,16 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   }
 
   const toLocal = (iso: string | null) => (iso ? iso.slice(0, 16) : "");
+
+  const missingDeploy = !isSupabaseConfigured();
+
+  if (missingDeploy) {
+    return (
+      <div className="max-w-xl py-4">
+        <SupabaseDeployWarning compact />
+      </div>
+    );
+  }
 
   if (!remate && !err) {
     return <p className="text-neutral-400">Cargando remate…</p>;

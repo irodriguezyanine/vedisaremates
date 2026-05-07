@@ -1,9 +1,18 @@
 import Link from "next/link";
 
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminHomePage() {
   const supabase = await createClient();
+
+  if (!supabase) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <SupabaseDeployWarning compact />
+      </div>
+    );
+  }
 
   const [rematesRes, lotesRes, invRes] = await Promise.all([
     supabase.from("portal_remates").select("id", { count: "exact", head: true }),

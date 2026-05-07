@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { Session } from "@supabase/supabase-js";
+
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow, PortalOfertaRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +33,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
     async (loteIds: string[]) => {
       if (!loteIds.length) return;
       const sb = createClient();
+      if (!sb) return;
       const { data, error } = await sb
         .from("portal_ofertas")
         .select("*")
@@ -53,7 +56,8 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
 
   useEffect(() => {
     const sb = createClient();
-    sb.auth.getSession().then(({ data }) => {
+    if (!sb) return;
+    void sb.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       setSessionEmail(data.session?.user.email ?? null);
     });
   }, []);
@@ -61,14 +65,14 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   useEffect(() => {
     const sb = createClient();
     const ids = lotes.map((l) => l.id);
-    if (!ids.length) return;
+    if (!sb || !ids.length) return;
 
     const ch = sb
       .channel(`portal_ofertas:${remate.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "portal_ofertas" },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const row = payload.new as PortalOfertaRow;
           if (!ids.includes(row.lote_id)) return;
           setOffersByLote((prev) => {
@@ -87,8 +91,8 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
         .select("*")
         .eq("id", remate.id)
         .single()
-        .then(({ data }) => {
-          if (data) setRemate(data as PortalRemateRow);
+        .then(({ data }: { data: PortalRemateRow | null }) => {
+          if (data) setRemate(data);
         });
     }, 15000);
 
@@ -124,6 +128,11 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
       return;
     }
     const sb = createClient();
+    if (!sb) {
+      setMsg("Falta configuración de Supabase en el despliegue.");
+      setBusy(false);
+      return;
+    }
     const { data, error } = await sb.rpc("portal_place_bid", {
       p_lote_id: active.id,
       p_monto: monto,

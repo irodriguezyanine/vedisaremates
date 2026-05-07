@@ -3,19 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ListaUsuarioRow } from "@/lib/portal-types";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/client";
-
-function supabaseUrl() {
-  const u = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!u) throw new Error("NEXT_PUBLIC_SUPABASE_URL no configurada");
-  return u;
-}
-
-function anonKey() {
-  const k = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!k) throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY no configurada");
-  return k;
-}
+import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 export function UsuariosPanel() {
   const [users, setUsers] = useState<ListaUsuarioRow[]>([]);
@@ -26,6 +16,10 @@ export function UsuariosPanel() {
   const load = useCallback(async () => {
     setLoadErr(null);
     const supabase = createClient();
+    if (!supabase) {
+      setLoadErr("Servicio sin configuración (NEXT_PUBLIC_SUPABASE_*).");
+      return;
+    }
     const { data, error } = await supabase.rpc("listar_usuarios");
     if (error) {
       setLoadErr(error.message);
@@ -48,17 +42,20 @@ export function UsuariosPanel() {
     const nombre = String(fd.get("nombre") ?? "").trim();
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error("Cliente Supabase indisponible");
+      const pub = getPublicSupabaseEnv();
+      if (!pub) throw new Error("Variables Supabase incompletas");
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) throw new Error("Sesión caducada. Volvé a iniciar sesión.");
 
-      const res = await fetch(`${supabaseUrl()}/functions/v1/create-user`, {
+      const res = await fetch(`${pub.url}/functions/v1/create-user`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          apikey: anonKey(),
+          apikey: pub.key,
         },
         body: JSON.stringify({
           email,
@@ -87,17 +84,20 @@ export function UsuariosPanel() {
     const password = String(fd.get("password") ?? "");
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error("Cliente Supabase indisponible");
+      const pub = getPublicSupabaseEnv();
+      if (!pub) throw new Error("Variables Supabase incompletas");
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) throw new Error("Sesión caducada");
 
-      const res = await fetch(`${supabaseUrl()}/functions/v1/update-user-password`, {
+      const res = await fetch(`${pub.url}/functions/v1/update-user-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          apikey: anonKey(),
+          apikey: pub.key,
         },
         body: JSON.stringify({ userId: pwModal.userId, password }),
       });
@@ -107,6 +107,16 @@ export function UsuariosPanel() {
     } catch (e: unknown) {
       setLoadErr(e instanceof Error ? e.message : "Error");
     }
+  }
+
+  const missingDeploy = !isSupabaseConfigured();
+
+  if (missingDeploy) {
+    return (
+      <div className="max-w-xl">
+        <SupabaseDeployWarning compact />
+      </div>
+    );
   }
 
   return (

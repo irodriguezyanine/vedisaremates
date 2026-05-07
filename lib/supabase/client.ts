@@ -1,12 +1,16 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en el entorno",
-    );
+import { getPublicSupabaseEnv } from "./public-env";
+
+let browserClient: SupabaseClient | undefined;
+
+/** Cliente browser; `null` si faltan variables (no lanzar error: evita pantalla en blanco en Vercel). */
+export function createClient(): SupabaseClient | null {
+  const env = getPublicSupabaseEnv();
+  if (!env) return null;
+  if (!browserClient) {
+    browserClient = createBrowserClient(env.url, env.key);
   }
-  return createBrowserClient(url, key);
+  return browserClient;
 }

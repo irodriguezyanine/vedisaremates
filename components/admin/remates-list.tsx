@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
+import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
@@ -13,6 +15,10 @@ export function RematesList() {
   const load = useCallback(async () => {
     setErr(null);
     const sb = createClient();
+    if (!sb) {
+      setErr("Cliente Supabase sin configurar.");
+      return;
+    }
     const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
     if (error) {
       setErr(error.message);
@@ -28,6 +34,10 @@ export function RematesList() {
   async function nuevo() {
     setErr(null);
     const sb = createClient();
+    if (!sb) {
+      setErr("Sin Supabase en este despliegue.");
+      return;
+    }
     const {
       data: { user },
     } = await sb.auth.getUser();
@@ -61,6 +71,16 @@ export function RematesList() {
     };
     return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-white ${map[e]}`}>{e}</span>;
   };
+
+  const missingDeploy = !isSupabaseConfigured();
+
+  if (missingDeploy) {
+    return (
+      <div className="max-w-xl py-4">
+        <SupabaseDeployWarning compact />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
