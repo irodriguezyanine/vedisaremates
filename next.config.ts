@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "img.icons8.com", pathname: "/**" },
       { protocol: "https", hostname: "static.vecteezy.com", pathname: "/**" },
       { protocol: "https", hostname: "cdn-icons-png.flaticon.com", pathname: "/**" },
-      { protocol: "https", hostname: "images.unsplash.com", pathname: "/**" },
+      { protocol: "https", hostname: "**.supabase.co", pathname: "/storage/v1/object/public/**" },
     ],
   },
 };

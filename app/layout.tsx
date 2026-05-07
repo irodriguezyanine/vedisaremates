@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
-import { SkipLink } from "@/components/skip-link";
-
 import "./globals.css";
 
 const inter = Inter({
@@ -52,14 +48,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
   return (
     <html lang="es" className={`${inter.variable} h-full`}>
-      <body className="flex min-h-full flex-col bg-[#fdfefe] font-sans text-neutral-900 antialiased">
+      <body className="flex min-h-screen flex-col bg-[#fdfefe] font-sans text-neutral-900 antialiased">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
-        <SkipLink />
-        <SiteHeader />
-        <main id="contenido-principal" className="flex-1 outline-none focus:outline-none" tabIndex={-1}>
-          {children}
-        </main>
-        <SiteFooter />
+        {children}
       </body>
     </html>
   );
