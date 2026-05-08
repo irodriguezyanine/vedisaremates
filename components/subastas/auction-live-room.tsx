@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { Session } from "@supabase/supabase-js";
-
 import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
@@ -54,7 +52,6 @@ export function AuctionLiveRoom({
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [tick, setTick] = useState<number | null>(null);
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
@@ -97,14 +94,6 @@ export function AuctionLiveRoom({
     setTick(Date.now());
     const id = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const sb = createClient();
-    if (!sb) return;
-    void sb.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
-      setSessionEmail(data.session?.user.email ?? null);
-    });
   }, []);
 
   useEffect(() => {
@@ -225,30 +214,36 @@ export function AuctionLiveRoom({
             <p className="mt-2 max-w-2xl text-pretty text-neutral-600">{remate.descripcion}</p>
           ) : null}
         </div>
-        <div className="w-full shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-sm shadow-sm sm:max-w-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</p>
-          <p className="mt-2 text-lg font-bold capitalize text-neutral-900">
-            {String(remate.estado ?? "").replaceAll("_", " ") || "—"}
-          </p>
-          <p className={`mt-2 text-xs font-medium ${countdownLive !== null && countdownLive <= 0 ? "text-red-600" : "text-emerald-700"}`}>
-            {countdownLive !== null && countdownLive <= 0
-              ? "Este remate ya cerró según la fecha configurada."
-              : remate.ends_at
-                ? `Cierra ${formatClDateTime(remate.ends_at)}`
-                : null}
-          </p>
-          {viewerId ? (
-            <p className="mt-4 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
-              Conectado como <span className="font-medium text-neutral-700">{sessionEmail}</span>
-            </p>
-          ) : (
+        <div className="w-full shrink-0 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm shadow-sm lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+            <div className="flex min-w-[8.5rem] shrink-0 flex-col leading-tight">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</span>
+              <span className="text-base font-bold capitalize text-neutral-900">
+                {String(remate.estado ?? "").replaceAll("_", " ") || "—"}
+              </span>
+            </div>
+            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 sm:block" aria-hidden />
+            <div className="min-w-0 flex-1 leading-tight">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Cierra</span>
+              <p
+                className={`text-xs font-medium ${countdownLive !== null && countdownLive <= 0 ? "text-red-600" : "text-emerald-700"}`}
+              >
+                {countdownLive !== null && countdownLive <= 0
+                  ? "Este remate ya cerró según la fecha configurada."
+                  : remate.ends_at
+                    ? formatClDateTime(remate.ends_at)
+                    : "—"}
+              </p>
+            </div>
+          </div>
+          {!viewerId ? (
             <Link
               href={`/ingreso?redirect=/subastas/${remate.id}`}
-              className="mt-3 inline-block rounded-lg bg-[#009ade]/10 px-3 py-2 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15"
+              className="mt-2 inline-flex w-full justify-center rounded-lg bg-[#009ade]/10 px-3 py-1.5 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15 sm:w-auto sm:justify-start"
             >
               Iniciá sesión para ofertar
             </Link>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -351,7 +346,7 @@ export function AuctionLiveRoom({
                     ) : (
                       <>
                         <label className="mt-3 block text-sm text-neutral-600">
-                          Monto (CLP)
+                          Monto
                           <input
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}

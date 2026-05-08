@@ -3,6 +3,7 @@
 import type { PortalInventarioFichaConfigV1 } from "@/lib/portal-ficha-config";
 import { parsePortalInventarioFichaConfig } from "@/lib/portal-ficha-config";
 import type { InventarioRow } from "@/lib/portal-types";
+import { formatClp, tryParseMoneyInteger } from "@/lib/format-clp";
 
 export type InventarioSpecRow = {
   label: string;
@@ -217,6 +218,36 @@ export function normalizeMapKey(key: string): string {
     .replace(/[^a-z0-9_]/g, "_");
 }
 
+const MONEY_FIELD_KEYS_NORM: ReadonlySet<string> = (() => {
+  const s = new Set<string>();
+  function fieldIsMonetary(field: { label: string; keys: readonly string[] }): boolean {
+    const lbl = field.label.toLowerCase();
+    if (/\b(valor\s+m[ií]nimo|valor\s+esperado|precio\b|incremento\b|monto\b)/i.test(lbl)) return true;
+    return field.keys.some((k) => /valor_(minimo|esperado)|precio_|incremento_|monto_/i.test(normalizeMapKey(k)));
+  }
+  for (const grp of ORDERED_GROUPS) {
+    for (const fld of grp.fields) {
+      if (!fieldIsMonetary(fld)) continue;
+      for (const alias of fld.keys) s.add(normalizeMapKey(alias));
+    }
+  }
+  return s;
+})();
+
+function isLikelyMoneyKeyNorm(nk: string): boolean {
+  if (MONEY_FIELD_KEYS_NORM.has(nk)) return true;
+  let rest = nk.replace(/^fields_/, "").replace(/^field_/, "");
+  rest = rest.replace(/^fields_/, "").replace(/^field_/, "");
+  if (MONEY_FIELD_KEYS_NORM.has(rest)) return true;
+  return /(^|_)valor_(minimo|esperado|referencia)|precio_|(^|_)incremento|monto_|_clp_/i.test(nk);
+}
+
+function formatMoneyCellDisplayIfKey(nk: string, displayText: string): string {
+  if (!isLikelyMoneyKeyNorm(nk)) return displayText;
+  const n = tryParseMoneyInteger(displayText);
+  return n !== null ? formatClp(n) : displayText;
+}
+
 function lookupKey(map: Map<string, string>, wanted: readonly string[]): { key: string; value: string } | null {
   for (const alias of wanted) {
     const n = normalizeMapKey(alias);
@@ -232,11 +263,12 @@ function buildLowerFlatMap(expanded: Record<string, unknown>): Map<string, strin
     const val = formatCellValue(v0);
     if (val === null) continue;
     const nk = normalizeMapKey(k0);
-    if (!map.has(nk)) map.set(nk, val);
+    const shown = formatMoneyCellDisplayIfKey(nk, val);
+    if (!map.has(nk)) map.set(nk, shown);
     /** Dynamo / Tasaciones suele usar `fields_marca`, `fields_ppu`, etc. */
     if (/^fields_/i.test(nk)) {
       const rest = nk.replace(/^fields_/, "").replace(/^field_/, "");
-      if (rest && !map.has(rest)) map.set(rest, val);
+      if (rest && !map.has(rest)) map.set(rest, formatMoneyCellDisplayIfKey(rest, val));
     }
   }
   return map;
@@ -421,6 +453,18 @@ export const PORTAL_BANNER_ADMIN_DEFS: readonly PortalBannerFieldAdminDef[] = [
   },
 ];
 
+/** Banner: filas que no se muestran en sala ni tienen opción en el panel (solo existen como datos fuente). */
+export const PORTAL_BANNER_KEYS_NEVER_PUBLIC = new Set<string>([
+  PORTAL_BANNER_KEYS.LOTE_ID,
+  PORTAL_BANNER_KEYS.LOTE_ORDEN,
+  PORTAL_BANNER_KEYS.REMATE_ID,
+]);
+
+/** Definiciones configurables para el panel (“tarjeta de precio y fechas”). */
+export const PORTAL_BANNER_ADMIN_PANEL_DEFS = PORTAL_BANNER_ADMIN_DEFS.filter(
+  (d) => !PORTAL_BANNER_KEYS_NEVER_PUBLIC.has(d.key),
+);
+
 const DEFAULT_PORTAL_BANNER_HIDDEN = new Set<string>(
   PORTAL_BANNER_ADMIN_DEFS.filter((d) => d.hiddenByDefault).map((d) => d.key),
 );
@@ -501,6 +545,7 @@ export function applyFichaPublicConfig(
   for (const r of portalRows) {
     const sk = r.sourceKey?.trim();
     if (!sk) continue;
+    if (PORTAL_BANNER_KEYS_NEVER_PUBLIC.has(sk)) continue;
     const ov = overrides[sk];
     if (ov?.visible === false) continue;
     if (ov?.visible !== true && portalHidden.has(sk)) continue;
@@ -598,19 +643,21 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     const text = formatCellValue(v);
     if (text === null) continue;
 
+    const shown = formatMoneyCellDisplayIfKey(nk, text);
+
     /** Evitar párrafos largos duplicados de descripción. */
-    const valKey = text.trim().toLowerCase().slice(0, 280);
+    const valKey = shown.trim().toLowerCase().slice(0, 280);
     if (seenVals.has(valKey)) continue;
     const hum = humanizeKeyDisplay(kRaw);
     if (noisyAdicionalTechnicalRow(nk, hum, text)) continue;
-    if (text.length > 4000) {
+    if (shown.length > 4000) {
       adicionalRows.push({
         label: hum,
-        value: text.slice(0, 4000) + "…",
+        value: shown.slice(0, 4000) + "…",
         sourceKey: nk,
       });
     } else {
-      adicionalRows.push({ label: hum, value: text, sourceKey: nk });
+      adicionalRows.push({ label: hum, value: shown, sourceKey: nk });
     }
     seenVals.add(valKey);
   }

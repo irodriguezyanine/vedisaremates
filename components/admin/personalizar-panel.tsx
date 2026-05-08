@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment, type DragEvent, type SVGProps } from "react";
 
 import { getPublicCloudinaryConfig, uploadImageToCloudinary } from "@/lib/cloudinary-upload";
 import {
@@ -14,6 +14,8 @@ import {
 } from "@/lib/hero-slides-shared";
 import {
   PORTAL_BANNER_ADMIN_DEFS,
+  PORTAL_BANNER_ADMIN_PANEL_DEFS,
+  PORTAL_BANNER_KEYS_NEVER_PUBLIC,
   collectAdminInventoryPresetRows,
   defaultFichaSectionOrderTitles,
   normalizeMapKey,
@@ -26,6 +28,66 @@ import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 const INV_FICHA_PRESETS = collectAdminInventoryPresetRows();
 const PORTAL_KEY_SET = new Set(PORTAL_BANNER_ADMIN_DEFS.map((d) => d.key));
 const INVENTORY_PRESET_KEY_SET = new Set(INV_FICHA_PRESETS.map((p) => p.sourceKeyHint));
+
+const PK_FINE = "\u001f";
+
+function stripExcludedBannerOverrides(raw: Record<string, PortalFichaFieldOverride>): Record<string, PortalFichaFieldOverride> {
+  const out = { ...raw };
+  for (const k of PORTAL_BANNER_KEYS_NEVER_PUBLIC) delete out[k];
+  return out;
+}
+
+function IconGripDrag({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <circle cx="6" cy="5" r="1.5" />
+      <circle cx="14" cy="5" r="1.5" />
+      <circle cx="6" cy="10" r="1.5" />
+      <circle cx="14" cy="10" r="1.5" />
+      <circle cx="6" cy="15" r="1.5" />
+      <circle cx="14" cy="15" r="1.5" />
+    </svg>
+  );
+}
+
+function IconPencil({ className, ...p }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden {...p}>
+      <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconEyeOpen({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function IconEyeOff({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path
+        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M1 1l22 22" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconEyeDefault({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" aria-hidden opacity={0.55}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeDasharray="2 3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" opacity={0.7} />
+    </svg>
+  );
+}
 
 function pruneFieldOverrides(raw: Record<string, PortalFichaFieldOverride>): Record<string, PortalFichaFieldOverride> {
   const out: Record<string, PortalFichaFieldOverride> = {};
@@ -67,6 +129,9 @@ export function PersonalizarPanel() {
   const [sectionOrderList, setSectionOrderList] = useState<string[]>(() => [...defaultFichaSectionOrderTitles()]);
   const [hiddenSections, setHiddenSections] = useState<string[]>([]);
   const [dragOverSectionIx, setDragOverSectionIx] = useState<number | null>(null);
+  const [bannerDragIx, setBannerDragIx] = useState<number | null>(null);
+  const [bannerEditKey, setBannerEditKey] = useState<string | null>(null);
+  const [fineEditPk, setFineEditPk] = useState<string | null>(null);
   const [showTechRefs, setShowTechRefs] = useState(false);
   const [fichaSaving, setFichaSaving] = useState(false);
   const [fichaOk, setFichaOk] = useState<string | null>(null);
@@ -113,7 +178,7 @@ export function PersonalizarPanel() {
       setHiddenSections([]);
     } else {
       const cfg = parsePortalInventarioFichaConfig(fichaRes.data?.config ?? null);
-      setFichaOverrides(cfg?.fieldOverrides ? { ...cfg.fieldOverrides } : {});
+      setFichaOverrides(stripExcludedBannerOverrides(cfg?.fieldOverrides ? { ...cfg.fieldOverrides } : {}));
       const orderTitles = cfg?.sectionOrder?.length ? cfg.sectionOrder : [...defaultFichaSectionOrderTitles()];
       setSectionOrderList(orderTitles.map((s) => s.trim()).filter(Boolean));
       setHiddenSections(cfg?.hiddenSectionTitles?.length ? [...cfg.hiddenSectionTitles] : []);
@@ -220,6 +285,17 @@ export function PersonalizarPanel() {
     return "def";
   }
 
+  function cycleFieldVisibility(key: string) {
+    const v = visSelectValue(key);
+    setVisibilityMode(key, v === "def" ? "show" : v === "show" ? "hide" : "def");
+  }
+
+  function visibilityCycleHint(mode: "def" | "show" | "hide"): string {
+    if (mode === "def") return "Visibilidad: predeterminado Vedisa. Tocar → siempre visible → siempre oculto → predeterminado.";
+    if (mode === "show") return "Visibilidad: siempre visible. Tocar para ocultar siempre.";
+    return "Visibilidad: oculto siempre. Tocar para volver al predeterminado.";
+  }
+
   async function saveFicha() {
     setFichaSaving(true);
     setFichaErr(null);
@@ -232,7 +308,7 @@ export function PersonalizarPanel() {
     }
     const config = {
       version: 1 as const,
-      fieldOverrides: pruneFieldOverrides(fichaOverrides),
+      fieldOverrides: pruneFieldOverrides(stripExcludedBannerOverrides(fichaOverrides)),
       sectionOrder: sectionOrderList.map((l) => l.trim()).filter(Boolean),
       hiddenSectionTitles: hiddenSections,
     };
@@ -280,6 +356,37 @@ export function PersonalizarPanel() {
 
   /** Arrastre desde la asa (HTML5 drag-and-drop nativo). */
   const SECTION_DND_KEY = "application/x-vedisa-section-index";
+  const BANNER_DND_KEY = "application/x-vedisa-banner-index";
+
+  const orderedBannerPanelDefs = useMemo(() => {
+    return [...PORTAL_BANNER_ADMIN_PANEL_DEFS].sort((a, b) => {
+      const oa = fichaOverrides[a.key]?.order ?? a.defaultOrder;
+      const ob = fichaOverrides[b.key]?.order ?? b.defaultOrder;
+      if (oa !== ob) return oa - ob;
+      return a.defaultOrder - b.defaultOrder;
+    });
+  }, [fichaOverrides]);
+
+  function reorderBannerByDrag(from: number, to: number) {
+    setFichaOk(null);
+    const keys = orderedBannerPanelDefs.map((d) => d.key);
+    if (from === to || from < 0 || to < 0 || from >= keys.length || to >= keys.length) return;
+    const nextKeys = [...keys];
+    const [moved] = nextKeys.splice(from, 1);
+    if (moved === undefined) return;
+    nextKeys.splice(from < to ? to - 1 : to, 0, moved);
+    setFichaOverrides((prev) => {
+      const next = { ...prev };
+      for (let ix = 0; ix < nextKeys.length; ix++) {
+        const key = nextKeys[ix];
+        if (!key) continue;
+        const cur: PortalFichaFieldOverride = { ...(next[key] ?? {}) };
+        cur.order = (ix + 1) * 10;
+        next[key] = cur;
+      }
+      return next;
+    });
+  }
 
   const presetsPorSeccion = useMemo(() => {
     const map = new Map<string, (typeof INV_FICHA_PRESETS)[number][]>();
@@ -622,99 +729,173 @@ export function PersonalizarPanel() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
+            <div className="rounded-xl border border-white/10 bg-[#141c28] p-4 sm:p-5">
               <p className="text-base font-bold text-white">Tarjeta de precio y fechas (arriba de la foto grande)</p>
               <p className="mt-2 text-xs text-neutral-400">
-                No es uno de los capítulos de la lista: es la franja de la sala de remates donde el visitante ve lote, subasta y montos antes de llegar al catálogo. Seguimos ocultando por defecto los
-                códigos sólo útiles por dentro.
+                Franja con datos del lote y del remate (no es un capítulo del catálogo). Los códigos internos no se listan acá: ni en el panel ni en la sala. Arrastrá filas para orden;
+                el ojo cambia ver / ocultar / valor Vedisa; el lápiz abre nombre público y orden manual.
               </p>
-              <div className="mt-4 space-y-4">
-                {PORTAL_BANNER_ADMIN_DEFS.map((def) => (
-                  <div key={def.key} className="rounded-xl border border-white/10 bg-black/25 p-4">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{def.tituloEnPanel}</p>
-                      <p className="mt-1 max-w-[68ch] text-xs leading-relaxed text-neutral-400">{def.ayudaParaAdmin}</p>
-                      <p className="mt-2 text-[11px] text-neutral-500">
-                        Como venimos cargándolo:{" "}
-                        <strong className="text-neutral-300">{def.hiddenByDefault ? "usualmente invisible" : "usualmente visible"}</strong>.
-                      </p>
-                      {showTechRefs ? (
-                        <p className="mt-2 break-all font-mono text-[10px] text-amber-200/85">Soporte: {def.key}</p>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-12 lg:gap-4">
-                      <label className="lg:col-span-4">
-                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                          ¿Se muestra?
-                        </span>
-                        <select
-                          className="mt-1 w-full rounded border border-white/15 bg-black/35 px-2 py-2 text-sm text-white"
-                          value={visSelectValue(def.key)}
-                          onChange={(e) => setVisibilityMode(def.key, e.target.value as "def" | "show" | "hide")}
-                        >
-                          <option value="def">Dejar como lo armó Vedisa</option>
-                          <option value="show">Siempre visible</option>
-                          <option value="hide">Ocultarlo siempre</option>
-                        </select>
-                      </label>
-                      <label className="lg:col-span-5">
-                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                          Nombre público frente al cliente (opcional)
-                        </span>
-                        <input
-                          placeholder={`Predeterminado: ${def.defaultLabel}`}
-                          value={fichaOverrides[def.key]?.label ?? ""}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setFichaOk(null);
-                            setFichaOverrides((prev) => {
-                              const next = { ...prev };
-                              const cur: PortalFichaFieldOverride = { ...(next[def.key] ?? {}) };
-                              const t = raw.trim().slice(0, 320);
-                              if (!t) delete cur.label;
-                              else cur.label = t;
-                              if (isEmptyOverrideEntry(cur)) delete next[def.key];
-                              else next[def.key] = cur;
-                              return next;
-                            });
-                          }}
-                          className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                        />
-                      </label>
-                      <label className="lg:col-span-3">
-                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                          Orden (número bajo antes)
-                        </span>
-                        <input
-                          type="number"
-                          placeholder={String(def.defaultOrder)}
-                          value={
-                            typeof fichaOverrides[def.key]?.order === "number"
-                              ? String(fichaOverrides[def.key]!.order)
-                              : ""
-                          }
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setFichaOk(null);
-                            setFichaOverrides((prev) => {
-                              const next = { ...prev };
-                              const cur: PortalFichaFieldOverride = { ...(next[def.key] ?? {}) };
-                              if (!raw.trim()) delete cur.order;
-                              else {
-                                const n = Number(raw);
-                                if (Number.isFinite(n)) cur.order = Math.round(n);
-                              }
-                              if (isEmptyOverrideEntry(cur)) delete next[def.key];
-                              else next[def.key] = cur;
-                              return next;
-                            });
-                          }}
-                          className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-black/30 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                      <th className="w-12 px-2 py-2" aria-label="Orden">
+                        <span className="sr-only">Orden</span>
+                      </th>
+                      <th className="px-2 py-2">Campo</th>
+                      <th className="w-14 px-2 py-2 text-center" title="Visibilidad">
+                        Ver
+                      </th>
+                      <th className="w-14 px-2 py-2 text-center" title="Editar texto y orden">
+                        Edit.
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderedBannerPanelDefs.map((def, ix) => {
+                      const vm = visSelectValue(def.key);
+                      const editing = bannerEditKey === def.key;
+                      return (
+                        <Fragment key={def.key}>
+                          <tr
+                            className={`border-b border-white/10 bg-black/15 ${bannerDragIx === ix ? "bg-[#33C7E3]/10 ring-1 ring-[#33C7E3]/30" : ""}`}
+                            onDragOver={(e: DragEvent) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = "move";
+                              setBannerDragIx(ix);
+                            }}
+                            onDragLeave={(e: DragEvent) => {
+                              if (!e.currentTarget.contains(e.relatedTarget as Node)) setBannerDragIx((v) => (v === ix ? null : v));
+                            }}
+                            onDrop={(e: DragEvent) => {
+                              e.preventDefault();
+                              const from = Number(e.dataTransfer.getData(BANNER_DND_KEY));
+                              if (!Number.isFinite(from)) return;
+                              reorderBannerByDrag(from, ix);
+                              setBannerDragIx(null);
+                            }}
+                          >
+                            <td className="align-middle px-2 py-1">
+                              <button
+                                type="button"
+                                draggable
+                                aria-label={`Arrastrar fila ${def.tituloEnPanel}`}
+                                onDragStart={(e: DragEvent) => {
+                                  e.dataTransfer.setData(BANNER_DND_KEY, String(ix));
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => setBannerDragIx(null)}
+                                className="flex h-9 w-9 cursor-grab touch-manipulation items-center justify-center rounded-md border border-white/10 bg-black/40 text-neutral-400 active:cursor-grabbing"
+                              >
+                                <IconGripDrag className="h-4 w-4" />
+                              </button>
+                            </td>
+                            <td className="align-middle px-2 py-2">
+                              <span className="font-medium text-neutral-100">{def.tituloEnPanel}</span>
+                              <span className="mt-0.5 block text-[11px] text-neutral-500">
+                                {def.hiddenByDefault ? "Suele ir oculto" : "Suele verse"} · {def.ayudaParaAdmin}
+                              </span>
+                              {showTechRefs ? (
+                                <span className="mt-1 block break-all font-mono text-[9px] text-amber-200/75">{def.key}</span>
+                              ) : null}
+                            </td>
+                            <td className="align-middle px-2 py-2 text-center">
+                              <button
+                                type="button"
+                                disabled={fichaSaving}
+                                title={visibilityCycleHint(vm)}
+                                aria-label={visibilityCycleHint(vm)}
+                                onClick={() => cycleFieldVisibility(def.key)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 hover:bg-white/[0.08]"
+                              >
+                                {vm === "show" ? (
+                                  <IconEyeOpen className="h-5 w-5 text-emerald-300" />
+                                ) : vm === "hide" ? (
+                                  <IconEyeOff className="h-5 w-5 text-rose-300" />
+                                ) : (
+                                  <IconEyeDefault className="h-5 w-5 text-neutral-400" />
+                                )}
+                              </button>
+                            </td>
+                            <td className="align-middle px-2 py-2 text-center">
+                              <button
+                                type="button"
+                                disabled={fichaSaving}
+                                aria-expanded={editing}
+                                aria-label={editing ? "Cerrar edición" : `Editar ${def.tituloEnPanel}`}
+                                onClick={() => setBannerEditKey(editing ? null : def.key)}
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${
+                                  editing ? "border-[#33C7E3]/50 bg-[#33C7E3]/15 text-[#bdefff]" : "border-white/15 text-neutral-300 hover:bg-white/[0.08]"
+                                }`}
+                              >
+                                <IconPencil className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                          {editing ? (
+                            <tr className="border-b border-white/10 bg-black/40">
+                              <td colSpan={4} className="px-3 py-3">
+                                <div className="grid gap-3 sm:grid-cols-12">
+                                  <label className="block sm:col-span-8">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nombre público (opcional)</span>
+                                    <input
+                                      placeholder={`Predeterminado: ${def.defaultLabel}`}
+                                      value={fichaOverrides[def.key]?.label ?? ""}
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        setFichaOk(null);
+                                        setFichaOverrides((prev) => {
+                                          const next = { ...prev };
+                                          const cur: PortalFichaFieldOverride = { ...(next[def.key] ?? {}) };
+                                          const t = raw.trim().slice(0, 320);
+                                          if (!t) delete cur.label;
+                                          else cur.label = t;
+                                          if (isEmptyOverrideEntry(cur)) delete next[def.key];
+                                          else next[def.key] = cur;
+                                          return next;
+                                        });
+                                      }}
+                                      className="mt-1 w-full rounded border border-white/15 bg-black/45 px-3 py-2 text-sm text-white"
+                                    />
+                                  </label>
+                                  <label className="block sm:col-span-4">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Orden (número menor, más arriba)</span>
+                                    <input
+                                      type="number"
+                                      placeholder={String(def.defaultOrder)}
+                                      value={
+                                        typeof fichaOverrides[def.key]?.order === "number"
+                                          ? String(fichaOverrides[def.key]!.order)
+                                          : ""
+                                      }
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        setFichaOk(null);
+                                        setFichaOverrides((prev) => {
+                                          const next = { ...prev };
+                                          const cur: PortalFichaFieldOverride = { ...(next[def.key] ?? {}) };
+                                          if (!raw.trim()) delete cur.order;
+                                          else {
+                                            const n = Number(raw);
+                                            if (Number.isFinite(n)) cur.order = Math.round(n);
+                                          }
+                                          if (isEmptyOverrideEntry(cur)) delete next[def.key];
+                                          else next[def.key] = cur;
+                                          return next;
+                                        });
+                                      }}
+                                      className="mt-1 w-full rounded border border-white/15 bg-black/45 px-3 py-2 text-sm text-white"
+                                    />
+                                  </label>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -725,126 +906,161 @@ export function PersonalizarPanel() {
                   <span className="text-xs font-semibold text-[#84d8ec]">Tocar para abrir</span>
                 </div>
                 <p className="mt-2 max-w-[72ch] text-xs text-neutral-400">
-                  El orden de los capítulos lo definís arriba. Acá sólo renombrás un dato, lo escondés o lo movés a otro capítulo — ideal si “Marca” tiene que decir otra cosa o un valor quedó mal etiquetado.
+                  Tablas compactas por capítulo: ojo para visibilidad, lápiz para título público, capítulo destino y prioridad. Abrí sólo lo que necesites tocar.
                 </p>
               </summary>
-              <div className="space-y-3 border-t border-white/10 px-5 pb-5 pt-4">
+              <div className="space-y-3 border-t border-white/10 px-3 pb-4 pt-4 sm:px-5">
                 {presetsPorSeccion.map(([sectionTitle, rows]) => (
-                  <details key={sectionTitle} className="group rounded-xl border border-white/10 bg-black/27">
-                    <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-[#bdefff] [&::-webkit-details-marker]:hidden">
+                  <details key={sectionTitle} className="group rounded-lg border border-white/10 bg-black/27">
+                    <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-bold text-[#bdefff] sm:px-4 [&::-webkit-details-marker]:hidden">
                       <span className="flex items-center justify-between gap-3">
                         <span>{sectionTitle}</span>
                         <span className="text-xs font-medium text-neutral-400">{rows.length} datos</span>
                       </span>
                     </summary>
-                    <div className="border-t border-white/10 px-4 py-4 space-y-4">
-                      {rows.map((pre) => {
-                        const fk = pre.sourceKeyHint;
-                        const aliasPretty = [...new Set(pre.aliases)].filter((a) => a !== fk).join(", ");
-                        return (
-                          <div key={`${sectionTitle}-${fk}`} className="rounded-xl border border-white/10 bg-black/30 p-4">
-                            <p className="text-sm font-semibold text-neutral-50">{pre.defaultLabel}</p>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              Hoy se agrupa dentro de «{sectionTitle}». También puede llamarse en origen como:{" "}
-                              {aliasPretty || "solo con el mismo nombre anterior"}.
-                            </p>
-                            {showTechRefs ? (
-                              <p className="mt-2 break-all font-mono text-[10px] text-amber-200/80">Soporte: {fk}</p>
-                            ) : null}
-                            <div className="mt-3 grid gap-3 lg:grid-cols-12 lg:gap-4">
-                              <label className="lg:col-span-3">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                                  ¿Mostrar si hay texto?
-                                </span>
-                                <select
-                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-2 py-2 text-sm text-white"
-                                  value={visSelectValue(fk)}
-                                  onChange={(e) => setVisibilityMode(fk, e.target.value as "def" | "show" | "hide")}
-                                >
-                                  <option value="def">Cuando existe valor en la base</option>
-                                  <option value="show">Forzar visible siempre</option>
-                                  <option value="hide">No mostrar jamás</option>
-                                </select>
-                              </label>
-                              <label className="lg:col-span-4">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                                  Cómo se lee públicamente (opcional)
-                                </span>
-                                <input
-                                  placeholder={`Sugerimos: ${pre.defaultLabel}`}
-                                  value={fichaOverrides[fk]?.label ?? ""}
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    setFichaOk(null);
-                                    setFichaOverrides((prev) => {
-                                      const next = { ...prev };
-                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                      const t = raw.trim().slice(0, 320);
-                                      if (!t) delete cur.label;
-                                      else cur.label = t;
-                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                      else next[fk] = cur;
-                                      return next;
-                                    });
-                                  }}
-                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                                />
-                              </label>
-                              <label className="lg:col-span-3">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                                  ¿En qué capítulo aparece?
-                                </span>
-                                <input
-                                  placeholder={sectionTitle}
-                                  value={fichaOverrides[fk]?.sectionTitle ?? ""}
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    setFichaOk(null);
-                                    setFichaOverrides((prev) => {
-                                      const next = { ...prev };
-                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                      const t = raw.trim().slice(0, 240);
-                                      if (!t) delete cur.sectionTitle;
-                                      else cur.sectionTitle = t;
-                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                      else next[fk] = cur;
-                                      return next;
-                                    });
-                                  }}
-                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                                />
-                              </label>
-                              <label className="lg:col-span-2">
-                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                                  Prioridad dentro del grupo
-                                </span>
-                                <input
-                                  type="number"
-                                  placeholder="auto"
-                                  value={typeof fichaOverrides[fk]?.order === "number" ? String(fichaOverrides[fk]!.order) : ""}
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    setFichaOk(null);
-                                    setFichaOverrides((prev) => {
-                                      const next = { ...prev };
-                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                      if (!raw.trim()) delete cur.order;
-                                      else {
-                                        const n = Number(raw);
-                                        if (Number.isFinite(n)) cur.order = Math.round(n);
-                                      }
-                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                      else next[fk] = cur;
-                                      return next;
-                                    });
-                                  }}
-                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="overflow-x-auto border-t border-white/10">
+                      <table className="w-full border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-black/35 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                            <th className="px-3 py-2">Dato</th>
+                            <th className="w-14 px-2 py-2 text-center">Ver</th>
+                            <th className="w-14 px-2 py-2 text-center">Edit.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((pre) => {
+                            const fk = pre.sourceKeyHint;
+                            const aliasPretty = [...new Set(pre.aliases)].filter((a) => a !== fk).join(", ");
+                            const pk = `${sectionTitle}${PK_FINE}${fk}`;
+                            const vm = visSelectValue(fk);
+                            const editing = fineEditPk === pk;
+                            return (
+                              <Fragment key={pk}>
+                                <tr className="border-b border-white/10 bg-black/20">
+                                  <td className="px-3 py-2 align-middle">
+                                    <span className="font-medium text-neutral-100">{pre.defaultLabel}</span>
+                                    <span className="mt-0.5 block text-[11px] text-neutral-500">
+                                      {aliasPretty ? `También: ${aliasPretty}` : "Una sola etiqueta en origen"}
+                                    </span>
+                                    {showTechRefs ? (
+                                      <span className="mt-0.5 block break-all font-mono text-[9px] text-amber-200/75">{fk}</span>
+                                    ) : null}
+                                  </td>
+                                  <td className="align-middle px-2 py-1.5 text-center">
+                                    <button
+                                      type="button"
+                                      disabled={fichaSaving}
+                                      title={visibilityCycleHint(vm)}
+                                      aria-label={visibilityCycleHint(vm)}
+                                      onClick={() => cycleFieldVisibility(fk)}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 hover:bg-white/[0.08]"
+                                    >
+                                      {vm === "show" ? (
+                                        <IconEyeOpen className="h-5 w-5 text-emerald-300" />
+                                      ) : vm === "hide" ? (
+                                        <IconEyeOff className="h-5 w-5 text-rose-300" />
+                                      ) : (
+                                        <IconEyeDefault className="h-5 w-5 text-neutral-400" />
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td className="align-middle px-2 py-1.5 text-center">
+                                    <button
+                                      type="button"
+                                      disabled={fichaSaving}
+                                      aria-expanded={editing}
+                                      aria-label={editing ? "Cerrar" : `Editar ${pre.defaultLabel}`}
+                                      onClick={() => setFineEditPk(editing ? null : pk)}
+                                      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${
+                                        editing ? "border-[#33C7E3]/50 bg-[#33C7E3]/15 text-[#bdefff]" : "border-white/15 text-neutral-300 hover:bg-white/[0.08]"
+                                      }`}
+                                    >
+                                      <IconPencil className="h-4 w-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                                {editing ? (
+                                  <tr className="border-b border-white/10 bg-black/40">
+                                    <td colSpan={3} className="px-3 py-3">
+                                      <div className="grid gap-3 lg:grid-cols-12">
+                                        <label className="block lg:col-span-5">
+                                          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Cómo se lee públicamente</span>
+                                          <input
+                                            placeholder={`Sugerimos: ${pre.defaultLabel}`}
+                                            value={fichaOverrides[fk]?.label ?? ""}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              setFichaOk(null);
+                                              setFichaOverrides((prev) => {
+                                                const next = { ...prev };
+                                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                                const t = raw.trim().slice(0, 320);
+                                                if (!t) delete cur.label;
+                                                else cur.label = t;
+                                                if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                                else next[fk] = cur;
+                                                return next;
+                                              });
+                                            }}
+                                            className="mt-1 w-full rounded border border-white/15 bg-black/45 px-3 py-2 text-sm text-white"
+                                          />
+                                        </label>
+                                        <label className="block lg:col-span-4">
+                                          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Capítulo (grupo)</span>
+                                          <input
+                                            placeholder={sectionTitle}
+                                            value={fichaOverrides[fk]?.sectionTitle ?? ""}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              setFichaOk(null);
+                                              setFichaOverrides((prev) => {
+                                                const next = { ...prev };
+                                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                                const t = raw.trim().slice(0, 240);
+                                                if (!t) delete cur.sectionTitle;
+                                                else cur.sectionTitle = t;
+                                                if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                                else next[fk] = cur;
+                                                return next;
+                                              });
+                                            }}
+                                            className="mt-1 w-full rounded border border-white/15 bg-black/45 px-3 py-2 text-sm text-white"
+                                          />
+                                        </label>
+                                        <label className="block lg:col-span-3">
+                                          <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Prioridad (nº menor antes)</span>
+                                          <input
+                                            type="number"
+                                            placeholder="auto"
+                                            value={typeof fichaOverrides[fk]?.order === "number" ? String(fichaOverrides[fk]!.order) : ""}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              setFichaOk(null);
+                                              setFichaOverrides((prev) => {
+                                                const next = { ...prev };
+                                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                                if (!raw.trim()) delete cur.order;
+                                                else {
+                                                  const n = Number(raw);
+                                                  if (Number.isFinite(n)) cur.order = Math.round(n);
+                                                }
+                                                if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                                else next[fk] = cur;
+                                                return next;
+                                              });
+                                            }}
+                                            className="mt-1 w-full rounded border border-white/15 bg-black/45 px-3 py-2 text-sm text-white"
+                                          />
+                                        </label>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </details>
                 ))}
@@ -862,73 +1078,88 @@ export function PersonalizarPanel() {
                   soporte una captura con el nombre técnico.
                 </p>
               </summary>
-              <div className="border-t border-white/10 px-5 pb-5 pt-4">
-              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-                <label className="min-w-[200px] flex-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nombre interno (sin espacios)</span>
-                  <input
-                    value={customKeyInput}
-                    onChange={(e) => setCustomKeyInput(e.target.value)}
-                    className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                    placeholder='Ejemplo: cilindrada_motor'
-                  />
-                </label>
-                <label className="min-w-[200px] flex-[2]">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                    Título bonito para el público <span className="text-rose-200">(requerido)</span>
-                  </span>
-                  <input
-                    value={customLabelDraft}
-                    onChange={(e) => setCustomLabelDraft(e.target.value)}
-                    className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                    placeholder='Ejemplo: “Cilindrada del motor”'
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={fichaSaving}
-                  onClick={() => addCustomFieldKey()}
-                  className="rounded-xl bg-[#33C7E3] px-5 py-2.5 text-sm font-bold text-[#0f1f2c] hover:bg-[#5ad4ec] disabled:opacity-45"
-                >
-                  Guardarlo en este formulario (después pulsá Guardar todo abajo)
-                </button>
-              </div>
-
-              {extraFieldKeys.length ? (
-                <ul className="mt-4 space-y-3">
-                  {extraFieldKeys.map((ek) => (
-                    <li
-                      key={ek}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-neutral-100">
-                          {fichaOverrides[ek]?.label?.trim() || "Nombre pendiente"}
-                        </p>
-                        {showTechRefs ? <p className="break-all font-mono text-[10px] text-amber-200/80">{ek}</p> : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="text-xs font-bold text-rose-300 underline-offset-2 hover:underline"
-                        onClick={() => {
-                          setFichaOverrides((prev) => {
-                            const next = { ...prev };
-                            delete next[ek];
-                            return next;
-                          });
-                          setFichaOk(null);
-                        }}
-                      >
-                        Borrar
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-xs text-neutral-500">
-                  Todavía no agregaste nada desde este cuadrito (y está perfecto así).
-                </p>
-              )}
+              <div className="border-t border-white/10 px-3 pb-5 pt-4 sm:px-5">
+                <div className="overflow-x-auto rounded-lg border border-white/10">
+                  <table className="w-full border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-black/35 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                        <th className="min-w-[140px] px-3 py-2">Clave interna</th>
+                        <th className="min-w-[180px] px-3 py-2">Título público</th>
+                        <th className="w-32 px-2 py-2 text-right">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-white/10 bg-black/30">
+                        <td className="px-3 py-2 align-top">
+                          <input
+                            value={customKeyInput}
+                            onChange={(e) => setCustomKeyInput(e.target.value)}
+                            className="w-full rounded border border-white/15 bg-black/45 px-2 py-1.5 text-sm text-white"
+                            placeholder="sin_espacios"
+                          />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <input
+                            value={customLabelDraft}
+                            onChange={(e) => setCustomLabelDraft(e.target.value)}
+                            className="w-full rounded border border-white/15 bg-black/45 px-2 py-1.5 text-sm text-white"
+                            placeholder="Nombre que ve el público"
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={fichaSaving}
+                            onClick={() => addCustomFieldKey()}
+                            className="rounded-lg bg-[#33C7E3] px-3 py-1.5 text-xs font-bold text-[#0f1f2c] hover:bg-[#5ad4ec] disabled:opacity-45"
+                          >
+                            Agregar
+                          </button>
+                        </td>
+                      </tr>
+                      {extraFieldKeys.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-3 text-xs text-neutral-500">
+                            Todavía no hay campos extra (normal en la mayoría de los casos).
+                          </td>
+                        </tr>
+                      ) : (
+                        extraFieldKeys.map((ek) => (
+                          <tr key={ek} className="border-b border-white/10 bg-black/22">
+                            <td className="px-3 py-2 align-middle">
+                              <span className={`block max-w-[220px] truncate font-mono text-xs ${showTechRefs ? "text-amber-200/90" : "text-neutral-500"}`} title={ek}>
+                                {showTechRefs ? ek : "—"}
+                              </span>
+                              {!showTechRefs ? (
+                                <span className="mt-0.5 block text-[10px] text-neutral-600">Activá “textos técnicos” arriba para ver la clave.</span>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 align-middle text-neutral-100">
+                              {fichaOverrides[ek]?.label?.trim() || "—"}
+                            </td>
+                            <td className="px-2 py-2 align-middle text-right">
+                              <button
+                                type="button"
+                                className="text-xs font-bold text-rose-300 underline-offset-2 hover:underline"
+                                onClick={() => {
+                                  setFichaOverrides((prev) => {
+                                    const next = { ...prev };
+                                    delete next[ek];
+                                    return next;
+                                  });
+                                  setFichaOk(null);
+                                }}
+                              >
+                                Quitar
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-neutral-500">Después de agregar filas recordá usar <strong className="text-neutral-400">Guardar estos cambios de la ficha</strong>.</p>
               </div>
             </details>
 
