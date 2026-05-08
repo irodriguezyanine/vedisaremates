@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,22 +35,6 @@ export default async function AdminHomePage() {
         <MetricCard title="Ítems inventario Tasaciones" value={invCount} />
         <MetricCard title="Remates configurados" value={rematesCount} />
         <MetricCard title="Lotes sumados" value={lotesCount} />
-      </div>
-
-      <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-        <h2 className="font-semibold text-white">Pasos rápidos</h2>
-        <ol className="mt-6 list-inside list-decimal space-y-3 text-sm text-neutral-400">
-          <li>Si es la primera vez, aplicá los scripts SQL del repositorio en la base del proyecto antes de usar subastas en vivo.</li>
-          <li>En Remates creá un evento con fechas de inicio y fin.</li>
-          <li>Añadí lotes desde Inventario; publicá y luego marcá estado &quot;en curso&quot; para habilitar ofertas.</li>
-          <li>
-            Sala pública:{" "}
-            <Link className="text-[#33C7E3] hover:underline" href="/subastas">
-              /subastas
-            </Link>
-            .
-          </li>
-        </ol>
       </div>
     </div>
   );

@@ -37,9 +37,6 @@ export function AdminSidebar() {
         </Link>
         <p className="mt-3 text-center text-[11px] font-medium uppercase tracking-wide text-neutral-500">Administración</p>
       </div>
-      <p className="text-center text-[11px] leading-snug text-neutral-500">
-        No cierra sesión: seguís logueado como admin.
-      </p>
       <nav className="flex flex-col gap-1">
         {links.map(({ href, label }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
