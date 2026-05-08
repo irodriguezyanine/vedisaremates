@@ -477,6 +477,7 @@ function shouldExcludeOtrosAdicional(
   if (/(^|_)empresa_?id$|^id_empresa$|^company_id$|^cia_id$/i.test(nk)) return true;
   if (/(^|_)empresa_?id$/i.test(bare)) return true;
   if (/(^|_)empresa_?id($|_)/i.test(normalizeMapKey(kRaw.replace(/\s+/g, "_")))) return true;
+  if (/(^|_)tasacion_?id($|_)/i.test(nk) || /(^|_)tasacion_?id($|_)/i.test(bare) || lab === "tasacion_id") return true;
   if (/^origen$/i.test(bare) || /^origen$/i.test(nk) || lab === "origen") return true;
   if (/^src$/i.test(bare) || /^iframe_?src$/i.test(nk)) return true;
 
