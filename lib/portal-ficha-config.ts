@@ -13,8 +13,10 @@ export type PortalInventarioFichaConfigV1 = {
   fieldOverrides?: Record<string, PortalFichaFieldOverride>;
   /** Primero estos títulos de sección en este orden; el resto alfabético. */
   sectionOrder?: string[];
-  /** Ocultación extra para filas banner portal (clave estable `portal:lote:id`, etc.). Se unen a los valores por defecto del sitio. */
+  /** Ocultación extra para filas banner portal (clave estable `portal:lote:id`, etc.). */
   portalBannerHiddenKeys?: string[];
+  /** Bloques de inventario (`Identificación…`, `Otros datos…`) que no se muestran en la web */
+  hiddenSectionTitles?: string[];
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -70,10 +72,21 @@ export function parsePortalInventarioFichaConfig(raw: unknown): PortalInventario
     if (!portalBannerHiddenKeys.length) portalBannerHiddenKeys = undefined;
   }
 
+  let hiddenSectionTitles: string[] | undefined;
+  if (Array.isArray(raw.hiddenSectionTitles)) {
+    hiddenSectionTitles = raw.hiddenSectionTitles
+      .filter((x) => typeof x === "string")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 96);
+    if (!hiddenSectionTitles.length) hiddenSectionTitles = undefined;
+  }
+
   const out: PortalInventarioFichaConfigV1 = { version: 1 };
   if (fieldOverrides) out.fieldOverrides = fieldOverrides;
   if (sectionOrder) out.sectionOrder = sectionOrder;
   if (portalBannerHiddenKeys) out.portalBannerHiddenKeys = portalBannerHiddenKeys;
+  if (hiddenSectionTitles) out.hiddenSectionTitles = hiddenSectionTitles;
   return out;
 }
 

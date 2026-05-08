@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 
 import { getPublicCloudinaryConfig, uploadImageToCloudinary } from "@/lib/cloudinary-upload";
 import {
@@ -57,6 +57,7 @@ export function PersonalizarPanel() {
   const [slides, setSlides] = useState<HeroSlide[]>(() =>
     slidesForAdminForm([...FALLBACK_HERO_SLIDES]),
   );
+  const [heroTabIx, setHeroTabIx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -64,6 +65,8 @@ export function PersonalizarPanel() {
   const [uploadIx, setUploadIx] = useState<number | null>(null);
   const [fichaOverrides, setFichaOverrides] = useState<Record<string, PortalFichaFieldOverride>>({});
   const [sectionOrderList, setSectionOrderList] = useState<string[]>(() => [...defaultFichaSectionOrderTitles()]);
+  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
+  const [dragOverSectionIx, setDragOverSectionIx] = useState<number | null>(null);
   const [showTechRefs, setShowTechRefs] = useState(false);
   const [fichaSaving, setFichaSaving] = useState(false);
   const [fichaOk, setFichaOk] = useState<string | null>(null);
@@ -107,11 +110,13 @@ export function PersonalizarPanel() {
       setFichaLoadErr(fichaRes.error.message);
       setFichaOverrides({});
       setSectionOrderList([...defaultFichaSectionOrderTitles()]);
+      setHiddenSections([]);
     } else {
       const cfg = parsePortalInventarioFichaConfig(fichaRes.data?.config ?? null);
       setFichaOverrides(cfg?.fieldOverrides ? { ...cfg.fieldOverrides } : {});
       const orderTitles = cfg?.sectionOrder?.length ? cfg.sectionOrder : [...defaultFichaSectionOrderTitles()];
       setSectionOrderList(orderTitles.map((s) => s.trim()).filter(Boolean));
+      setHiddenSections(cfg?.hiddenSectionTitles?.length ? [...cfg.hiddenSectionTitles] : []);
       setFichaLoadErr(null);
     }
 
@@ -145,7 +150,13 @@ export function PersonalizarPanel() {
       setSaving(false);
       return;
     }
-    const clean = sanitizeSlidesForSave(slides);
+    const clean = sanitizeSlidesForSave(
+      slides.map((slide, i) => ({
+        ...slide,
+        href: "/",
+        alt: `Banner ${i + 1}`,
+      })),
+    );
     if (clean.length !== HERO_CAROUSEL_SLOT_COUNT) {
       setErr(`Se requieren ${HERO_CAROUSEL_SLOT_COUNT} imágenes con URL válida (https).`);
       setSaving(false);
@@ -223,6 +234,7 @@ export function PersonalizarPanel() {
       version: 1 as const,
       fieldOverrides: pruneFieldOverrides(fichaOverrides),
       sectionOrder: sectionOrderList.map((l) => l.trim()).filter(Boolean),
+      hiddenSectionTitles: hiddenSections,
     };
     const { error } = await sb.from("portal_inventario_ficha_config").upsert({ id: 1, config }, { onConflict: "id" });
     if (error) {
@@ -248,6 +260,26 @@ export function PersonalizarPanel() {
       return next;
     });
   }
+
+  function reorderSectionByDrag(from: number, to: number) {
+    setFichaOk(null);
+    setSectionOrderList((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      if (item === undefined) return prev;
+      next.splice(from < to ? to - 1 : to, 0, item);
+      return next;
+    });
+  }
+
+  function toggleSectionHidden(title: string) {
+    setFichaOk(null);
+    setHiddenSections((prev) => (prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]));
+  }
+
+  /** Arrastre desde la asa (HTML5 drag-and-drop nativo). */
+  const SECTION_DND_KEY = "application/x-vedisa-section-index";
 
   const presetsPorSeccion = useMemo(() => {
     const map = new Map<string, (typeof INV_FICHA_PRESETS)[number][]>();
@@ -324,80 +356,91 @@ export function PersonalizarPanel() {
           {fichaOk ? <p className="rounded-lg border border-emerald-500/35 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">{fichaOk}</p> : null}
 
           <p className="text-sm font-semibold text-[#84d8ec]">Carrusel del inicio</p>
-          <ul className="space-y-8">
+          <div className="rounded-xl border border-white/10 bg-[#141c28] p-1">
+            <div
+              role="tablist"
+              aria-label="Elegir banner del carrusel"
+              className="flex flex-wrap gap-1 border-b border-white/10 p-2 sm:gap-2"
+            >
+              {slides.map((_, ix) => (
+                <button
+                  key={ix}
+                  type="button"
+                  role="tab"
+                  aria-selected={heroTabIx === ix}
+                  id={`hero-tab-${ix}`}
+                  aria-controls={`hero-panel-${ix}`}
+                  onClick={() => setHeroTabIx(ix)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4 ${
+                    heroTabIx === ix
+                      ? "bg-[#33C7E3]/20 text-[#dcf6ff] ring-1 ring-[#33C7E3]/40"
+                      : "text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200"
+                  }`}
+                >
+                  Banner {ix + 1}
+                </button>
+              ))}
+            </div>
             {slides.map((s, ix) => (
-              <li
+              <div
                 key={ix}
-                className="rounded-xl border border-white/10 bg-[#141c28] p-5"
+                role="tabpanel"
+                id={`hero-panel-${ix}`}
+                aria-labelledby={`hero-tab-${ix}`}
+                hidden={heroTabIx !== ix}
               >
-                <p className="text-sm font-semibold text-white">Banner {ix + 1}</p>
-                <div className="mt-4 flex flex-col gap-4 lg:flex-row">
-                  <div className="relative h-44 w-full max-w-xl shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-                    {/^https:\/\//i.test(s.src) ? (
-                      <Image
-                        src={s.src}
-                        alt={s.alt || `Banner ${ix + 1}`}
-                        fill
-                        className="object-contain"
-                        sizes="(max-width: 768px) 100vw, 640px"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-neutral-500">Sin vista previa</div>
-                    )}
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-3">
-                    <label className="block text-xs text-neutral-400">
-                      URL de imagen (https)
-                      <input
-                        value={s.src}
-                        onChange={(e) => update(ix, { src: e.target.value })}
-                        className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                        placeholder="https://..."
-                      />
-                    </label>
-                    <label className="block text-xs text-neutral-400">
-                      Destino al hacer clic (ruta interna recomendada, ej. / o /subastas)
-                      <input
-                        value={s.href}
-                        onChange={(e) => update(ix, { href: e.target.value })}
-                        className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                        placeholder="/"
-                      />
-                    </label>
-                    <label className="block text-xs text-neutral-400">
-                      Texto alternativo (accesibilidad)
-                      <input
-                        value={s.alt}
-                        onChange={(e) => update(ix, { alt: e.target.value })}
-                        className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                      />
-                    </label>
-                    <div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadIx === ix || !cld.configured}
-                        id={`hero-upload-${ix}`}
-                        className="hidden"
-                        onChange={(e) => void onPickFile(ix, e.target.files?.[0] ?? null)}
-                      />
-                      <label
-                        htmlFor={`hero-upload-${ix}`}
-                        className={`inline-flex cursor-pointer rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                          cld.configured
-                            ? "border-[#33C7E3]/50 text-[#33C7E3] hover:bg-[#33C7E3]/10"
-                            : "cursor-not-allowed border-white/15 text-neutral-500"
-                        }`}
-                      >
-                        {uploadIx === ix ? "Subiendo…" : "Subir desde tu equipo (Cloudinary)"}
+                <div className="p-5 pt-4">
+                  <div className="flex flex-col gap-4 lg:flex-row">
+                    <div className="relative h-44 w-full max-w-xl shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                      {/^https:\/\//i.test(s.src) ? (
+                        <Image
+                          src={s.src}
+                          alt={`Vista previa banner ${ix + 1}`}
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 768px) 100vw, 640px"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-neutral-500">Sin vista previa</div>
+                      )}
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-3">
+                      <label className="block text-xs text-neutral-400">
+                        URL de imagen (https)
+                        <input
+                          value={s.src}
+                          onChange={(e) => update(ix, { src: e.target.value })}
+                          className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                          placeholder="https://..."
+                        />
                       </label>
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadIx === ix || !cld.configured}
+                          id={`hero-upload-${ix}`}
+                          className="hidden"
+                          onChange={(e) => void onPickFile(ix, e.target.files?.[0] ?? null)}
+                        />
+                        <label
+                          htmlFor={`hero-upload-${ix}`}
+                          className={`inline-flex cursor-pointer rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                            cld.configured
+                              ? "border-[#33C7E3]/50 text-[#33C7E3] hover:bg-[#33C7E3]/10"
+                              : "cursor-not-allowed border-white/15 text-neutral-500"
+                          }`}
+                        >
+                          {uploadIx === ix ? "Subiendo…" : "Subir desde tu equipo (Cloudinary)"}
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
 
           <div className="flex flex-wrap gap-3">
             <button
@@ -413,6 +456,7 @@ export function PersonalizarPanel() {
               disabled={saving}
               onClick={() => {
                 setSlides(slidesForAdminForm([...FALLBACK_HERO_SLIDES]));
+                setHeroTabIx(0);
                 setOk(null);
                 setErr(null);
               }}
@@ -425,81 +469,164 @@ export function PersonalizarPanel() {
           <hr className="border-white/10" />
 
           <div className="space-y-6">
-            <div className="rounded-xl border border-[#33C7E3]/30 bg-[#0c141f] p-5">
-              <p className="text-base font-bold text-[#dcf6ff]">Guía rápida (sin cosas raras)</p>
-              <p className="mt-2 max-w-[74ch] text-sm leading-relaxed text-neutral-200">
-                El orden va de arriba hacia abajo como lo verá cualquier persona en Internet. Mové los bloques con{" "}
-                <strong className="text-white">Subir</strong> / <strong className="text-white">Bajar</strong>. Para cada dato sólo decidís si se ve o no,
-                cómo se llama y en qué capítulo aparece — sin tener que conocer cómo llegan desde Tasaciones.
+            <h2 className="text-base font-bold uppercase tracking-wide text-[#84d8ec]">Vista pública del vehículo en una subasta</h2>
+
+            <div className="rounded-2xl border border-[#33C7E3]/35 bg-gradient-to-br from-[#0f1a24] to-[#0b1219] p-6">
+              <p className="text-lg font-bold text-white">¿Qué estás tocando acá?</p>
+              <p className="mt-2 max-w-[76ch] text-sm leading-relaxed text-neutral-300">
+                Esto <strong className="text-white">no cambia el sistema de Tasaciones</strong>: sólo la forma en que se lee el auto en la sala de remates. Son tres ideas distintas
+                (no tienen el mismo lugar en la página):
               </p>
-              <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs text-neutral-400">
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-200">
+                <li>
+                  <strong className="text-white">Capítulos grandes</strong> (“Identificación”, “Motor”, “Otros datos…”): la misma idea que un catálogo en columnas. Ahí definís el orden, podés
+                  arrastrar y podés <strong className="text-white">ocultar todo un capítulo</strong> en Internet.
+                </li>
+                <li>
+                  <strong className="text-white">Tarjeta corta de precio y fechas</strong>: aparece <em>arriba de la foto grande</em> en la sala, con textos del evento y del lote. Es independiente de los
+                  capítulos.
+                </li>
+                <li>
+                  <strong className="text-white">Ajustes finos</strong> (abajo, cerrados por defecto): renombrar un renglón suelto o moverlo a otro capítulo. Abrilos sólo si falta algo muy específico.
+                </li>
+              </ul>
+              <label className="mt-5 flex cursor-pointer items-start gap-2 text-xs text-neutral-400">
                 <input
                   type="checkbox"
                   checked={showTechRefs}
                   onChange={(e) => setShowTechRefs(e.target.checked)}
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 bg-black/50"
                 />
-                <span>
-                  ¿Necesitás el código interno que usa el equipo de sistemas? Activá esta casilla sólo cuando alguien de soporte te lo pida.
-                </span>
+                <span>Activar textos técnicos para cuando te ayude alguien del equipo de sistemas (opcional).</span>
               </label>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-base font-bold text-white">Primer paso · orden del catálogo en la página</p>
-              <p className="mt-2 text-xs text-neutral-400">
-                Ejemplo: Primero aparece Identificación del vehículo, luego colores… como en un sitio profesional automotriz.
-              </p>
-              <ol className="mt-4 space-y-2">
-                {sectionOrderList.map((title, ix) => (
-                  <li
-                    key={`${ix}-${title}`}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-3 sm:flex-nowrap"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#33C7E3]/28 text-sm font-black text-[#dcf6ff]">
-                      {ix + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 text-sm font-medium text-neutral-50">{title}</span>
-                    <div className="flex shrink-0 gap-1.5">
+            <div className="rounded-2xl border border-white/12 bg-[#141c28] p-5 sm:p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-lg font-bold text-white">Capítulos del detalle (lista estilo catálogo)</p>
+                  <p className="mt-1 max-w-[70ch] text-xs text-neutral-400">
+                    Arrastrá desde el botón de puntos (izquierda) o usá Subir/Bajar.{" "}
+                    <strong className="text-neutral-200">Ocultar</strong> hace desaparecer el capítulo entero en la web (sigue en tu lista por si lo querés volver a mostrar).
+                  </p>
+                </div>
+              </div>
+              <ol className="mt-5 space-y-2">
+                {sectionOrderList.map((title, ix) => {
+                  const hidden = hiddenSections.includes(title);
+                  return (
+                    <li
+                      key={title}
+                      onDragOver={(e: DragEvent) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDragOverSectionIx(ix);
+                      }}
+                      onDragLeave={(e: DragEvent) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverSectionIx((v) => (v === ix ? null : v));
+                      }}
+                      onDrop={(e: DragEvent) => {
+                        e.preventDefault();
+                        const from = Number(e.dataTransfer.getData(SECTION_DND_KEY));
+                        if (!Number.isFinite(from)) return;
+                        reorderSectionByDrag(from, ix);
+                        setDragOverSectionIx(null);
+                      }}
+                      className={`flex flex-wrap items-center gap-2 rounded-xl border px-2 py-2 sm:gap-3 sm:px-3 sm:py-3 ${
+                        hidden
+                          ? "border-dashed border-amber-500/35 bg-amber-950/15"
+                          : dragOverSectionIx === ix
+                            ? "border-[#33C7E3]/60 bg-[#33C7E3]/10 ring-1 ring-[#33C7E3]/35"
+                            : "border-white/10 bg-black/30"
+                      }`}
+                    >
                       <button
                         type="button"
-                        disabled={ix === 0 || fichaSaving}
-                        onClick={() => moveSection(ix, -1)}
-                        aria-label={`Mover "${title}" hacia arriba`}
-                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                        draggable
+                        aria-label={`Arrastrar "${title}"`}
+                        onDragStart={(e: DragEvent) => {
+                          e.dataTransfer.setData(SECTION_DND_KEY, String(ix));
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDragOverSectionIx(null)}
+                        className="flex h-11 w-11 shrink-0 cursor-grab touch-manipulation items-center justify-center rounded-lg border border-white/10 bg-black/40 text-neutral-300 active:cursor-grabbing"
                       >
-                        Subir
+                        <svg
+                          className="h-5 w-5 text-neutral-400"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden
+                        >
+                          <circle cx="6" cy="5" r="1.5" />
+                          <circle cx="14" cy="5" r="1.5" />
+                          <circle cx="6" cy="10" r="1.5" />
+                          <circle cx="14" cy="10" r="1.5" />
+                          <circle cx="6" cy="15" r="1.5" />
+                          <circle cx="14" cy="15" r="1.5" />
+                        </svg>
                       </button>
-                      <button
-                        type="button"
-                        disabled={ix >= sectionOrderList.length - 1 || fichaSaving}
-                        onClick={() => moveSection(ix, 1)}
-                        aria-label={`Mover "${title}" hacia abajo`}
-                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Bajar
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#33C7E3]/26 text-sm font-black text-[#dcf6ff]">
+                        {ix + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className={`block text-sm font-medium ${hidden ? "text-neutral-500 line-through" : "text-neutral-50"}`}>{title}</span>
+                        {hidden ? <span className="mt-0.5 block text-[11px] font-semibold text-amber-200/90">Oculto en la web</span> : null}
+                      </div>
+                      <div className="flex w-full shrink-0 flex-wrap gap-1.5 sm:w-auto sm:justify-end">
+                        <button
+                          type="button"
+                          disabled={fichaSaving}
+                          onClick={() => toggleSectionHidden(title)}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${
+                            hidden
+                              ? "border-emerald-400/50 text-emerald-200 hover:bg-emerald-500/10"
+                              : "border-white/15 text-neutral-100 hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {hidden ? "Mostrar" : "Ocultar"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={ix === 0 || fichaSaving}
+                          onClick={() => moveSection(ix, -1)}
+                          aria-label={`Mover "${title}" hacia arriba`}
+                          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Subir
+                        </button>
+                        <button
+                          type="button"
+                          disabled={ix >= sectionOrderList.length - 1 || fichaSaving}
+                          onClick={() => moveSection(ix, 1)}
+                          aria-label={`Mover "${title}" hacia abajo`}
+                          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Bajar
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
               <button
                 type="button"
                 disabled={fichaSaving}
                 onClick={() => {
                   setSectionOrderList([...defaultFichaSectionOrderTitles()]);
+                  setHiddenSections([]);
                   setFichaOk(null);
                 }}
-                className="mt-4 rounded-lg border border-white/20 px-4 py-2 text-xs font-bold text-neutral-100 hover:bg-white/[0.06]"
+                className="mt-5 rounded-xl border border-white/20 px-4 py-2 text-xs font-bold text-neutral-100 hover:bg-white/[0.06]"
               >
-                Resetear orden al que recomendamos nosotros
+                Volver todo al formato recomendado (orden visible y capítulos mostrados)
               </button>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-base font-bold text-white">Segundo paso · recuadro superior del vehículo</p>
+              <p className="text-base font-bold text-white">Tarjeta de precio y fechas (arriba de la foto grande)</p>
               <p className="mt-2 text-xs text-neutral-400">
-                Fechas importantes del remate, precios y textos aclaratorios tal como aparecen arriba de la fotografía grande. Ocultamos por vos lo que casi nadie debe ver (códigos internos).
+                No es uno de los capítulos de la lista: es la franja de la sala de remates donde el visitante ve lote, subasta y montos antes de llegar al catálogo. Seguimos ocultando por defecto los
+                códigos sólo útiles por dentro.
               </p>
               <div className="mt-4 space-y-4">
                 {PORTAL_BANNER_ADMIN_DEFS.map((def) => (
@@ -591,14 +718,19 @@ export function PersonalizarPanel() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-base font-bold text-white">Tercer paso · ficha del vehículo (marca, modelo…)</p>
-              <p className="mt-2 text-xs text-neutral-400">
-                Está ordenado igual que tus capítulos del primer paso. Abrís cada grupo, localizás el dato (“Marca”, “Color”, etc.) y lo ponés donde corresponda.
-              </p>
-              <div className="mt-5 space-y-3">
+            <details className="group rounded-xl border border-white/10 bg-[#141c28]">
+              <summary className="cursor-pointer list-none px-5 py-4 text-left [&::-webkit-details-marker]:hidden">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                  <p className="text-base font-bold text-white">Ajustes finos · renglones dentro de cada capítulo</p>
+                  <span className="text-xs font-semibold text-[#84d8ec]">Tocar para abrir</span>
+                </div>
+                <p className="mt-2 max-w-[72ch] text-xs text-neutral-400">
+                  El orden de los capítulos lo definís arriba. Acá sólo renombrás un dato, lo escondés o lo movés a otro capítulo — ideal si “Marca” tiene que decir otra cosa o un valor quedó mal etiquetado.
+                </p>
+              </summary>
+              <div className="space-y-3 border-t border-white/10 px-5 pb-5 pt-4">
                 {presetsPorSeccion.map(([sectionTitle, rows]) => (
-                  <details key={sectionTitle} open className="group rounded-xl border border-white/10 bg-black/27">
+                  <details key={sectionTitle} className="group rounded-xl border border-white/10 bg-black/27">
                     <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-[#bdefff] [&::-webkit-details-marker]:hidden">
                       <span className="flex items-center justify-between gap-3">
                         <span>{sectionTitle}</span>
@@ -717,14 +849,21 @@ export function PersonalizarPanel() {
                   </details>
                 ))}
               </div>
-            </div>
+            </details>
 
-            <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-base font-bold text-white">Último paso · sólo cuando falta algo raro que no está arriba</p>
-              <p className="mt-2 text-xs text-neutral-400">
-                Si llegó un texto nuevo desde Tasaciones que no encuentras en los grupos , podés agregarlo vos: escribí palabras pegadas tipo “cilindrada_motor”; si no está segura, pedile a Soporte Vedisa una captura donde se ve el nombre técnico.
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <details className="group rounded-xl border border-white/10 bg-[#141c28]">
+              <summary className="cursor-pointer list-none px-5 py-4 text-left [&::-webkit-details-marker]:hidden">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                  <p className="text-base font-bold text-white">Campos extra del sistema (soporte / casos raros)</p>
+                  <span className="text-xs font-semibold text-[#84d8ec]">Tocar para abrir</span>
+                </div>
+                <p className="mt-2 max-w-[72ch] text-xs text-neutral-400">
+                  Sólo si ves un dato en Tasaciones que no aparece en los grupos de arriba: agregá la clave interna (sin espacios) y el título que debe leer el público. Si no sabés la clave, pedile a
+                  soporte una captura con el nombre técnico.
+                </p>
+              </summary>
+              <div className="border-t border-white/10 px-5 pb-5 pt-4">
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                 <label className="min-w-[200px] flex-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nombre interno (sin espacios)</span>
                   <input
@@ -736,7 +875,7 @@ export function PersonalizarPanel() {
                 </label>
                 <label className="min-w-[200px] flex-[2]">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                    Titulo bonito para el público <span className="text-rose-200">(requerido)</span>
+                    Título bonito para el público <span className="text-rose-200">(requerido)</span>
                   </span>
                   <input
                     value={customLabelDraft}
@@ -790,7 +929,8 @@ export function PersonalizarPanel() {
                   Todavía no agregaste nada desde este cuadrito (y está perfecto así).
                 </p>
               )}
-            </div>
+              </div>
+            </details>
 
             <button
               type="button"

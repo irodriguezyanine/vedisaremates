@@ -543,8 +543,10 @@ export function applyFichaPublicConfig(
   }
 
   const secTitles = [...bySec.keys()].sort((a, b) => compareSectionTitles(a, b, sectionPreset));
+  const hiddenSecs = new Set((cfg.hiddenSectionTitles ?? []).map((s) => s.trim()).filter(Boolean));
   const sectionsOut: InventarioFichaSection[] = [];
   for (const title of secTitles) {
+    if (hiddenSecs.has(title)) continue;
     const list = bySec.get(title);
     if (!list?.length) continue;
     list.sort((a, b) => {
