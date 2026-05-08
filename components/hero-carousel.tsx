@@ -122,7 +122,7 @@ export function HeroCarousel() {
         </button>
       </div>
 
-      <div className="flex justify-center gap-2 border-t border-neutral-100 bg-white py-2 sm:py-2.5">
+      <div className="flex justify-center gap-2 border-t border-neutral-100 bg-white py-1.5 sm:py-2">
         {slides.map((_, idx) => (
           <button
             key={idx}

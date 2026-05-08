@@ -413,8 +413,8 @@ export function AuctionFeed() {
 
   return (
     <section aria-labelledby="sec-subastas" className="border-y border-neutral-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%)]">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto max-w-7xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5 lg:px-8">
+        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-wrap gap-1 rounded-xl bg-white/90 p-1.5 shadow-md ring-1 ring-black/[0.06] backdrop-blur">
             {(
               [
@@ -471,7 +471,7 @@ export function AuctionFeed() {
           )}
         </div>
 
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 id="sec-subastas" className="text-xl font-black text-neutral-900 md:text-2xl">
               {heading}
@@ -599,7 +599,7 @@ export function AuctionFeed() {
           </div>
         )}
 
-        <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-8 sm:flex-row sm:gap-4">
           <Link
             href={cat}
             target="_blank"

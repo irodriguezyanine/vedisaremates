@@ -13,7 +13,7 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-neutral-200 bg-[#f7f9fb] text-neutral-700">
       <SocialShareBar />
 
-      <div className="mx-auto max-w-7xl space-y-8 px-4 py-12 text-sm sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 text-sm sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-base font-black text-[#1a2c4e]">{SITE.name}</p>

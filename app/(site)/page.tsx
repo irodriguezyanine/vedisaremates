@@ -26,11 +26,11 @@ export default function HomePage() {
       </div>
 
       <div className="bg-gradient-to-b from-white via-[#f8fafc] to-[#eef2f7]">
-        <Reveal className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <Reveal className="mx-auto max-w-7xl px-4 pt-1 pb-0 sm:px-6 sm:pt-2 lg:px-8">
           <AuctionFeed />
         </Reveal>
 
-        <div className="mx-auto max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5 lg:px-8">
           <Reveal className="text-center">
             <Link
               href={cat}

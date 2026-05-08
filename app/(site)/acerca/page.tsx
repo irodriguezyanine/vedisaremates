@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 
 import { Reveal } from "@/components/reveal-on-scroll";
 import { TrustStrip } from "@/components/home-sections";
-import { catalogoHref } from "@/lib/site-config";
+import { catalogoHref, SITE } from "@/lib/site-config";
 
 export const metadata: Metadata = {
   title: "Acerca de Vedisa",
@@ -45,10 +45,20 @@ export default function AcercaPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
       <Reveal className="text-center">
-        <h1 className="text-4xl font-black uppercase tracking-tight text-[#009ade] md:text-[2.8rem]">
-          Vedisa <span className="text-[#FFC107]">Remates</span>
+        <h1 className="flex justify-center">
+          <Link href="/" className="inline-flex shrink-0 hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-4 rounded-sm">
+            <Image
+              src="/vedisa-logo-navbar.png"
+              alt={SITE.name}
+              width={480}
+              height={96}
+              className="h-14 w-auto max-w-[min(92vw,440px)] sm:h-[4.5rem] md:h-[5.25rem]"
+              sizes="(max-width: 768px) 92vw, 440px"
+              priority
+            />
+          </Link>
         </h1>
-        <div className="mx-auto mt-4 h-1 w-16 rounded-full bg-[#FFC107]" aria-hidden />
+        <div className="mx-auto mt-6 h-1 w-16 rounded-full bg-[#FFC107]" aria-hidden />
         <p className="mx-auto mt-6 max-w-3xl text-lg text-neutral-600">
           Expertos en gestión de activos corporativos y maximizar recupero. Transformamos flotas, maquinaria y
           vehículos en capital líquido con agilidad, tecnología, transparencia y más de tres décadas de trayectoria.

@@ -26,7 +26,7 @@ export function SocialShareBar() {
 
   return (
     <div
-      className="border-y border-neutral-200/80 bg-gradient-to-r from-neutral-50 via-white to-neutral-50 py-3 text-center"
+      className="border-y border-neutral-200/80 bg-gradient-to-r from-neutral-50 via-white to-neutral-50 py-2 text-center"
       role="region"
       aria-label="Compartir"
     >
