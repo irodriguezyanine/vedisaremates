@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { classifyRemateForFeed, countdownLabelFromEndsAt, type RemateFeedSlice } from "@/lib/portal-remate-feed";
-import { fetchRemateThumbnailMap } from "@/lib/remate-cover-thumbnails";
+import { fetchRemateCarouselThumbnailsMap } from "@/lib/remate-cover-thumbnails";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 import { catalogoHref } from "@/lib/site-config";
@@ -103,6 +103,140 @@ function tabToSlice(tab: AuctionTab): RemateFeedSlice {
   return "cerrada";
 }
 
+const cardShell =
+  "group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)] md:flex-row md:items-stretch";
+
+const EMPTY_SLIDES: string[] = [];
+
+function RemateCarousel({
+  urls,
+  badge,
+  altBase,
+}: {
+  urls: string[];
+  badge: ReactNode;
+  altBase: string;
+}) {
+  const n = urls.length;
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    setIdx(0);
+  }, [urls.join("|")]);
+
+  useEffect(() => {
+    if (n <= 1) return;
+    const id = window.setInterval(() => setIdx((i) => (i + 1) % n), 5500);
+    return () => window.clearInterval(id);
+  }, [n]);
+
+  const slide = n > 0 ? idx % n : 0;
+
+  return (
+    <div className="relative min-h-[200px] w-full overflow-hidden bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/40 md:h-full md:min-h-[220px] lg:min-h-[260px]">
+      {n === 0 ? (
+        <>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <span className="rounded-full bg-white/75 px-4 py-1.5 text-center text-xs font-semibold text-neutral-500 backdrop-blur-sm">
+              Sin fotos en los lotes del remate
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={urls[slide]}
+            alt={`${altBase} — imagen ${slide + 1} de ${n}`}
+            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+            loading={slide === 0 ? "eager" : "lazy"}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" aria-hidden />
+          {n > 1 ? (
+            <>
+              <div className="absolute inset-y-0 left-0 flex w-10 items-center justify-center md:w-11">
+                <button
+                  type="button"
+                  onClick={() => setIdx((i) => (i - 1 + n) % n)}
+                  className="pointer-events-auto rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/50"
+                  aria-label="Imagen anterior"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                    <path strokeWidth="2" d="M15 6l-6 6 6 6" />
+                  </svg>
+                </button>
+              </div>
+              <div className="absolute inset-y-0 right-0 flex w-10 items-center justify-center md:w-11">
+                <button
+                  type="button"
+                  onClick={() => setIdx((i) => (i + 1) % n)}
+                  className="pointer-events-auto rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/50"
+                  aria-label="Imagen siguiente"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                    <path strokeWidth="2" d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                {urls.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setIdx(i)}
+                    className={`h-2 w-2 rounded-full transition ${i === slide ? "scale-110 bg-white shadow" : "bg-white/45 hover:bg-white/70"}`}
+                    aria-label={`Ir a la imagen ${i + 1}`}
+                    aria-current={i === slide}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </>
+      )}
+      <div className="pointer-events-none absolute left-3 top-3 z-[1]">{badge}</div>
+      {n > 1 ? (
+        <span className="pointer-events-none absolute right-3 top-3 z-[1] rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-bold tabular-nums text-white backdrop-blur-sm">
+          {slide + 1}/{n}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function DemoRemateCarousel({ badge }: { badge: ReactNode }) {
+  const slides = [
+    "from-neutral-200 via-sky-100/70 to-neutral-100",
+    "from-amber-100/90 via-neutral-100 to-sky-50",
+    "from-neutral-300 via-neutral-100 to-emerald-50/80",
+  ];
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setIdx((i) => (i + 1) % slides.length), 4500);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="relative min-h-[200px] w-full overflow-hidden md:h-full md:min-h-[220px] lg:min-h-[260px]">
+      {slides.map((grad, i) => (
+        <div
+          key={`demo-slide-${i}`}
+          className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-500 ${grad} ${idx === i ? "opacity-100" : "opacity-0"}`}
+          aria-hidden
+        />
+      ))}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-600 backdrop-blur-sm">
+          Ejemplo {idx + 1}/{slides.length}
+        </span>
+      </div>
+      <div className="pointer-events-none absolute left-3 top-3 z-[1]">{badge}</div>
+    </div>
+  );
+}
+
 export function AuctionFeed() {
   const cat = catalogoHref();
   const [tab, setTab] = useState<AuctionTab>("actuales");
@@ -146,36 +280,36 @@ export function AuctionFeed() {
   const liveRows = bundle.kind === "live" ? bundle.rows : [];
   const liveError = bundle.kind === "live" ? bundle.err : null;
   const [, setTick] = useState(0);
-  const [thumbMap, setThumbMap] = useState<Record<string, string | null>>({});
+  const [carouselMap, setCarouselMap] = useState<Record<string, string[]>>({});
 
   const liveIdsKey =
     bundle.kind === "live" ? [...bundle.rows].map((r) => r.id).sort().join(",") : "";
 
   useEffect(() => {
     if (bundle.kind !== "live") {
-      setThumbMap({});
+      setCarouselMap({});
       return;
     }
     const ids = bundle.rows.map((r) => r.id);
     if (!ids.length) {
-      setThumbMap({});
+      setCarouselMap({});
       return;
     }
 
     let cancelled = false;
 
-    async function thumbs() {
+    async function loadCarousels() {
       const sb = createClient();
       if (!sb) return;
       try {
-        const m = await fetchRemateThumbnailMap(sb, ids);
-        if (!cancelled) setThumbMap(m);
+        const m = await fetchRemateCarouselThumbnailsMap(sb, ids);
+        if (!cancelled) setCarouselMap(m);
       } catch {
-        if (!cancelled) setThumbMap({});
+        if (!cancelled) setCarouselMap({});
       }
     }
 
-    void thumbs();
+    void loadCarousels();
     return () => {
       cancelled = true;
     };
@@ -296,31 +430,29 @@ export function AuctionFeed() {
         </div>
 
         {bundle.kind === "loading" ? (
-          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto flex max-w-5xl flex-col gap-7">
             {[0, 1, 2].map((k) => (
               <div
                 key={k}
-                className="h-[320px] animate-pulse rounded-2xl border border-neutral-200/80 bg-gradient-to-br from-neutral-100 to-neutral-200/60"
-              />
+                className="flex h-[200px] animate-pulse overflow-hidden rounded-2xl border border-neutral-200/80 md:h-[260px] md:flex-row"
+              >
+                <div className="h-full min-h-[200px] w-full bg-gradient-to-br from-neutral-100 to-neutral-200/60 md:w-[42%]" />
+                <div className="hidden flex-1 flex-col gap-3 p-6 md:flex">
+                  <div className="h-6 w-2/3 rounded bg-neutral-200" />
+                  <div className="h-4 w-full rounded bg-neutral-100" />
+                  <div className="mt-auto h-4 w-40 rounded bg-neutral-100" />
+                </div>
+              </div>
             ))}
           </div>
         ) : useDemo ? (
-          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto flex max-w-5xl flex-col gap-7">
             {DEMO_LOTES.map((lote, i) => (
-              <article
-                key={i}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-1 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)]"
-              >
-                <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/40">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-500 backdrop-blur-sm">
-                      Ejemplo
-                    </span>
-                  </div>
-                  <div className="absolute left-3 top-3">{estadoBadge(lote.estado)}</div>
+              <article key={i} className={cardShell}>
+                <div className="relative w-full md:w-[min(42%,420px)] md:shrink-0">
+                  <DemoRemateCarousel badge={estadoBadge(lote.estado)} />
                 </div>
-                <div className="flex flex-1 flex-col p-5">
+                <div className="flex min-w-0 flex-1 flex-col p-5">
                   <h3 className="line-clamp-2 text-lg font-bold text-neutral-900">{lote.titulo}</h3>
                   <p className="mt-2 text-sm text-neutral-600">{lote.subtitulo}</p>
                   {lote.countdown ? (
@@ -328,7 +460,7 @@ export function AuctionFeed() {
                       Cierra en: <span className="tabular-nums font-bold">{lote.countdown}</span>
                     </p>
                   ) : (
-                    <p className="mt-3 text-xs text-neutral-500">Verifica ficha y condiciones antes de ofertar.</p>
+                    <p className="mt-3 text-xs text-neutral-500">Verificá ficha y condiciones antes de ofertar.</p>
                   )}
                   <div className="mt-auto border-t border-neutral-100 pt-4">
                     <span className="text-sm font-bold text-neutral-400">Conectá la base para habilitar enlaces</span>
@@ -348,40 +480,18 @@ export function AuctionFeed() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto flex max-w-5xl flex-col gap-7">
             {slicedLive.map((r) => {
               const slice = classifyRemateForFeed(r);
               const cd = slice !== "cerrada" ? countdownLabelFromEndsAt(r.ends_at) : null;
-              const thumbCover = thumbMap[r.id];
+              const slides = carouselMap[r.id] ?? EMPTY_SLIDES;
 
               return (
-                <article
-                  key={r.id}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-1 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)]"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/40">
-                    {thumbCover ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={thumbCover}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <>
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-500 backdrop-blur-sm">
-                            Sin foto en primer lote
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" aria-hidden />
-                    <div className="absolute left-3 top-3">{badgeForSlice(slice, r.estado)}</div>
+                <article key={r.id} className={cardShell}>
+                  <div className="relative w-full md:w-[min(42%,420px)] md:shrink-0">
+                    <RemateCarousel urls={slides} badge={badgeForSlice(slice, r.estado)} altBase={r.titulo} />
                   </div>
-                  <div className="flex flex-1 flex-col p-5">
+                  <div className="flex min-w-0 flex-1 flex-col p-5">
                     <h3 className="line-clamp-2 text-lg font-bold text-neutral-900">{r.titulo}</h3>
                     <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{renderLiveSubtitle(r)}</p>
                     {cd ? (

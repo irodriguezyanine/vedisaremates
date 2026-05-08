@@ -11,7 +11,7 @@ import { HeaderAuth } from "@/components/header-auth";
 import { ScrollHeader } from "./scroll-header";
 
 const navClasses = (active: boolean) =>
-  `rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+  `inline-flex whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium transition-colors ${
     active ? "bg-white/10 text-[#FFC600]" : "text-white/85 hover:bg-white/10 hover:text-[#33C7E3]"
   }`;
 
@@ -20,15 +20,25 @@ export function SiteHeader() {
   const cat = catalogoHref();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const catRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   const isActive = useCallback((p: string) => pathname === p, [pathname]);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   useEffect(() => {
+    setCatOpen(false);
+    setMoreOpen(false);
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
+      const t = e.target as Node;
+      if (catRef.current && !catRef.current.contains(t)) setCatOpen(false);
+      if (moreRef.current && !moreRef.current.contains(t)) setMoreOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -36,86 +46,119 @@ export function SiteHeader() {
 
   return (
     <ScrollHeader>
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <Link
-          href="/"
-          className="flex shrink-0 items-center hover:opacity-90"
-          aria-label={`${SITE.name} — inicio`}
-        >
-          <Image
-            src="/vedisa-logo-navbar.png"
-            alt={`${SITE.name} — ${SITE.tagline}`}
-            width={480}
-            height={96}
-            className="h-9 w-auto max-w-[min(58vw,260px)] sm:h-10 sm:max-w-[300px]"
-            sizes="(max-width: 640px) 58vw, 300px"
-            priority
-          />
-        </Link>
-
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Principal">
-          <Link href="/" className={navClasses(isActive("/"))}>
-            Inicio
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-4">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center hover:opacity-90"
+            aria-label={`${SITE.name} — inicio`}
+          >
+            <Image
+              src="/vedisa-logo-navbar.png"
+              alt={`${SITE.name} — ${SITE.tagline}`}
+              width={480}
+              height={96}
+              className="h-9 w-auto max-w-[min(52vw,220px)] sm:h-10 sm:max-w-[260px]"
+              sizes="(max-width: 640px) 52vw, 260px"
+              priority
+            />
           </Link>
 
-          <div className="relative" ref={catRef}>
-            <button
-              type="button"
-              className={navClasses(false)}
-              aria-expanded={catOpen}
-              aria-haspopup="true"
-              onClick={() => setCatOpen((o) => !o)}
-            >
-              Ver <span aria-hidden className="ml-0.5 text-[10px]">▾</span>
-            </button>
-            {catOpen ? (
-              <div
-                role="menu"
-                className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+          <nav className="hidden min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto lg:flex xl:justify-center" aria-label="Principal">
+            <Link href="/" className={navClasses(isActive("/"))}>
+              Inicio
+            </Link>
+
+            <div className="relative shrink-0" ref={catRef}>
+              <button
+                type="button"
+                className={navClasses(false)}
+                aria-expanded={catOpen}
+                aria-haspopup="true"
+                onClick={() => setCatOpen((o) => !o)}
               >
-                <Link href="/" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
-                  Todas las categorías
-                </Link>
-                <div className="border-t border-neutral-100 px-4 py-2 text-xs text-neutral-500">
-                  DESARME <span className="text-neutral-400">0</span>
+                Ver&nbsp;<span aria-hidden className="text-[10px]">▾</span>
+              </button>
+              {catOpen ? (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+                >
+                  <Link href="/" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                    Todas las categorías
+                  </Link>
+                  <div className="border-t border-neutral-100 px-4 py-2 text-xs text-neutral-500">
+                    DESARME <span className="text-neutral-400">0</span>
+                  </div>
+                  <div className="px-4 py-2 text-xs text-neutral-500">
+                    LIVIANOS <span className="font-medium text-neutral-800">1</span>
+                  </div>
+                  <div className="px-4 py-2 text-xs text-neutral-500">
+                    PESADOS <span className="text-neutral-400">0</span>
+                  </div>
+                  <div className="px-4 py-2 text-xs text-neutral-500">
+                    VENTA DIRECTA <span className="font-medium text-neutral-800">17</span>
+                  </div>
                 </div>
-                <div className="px-4 py-2 text-xs text-neutral-500">
-                  LIVIANOS <span className="font-medium text-neutral-800">1</span>
-                </div>
-                <div className="px-4 py-2 text-xs text-neutral-500">
-                  PESADOS <span className="text-neutral-400">0</span>
-                </div>
-                <div className="px-4 py-2 text-xs text-neutral-500">
-                  VENTA DIRECTA <span className="font-medium text-neutral-800">17</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
 
-          <Link href={cat} target="_blank" rel="noopener noreferrer" className={navClasses(false)}>
-            Catálogo
-          </Link>
-          <Link href="/subastas" className={navClasses(isActive("/subastas") || pathname?.startsWith("/subastas/"))}>
-            Subastas
-          </Link>
-          <Link href="/como-participar" className={navClasses(isActive("/como-participar"))}>
-            Cómo participar
-          </Link>
-          <Link href="/faq" className={navClasses(isActive("/faq"))}>
-            Ayuda
-          </Link>
-          <Link href="/contacto" className={navClasses(isActive("/contacto"))}>
-            Contacto
-          </Link>
-          <Link href="/acerca" className={navClasses(isActive("/acerca"))}>
-            Acerca de
-          </Link>
-          <Link href="/buscar" className={navClasses(isActive("/buscar"))}>
-            Búsqueda
-          </Link>
-        </nav>
+            <Link
+              href={cat}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${navClasses(false)} shrink-0`}
+            >
+              Catálogo
+            </Link>
+            <Link
+              href="/subastas"
+              className={`${navClasses(isActive("/subastas") || Boolean(pathname?.startsWith("/subastas/")))} shrink-0`}
+            >
+              Subastas
+            </Link>
 
-        <div className="hidden items-center gap-2 lg:flex">
+            <div className="relative shrink-0" ref={moreRef}>
+              <button
+                type="button"
+                className={navClasses(false)}
+                aria-expanded={moreOpen}
+                aria-haspopup="true"
+                onClick={() => setMoreOpen((o) => !o)}
+              >
+                Más&nbsp;<span aria-hidden className="text-[10px]">▾</span>
+              </button>
+              {moreOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+                >
+                  <Link
+                    href="/como-participar"
+                    role="menuitem"
+                    className="block px-4 py-2 text-sm hover:bg-neutral-50"
+                  >
+                    Cómo participar
+                  </Link>
+                  <Link href="/faq" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                    Ayuda / FAQ
+                  </Link>
+                  <Link href="/contacto" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                    Contacto
+                  </Link>
+                  <Link href="/acerca" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                    Acerca de
+                  </Link>
+                  <Link href="/buscar" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
+                    Búsqueda
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          </nav>
+        </div>
+
+        <div className="hidden shrink-0 lg:flex">
           <HeaderAuth />
         </div>
 
@@ -163,6 +206,9 @@ export function SiteHeader() {
             </Link>
             <Link href="/contacto" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
               Contacto
+            </Link>
+            <Link href="/acerca" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+              Acerca de
             </Link>
             <Link href="/terminos" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
               Términos
