@@ -13,6 +13,16 @@ import { createClient } from "@/lib/supabase/client";
 
 type Lote = PortalRemateLoteRow & { inventario: InventarioRow | null };
 
+const TZ_CHILE = { timeZone: "America/Santiago" } satisfies Intl.DateTimeFormatOptions;
+
+function formatClDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("es-CL", TZ_CHILE);
+}
+
+function formatClTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-CL", TZ_CHILE);
+}
+
 type Props = {
   initialRemate: PortalRemateRow;
   initialLotes: Lote[];
@@ -28,7 +38,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [tick, setTick] = useState<number | null>(null);
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
 
@@ -60,8 +70,9 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   }, [lotes, loadOffers]);
 
   useEffect(() => {
-    const tick = window.setInterval(() => setNowTick(Date.now()), 1000);
-    return () => window.clearInterval(tick);
+    setTick(Date.now());
+    const id = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -167,13 +178,16 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   }
 
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
-  const countdown = remate.ends_at ? new Date(remate.ends_at).getTime() - nowTick : 0;
+  const countdownLive =
+    tick != null && remate.ends_at ? new Date(remate.ends_at).getTime() - tick : null;
 
   const canBid =
     viewerId &&
     remate.estado === "en_curso" &&
-    countdown > 0 &&
-    (!remate.starts_at || new Date(remate.starts_at).getTime() <= nowTick);
+    tick != null &&
+    countdownLive !== null &&
+    countdownLive > 0 &&
+    (!remate.starts_at || new Date(remate.starts_at).getTime() <= tick);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:py-10">
@@ -190,10 +204,12 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
         <div className="w-full shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-sm shadow-sm sm:max-w-sm">
           <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</p>
           <p className="mt-2 text-lg font-bold capitalize text-neutral-900">{remate.estado.replaceAll("_", " ")}</p>
-          <p className={`mt-2 text-xs font-medium ${countdown <= 0 ? "text-red-600" : "text-emerald-700"}`}>
-            {countdown <= 0
+          <p className={`mt-2 text-xs font-medium ${countdownLive !== null && countdownLive <= 0 ? "text-red-600" : "text-emerald-700"}`}>
+            {countdownLive !== null && countdownLive <= 0
               ? "Este remate ya cerró según la fecha configurada."
-              : `Cierra ${new Date(remate.ends_at).toLocaleString("es-CL")}`}
+              : remate.ends_at
+                ? `Cierra ${formatClDateTime(remate.ends_at)}`
+                : null}
           </p>
           {viewerId ? (
             <p className="mt-4 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
@@ -287,9 +303,15 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                     <p className="mt-2 text-sm text-neutral-600">
                       {remate.estado !== "en_curso"
                         ? "Cuando el remate esté en curso podrás ofertar."
-                        : countdown <= 0
+                        : countdownLive !== null && countdownLive <= 0
                           ? "El remate ya cerró según la fecha de fin."
-                          : "Esperando la hora de inicio."}
+                          : tick === null
+                            ? "Cargando estado del remate…"
+                            : !viewerId
+                              ? "Iniciá sesión para ofertar."
+                              : remate.starts_at && new Date(remate.starts_at).getTime() > tick
+                                ? "Esperando la hora de inicio."
+                                : "No podés ofertar en este momento."}
                     </p>
                   ) : (
                     <>
@@ -329,7 +351,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                             viewerId && o.user_id === viewerId ? "bg-[#fff9e6] border-[#FFC600]/40" : ""
                           }`}
                         >
-                          <span className="text-neutral-500">{new Date(o.created_at).toLocaleTimeString("es-CL")}</span>
+                          <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
                           <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
                           <span className="text-[10px] text-neutral-400">
                             {o.user_id === viewerId ? "vos" : "participante"}

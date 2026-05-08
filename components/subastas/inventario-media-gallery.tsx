@@ -4,11 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import type { InventarioRow } from "@/lib/portal-types";
-import {
-  bucketGlo3dViewerUrls,
-  bucketInventarioStaticImages,
-  collectInventarioMediaUrls,
-} from "@/lib/inventario-media";
+import { getInventarioGlo3dIframeUrls, getInventarioStaticImageUrls } from "@/lib/inventario-media";
 
 type Props = {
   inventario: (InventarioRow & Record<string, unknown>) | null;
@@ -21,10 +17,9 @@ export function InventarioMediaGallery({ inventario, presentation = "standard" }
 
   const { statics, glo3d } = useMemo(() => {
     if (!inventario) return { statics: [] as string[], glo3d: [] as string[] };
-    const all = collectInventarioMediaUrls(inventario);
     return {
-      statics: bucketInventarioStaticImages(all),
-      glo3d: bucketGlo3dViewerUrls(all),
+      statics: getInventarioStaticImageUrls(inventario),
+      glo3d: getInventarioGlo3dIframeUrls(inventario),
     };
   }, [inventario]);
 

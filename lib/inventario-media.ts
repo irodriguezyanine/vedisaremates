@@ -1,8 +1,34 @@
 import type { InventarioRow } from "@/lib/portal-types";
+import {
+  buildGlo3dIframeNovaUrl,
+  extractGlo3dId,
+  normalizeGlo3dUrl,
+  resolveView3dUrlFromRaw,
+} from "@/lib/glo3d-catalog";
 
-/** Campos opcionales que a veces vienen desde Tasaciones/catálogo (además de `imagenes[]`). */
+/**
+ * Mismos campos que `view3dRaw` en Catalogo-Vedisa (`normalizeRow`).
+ * @see https://github.com/irodriguezyanine/Catalogo-Vedisa
+ */
+const VIEW3D_FIELD_KEYS = [
+  "url_3d",
+  "link_3d",
+  "visor_3d_url",
+  "glo3d_url",
+  "iframe_3d",
+  "view3d",
+  "iframe",
+  "iframe_with_params",
+  "src",
+  "src_with_params",
+] as const;
+
+const VIEW3D_KEY_SET = new Set<string>(VIEW3D_FIELD_KEYS);
+
+/** Campos de imagen / galería frecuentes en Tasaciones y catálogo. */
 const EXTRA_IMAGE_KEYS = [
   "thumbnail_url",
+  "thumbnail",
   "thumb_url",
   "miniatura",
   "miniatura_url",
@@ -10,27 +36,46 @@ const EXTRA_IMAGE_KEYS = [
   "url_miniatura",
   "imagen_principal",
   "foto_principal",
-  "glo3d_url",
-  "glo3d_link",
-  "url_glo3d",
+  "foto_portada",
+  "fotos_urls",
+  "fotos",
+  "galeria",
+  "galeria_fotos",
+  "images",
+  "photos",
+  "photo_urls",
   "viewer_360_url",
   "visor_360_url",
   "url_visita_virtual",
   "link_visita_virtual",
+  "glo3d_url",
+  "glo3d_link",
+  "url_glo3d",
 ] as const;
 
-function isHttpsUrl(v: unknown): v is string {
-  return typeof v === "string" && /^https?:\/\//i.test(v.trim());
+function toCollectableUrl(v: unknown): string | null {
+  if (typeof v === "number" && Number.isFinite(v)) return toCollectableUrl(String(v));
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return t;
+  if (t.startsWith("//")) return `https:${t}`;
+  return null;
 }
 
-function pushHttpsUnique(out: string[], u: unknown) {
-  if (!isHttpsUrl(u)) return;
-  const t = u.trim();
-  if (!out.includes(t)) out.push(t);
+function pushUnique(out: string[], u: unknown) {
+  const n = toCollectableUrl(u);
+  if (n && !out.includes(n)) out.push(n);
 }
 
 function urlsFromJsonItem(x: unknown): string[] {
-  if (isHttpsUrl(x)) return [x.trim()];
+  if (typeof x === "string") {
+    const s = x.trim();
+    if (!s) return [];
+    if (s.startsWith("//")) return [`https:${s}`];
+  }
+  const direct = toCollectableUrl(x);
+  if (direct) return [direct];
   if (!x || typeof x !== "object") return [];
   const o = x as Record<string, unknown>;
   for (const k of [
@@ -39,6 +84,7 @@ function urlsFromJsonItem(x: unknown): string[] {
     "href",
     "link",
     "imagen",
+    "image",
     "viewer",
     "embed",
     "embed_url",
@@ -48,12 +94,13 @@ function urlsFromJsonItem(x: unknown): string[] {
     "link_visita",
   ]) {
     const v = o[k];
-    if (isHttpsUrl(v)) return [String(v).trim()];
+    const n = toCollectableUrl(v);
+    if (n) return [n];
   }
   return [];
 }
 
-/** Parse `imagenes` JSON (array JSON en texto), string suelto, u objetos `{ url }` — tolerancia tipo catálogo. */
+/** Parse `imagenes` y campos análogos (JSON, URLs sueltas, listas separadas por coma, HTML iframe). */
 export function urlsFromImagenesField(raw: unknown): string[] {
   if (!raw) return [];
 
@@ -67,6 +114,8 @@ export function urlsFromImagenesField(raw: unknown): string[] {
 
   if (typeof raw === "string") {
     const s = raw.trim();
+    if (!s) return [];
+    if (s.includes("<iframe") || /\bglo3d\.net/i.test(s)) return [s];
     if (s.startsWith("[") || s.startsWith("{")) {
       try {
         const parsed = JSON.parse(s) as unknown;
@@ -75,65 +124,156 @@ export function urlsFromImagenesField(raw: unknown): string[] {
         return [];
       }
     }
-    if (isHttpsUrl(s)) return [s.trim()];
-    return [];
+    const direct = toCollectableUrl(s);
+    if (direct) return [direct];
+    /** Comma-separated URLs (patrón catálogo / exports CSV). */
+    const parts = s
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => toCollectableUrl(part))
+      .filter((x): x is string => Boolean(x));
+    return parts.length ? parts : [];
   }
 
   return urlsFromJsonItem(raw);
 }
 
-/** Lista todas las URLs de media del ítem inventario (fotos, miniaturas, enlaces CDN y Glo3D). */
+/** Lista todas las URLs https/`//` coleccionables (fotos, miniaturas, visores como URL). */
 export function collectInventarioMediaUrls(inv: InventarioRow & Record<string, unknown>): string[] {
   const out: string[] = [];
 
-  for (const url of urlsFromImagenesField(inv.imagenes)) {
-    pushHttpsUnique(out, url);
+  const imageFields = ["imagenes", "fotos", "galeria", "galeria_fotos", "images", "photos", "photo_urls", "fotos_urls"] as const;
+  for (const k of imageFields) {
+    const v = inv[k as keyof typeof inv];
+    if (v === undefined) continue;
+    for (const url of urlsFromImagenesField(v)) {
+      const n = toCollectableUrl(url);
+      if (n && !out.includes(n)) out.push(n);
+    }
   }
 
   for (const k of EXTRA_IMAGE_KEYS) {
-    pushHttpsUnique(out, inv[k]);
+    pushUnique(out, inv[k]);
   }
 
-  Object.keys(inv).forEach((k) => {
-    if (/^foto_?\d*$/i.test(k) || /^imagen_?\d*$/i.test(k)) {
-      pushHttpsUnique(out, inv[k]);
+  for (const k of VIEW3D_FIELD_KEYS) {
+    pushUnique(out, inv[k]);
+  }
+
+  for (const key of Object.keys(inv)) {
+    if (/^foto_?\d*$/i.test(key) || /^imagen_?\d*$/i.test(key)) {
+      pushUnique(out, inv[key]);
     }
-  });
+  }
 
   return out;
 }
 
 const GLO3D_HINT =
-  /\bglo3d\b|glo3d\.net|glo3d\.com|capture\.360|theta360|ricoh|spin\.glo3d|viewer\/embed|embed\/viewer|my360|sphere\.js/i;
+  /\bglo3d\b|glo3d\.net|glo3d\.com|capture\.360|theta360|ricoh|spin\.glo3d|viewer\/embed|embed\/viewer|my360|sphere\.js|iframenova/i;
+
+/** Heurística cercana a `isLikelyImageUrl` del catálogo para no usar iframes Glo3D como `<img>`. */
+export function isLikelyRasterImageUrl(url?: string): boolean {
+  if (!url || !url.startsWith("http")) return false;
+  const normalized = url.toLowerCase();
+  if (normalized.includes("glo3d.net/iframe") || normalized.includes("glo3d.net/iframenova") || normalized.includes("<iframe")) {
+    return false;
+  }
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(normalized)) return true;
+  return /cdn\.|cloudfront|amazonaws|supabase|img|image|media|cloudinary/.test(normalized);
+}
 
 export function isGlo3dOr360Url(url: string): boolean {
   return GLO3D_HINT.test(url);
 }
 
-/** URLs que suelen cargarse bien como `<img>` (miniatura o foto plana). */
-export function bucketInventarioStaticImages(urls: string[]): string[] {
-  return urls.filter((u) => !isGlo3dOr360Url(u));
-}
+export function getInventarioGlo3dIframeUrls(inv: InventarioRow & Record<string, unknown>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (u: string | undefined) => {
+    if (!u?.trim()) return;
+    const t = u.trim();
+    if (seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
 
-/** URLs para visor embed (360 / Glo3D tal como llegan desde Tasaciones/catálogo). */
-export function bucketGlo3dViewerUrls(urls: string[]): string[] {
-  return urls.filter((u) => isGlo3dOr360Url(u));
-}
-
-/** Primera URL pensada para iframe / visor 360° (no sirve como `<img src>` plano). */
-export function firstGlo3dViewerUrl(inv: InventarioRow & Record<string, unknown>): string | null {
-  const g = bucketGlo3dViewerUrls(collectInventarioMediaUrls(inv));
-  return g[0] ?? null;
-}
-
-/** Miniatura tipo catálogo: prioriza JPG/PNG/WebP explícitos, si no primera URL plana disponible. */
-export function preferredThumbnailUrl(inv: InventarioRow & Record<string, unknown>): string | null {
-  const all = collectInventarioMediaUrls(inv);
-  const statics = bucketInventarioStaticImages(all);
-  if (!statics.length) {
-    // Sin foto plana: algunos setups solo tienen viewer; no hay thumb real.
-    return null;
+  for (const k of VIEW3D_FIELD_KEYS) {
+    const v = inv[k];
+    add(resolveView3dUrlFromRaw(v));
   }
+
+  for (const blob of urlsFromImagenesField(inv.imagenes)) {
+    if (typeof blob === "string" && (/\bglo3d\b/i.test(blob) || blob.includes("<iframe"))) {
+      add(resolveView3dUrlFromRaw(blob));
+    }
+  }
+
+  for (const u of collectInventarioMediaUrls(inv)) {
+    if (!isGlo3dOr360Url(u)) continue;
+    const id = extractGlo3dId(u);
+    add(id ? buildGlo3dIframeNovaUrl(id) : normalizeGlo3dUrl(u));
+  }
+
+  for (const [key, val] of Object.entries(inv)) {
+    if (VIEW3D_KEY_SET.has(key)) continue;
+    if (typeof val !== "string") continue;
+    if (!/\bglo3d\b|<iframe/i.test(val)) continue;
+    add(resolveView3dUrlFromRaw(val));
+  }
+
+  return out;
+}
+
+export function getInventarioStaticImageUrls(inv: InventarioRow & Record<string, unknown>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (url: string) => {
+    const t = url.trim();
+    if (!t.startsWith("http") || !isLikelyRasterImageUrl(t) || seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
+
+  for (const u of collectInventarioMediaUrls(inv)) {
+    add(u);
+  }
+
+  for (const blob of urlsFromImagenesField(inv.imagenes)) {
+    const n = toCollectableUrl(blob);
+    if (n) add(n);
+  }
+
+  return out;
+}
+
+export function bucketInventarioStaticImages(urls: string[]): string[] {
+  return urls.filter((u) => isLikelyRasterImageUrl(u));
+}
+
+/** Canonicaliza rutas conocidas Glo3D a `iframeNova` cuando hay ID en path/query. */
+export function bucketGlo3dViewerUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const u of urls) {
+    if (!isGlo3dOr360Url(u)) continue;
+    const id = extractGlo3dId(u);
+    const canon = id ? buildGlo3dIframeNovaUrl(id) : normalizeGlo3dUrl(u.startsWith("//") ? `https:${u}` : u);
+    if (seen.has(canon)) continue;
+    seen.add(canon);
+    out.push(canon);
+  }
+  return out;
+}
+
+export function firstGlo3dViewerUrl(inv: InventarioRow & Record<string, unknown>): string | null {
+  return getInventarioGlo3dIframeUrls(inv)[0] ?? null;
+}
+
+export function preferredThumbnailUrl(inv: InventarioRow & Record<string, unknown>): string | null {
+  const statics = getInventarioStaticImageUrls(inv);
+  if (!statics.length) return null;
   const withExt = statics.find((u) => /\.(jpe?g|png|webp|gif)(\?|#|$)/i.test(u));
   return withExt ?? statics[0] ?? null;
 }
