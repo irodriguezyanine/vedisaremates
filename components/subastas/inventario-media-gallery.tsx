@@ -84,7 +84,8 @@ export function InventarioMediaGallery({
           </section>
         ) : null}
 
-        {statics.length ? (
+        {/* Fotos planas sólo si no hay visor GLO3D (evita duplicar lo mismo que el iframe con galería integrada). */}
+        {statics.length > 0 && glo3d.length === 0 ? (
           <section aria-label="Galería de fotografías">
             <h3 className="text-sm font-bold tracking-tight text-neutral-900">Galería de fotografías</h3>
             <div className={`mt-3 ${verticalPhotoThumbs && statics.length > 1 ? "flex flex-col gap-3 lg:flex-row lg:items-stretch" : "space-y-3"}`}>
@@ -157,12 +158,6 @@ export function InventarioMediaGallery({
           </section>
         ) : null}
 
-        {!statics.length && glo3d.length ? (
-          <p className="text-sm text-neutral-500">
-            Solo hay vista 360° para este ítem. Si cargás también URLs de fotos planas en el inventario verás aquí una
-            galería tipo aviso destacado.
-          </p>
-        ) : null}
       </div>
     );
   }
@@ -193,7 +188,7 @@ export function InventarioMediaGallery({
         </section>
       ) : null}
 
-      {statics.length ? (
+      {statics.length > 0 && glo3d.length === 0 ? (
         <section aria-label="Galería de fotografías">
           <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Fotografías y miniaturas</p>
 
@@ -244,12 +239,6 @@ export function InventarioMediaGallery({
         </section>
       ) : null}
 
-      {!statics.length && glo3d.length ? (
-        <p className="text-sm text-neutral-500">
-          Este ítem solo tiene visor interactivo 360°. Si completás también URLs de imagen plana en el inventario Tasaciones,
-          verás fotos y miniaturas como en el catálogo.
-        </p>
-      ) : null}
     </div>
   );
 }
