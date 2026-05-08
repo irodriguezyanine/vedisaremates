@@ -229,116 +229,135 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
       {lotes.length === 0 ? (
         <p className="text-neutral-600">Este remate aún no tiene lotes publicados.</p>
       ) : (
-        <div className="space-y-6">
-          <AuctionLotesCarousel lotes={lotes} activeId={activeId} onSelect={setActiveId} />
+        <div className="space-y-5 sm:space-y-6">
+          <AuctionLotesCarousel compact lotes={lotes} activeId={activeId} onSelect={setActiveId} />
 
           {active ? (
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:gap-10">
-              <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-md">
-                <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/95 to-white px-5 py-5 sm:px-6 sm:py-6">
-                  <h2 className="text-pretty text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">
-                    {active.inventario
-                      ? [active.inventario.marca, active.inventario.modelo, active.inventario.patente]
-                          .filter(Boolean)
-                          .join(" · ") || (active.titulo ?? "Detalle del lote")
-                      : (active.titulo ?? "Detalle del lote")}
-                  </h2>
-                  {active.inventario ? (
-                    <dl className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-2">
-                      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80">
-                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Patente</dt>
-                        <dd className="mt-0.5 font-semibold text-neutral-900">{active.inventario.patente ?? "—"}</dd>
-                      </div>
-                      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80">
-                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Marca / modelo</dt>
-                        <dd className="mt-0.5 font-semibold text-neutral-900">
-                          {[active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") || "—"}
-                        </dd>
-                      </div>
-                      {active.inventario.ano ? (
-                        <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80 sm:col-span-2 sm:max-w-xs">
-                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Año</dt>
-                          <dd className="mt-0.5 font-semibold text-neutral-900">{String(active.inventario.ano)}</dd>
-                        </div>
-                      ) : null}
-                      {active.inventario.descripcion ? (
-                        <div className="sm:col-span-2">
-                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Descripción</dt>
-                          <dd className="mt-1 leading-relaxed text-neutral-700">
-                            {String(active.inventario.descripcion).slice(0, 600)}
-                            {String(active.inventario.descripcion).length > 600 ? "…" : ""}
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  ) : (
-                    <p className="mt-3 text-sm text-neutral-500">Lote sin ficha Tasaciones enlazada.</p>
-                  )}
-                </header>
+            <>
+              <div className="space-y-1 border-b border-neutral-100 pb-4">
+                <h2 className="text-pretty text-2xl font-black tracking-tight text-neutral-900 sm:text-3xl">
+                  {active.inventario
+                    ? [active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") ||
+                      (active.titulo ?? "Vehículo")
+                    : (active.titulo ?? "Detalle del lote")}
+                </h2>
+                {active.inventario?.patente || active.inventario?.ano ? (
+                  <p className="text-sm text-neutral-500">
+                    {[active.inventario?.patente, active.inventario?.ano ? String(active.inventario.ano) : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : active.inventario?.categoria ? (
+                  <p className="text-sm text-neutral-500">{String(active.inventario.categoria)}</p>
+                ) : null}
+              </div>
 
-                <div className="border-b border-neutral-100 bg-neutral-50/40 px-4 py-6 sm:px-6">
-                  <InventarioMediaGallery
-                    inventario={(active.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null}
-                    presentation="showcase"
-                  />
-                  {!active.inventario ? (
-                    <p className="text-center text-sm text-neutral-500">No hay fotos ni visor 360° para mostrar.</p>
-                  ) : null}
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start lg:gap-8 xl:gap-10">
+                <div className="min-w-0 space-y-5">
+                  <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-md">
+                    <div className="bg-neutral-50/30 px-4 py-5 sm:px-6 sm:py-6">
+                      <InventarioMediaGallery
+                        inventario={(active.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null}
+                        presentation="showcase"
+                        verticalPhotoThumbs
+                      />
+                      {!active.inventario ? (
+                        <p className="text-center text-sm text-neutral-500">No hay fotos ni visor 360° para mostrar.</p>
+                      ) : null}
+                    </div>
+
+                    {active.inventario ? (
+                      <div className="border-t border-neutral-100 bg-white px-4 py-5 sm:px-6 sm:py-6">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Ficha del vehículo</h3>
+                        <dl className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-2">
+                          <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70">
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Patente</dt>
+                            <dd className="mt-0.5 font-semibold text-neutral-900">{active.inventario.patente ?? "—"}</dd>
+                          </div>
+                          <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70">
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Marca / modelo</dt>
+                            <dd className="mt-0.5 font-semibold text-neutral-900">
+                              {[active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") || "—"}
+                            </dd>
+                          </div>
+                          {active.inventario.ano ? (
+                            <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70 sm:col-span-2 sm:max-w-md">
+                              <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Año</dt>
+                              <dd className="mt-0.5 font-semibold text-neutral-900">{String(active.inventario.ano)}</dd>
+                            </div>
+                          ) : null}
+                          {active.inventario.descripcion ? (
+                            <div className="sm:col-span-2">
+                              <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Descripción</dt>
+                              <dd className="mt-2 leading-relaxed text-neutral-700">
+                                {String(active.inventario.descripcion).slice(0, 900)}
+                                {String(active.inventario.descripcion).length > 900 ? "…" : ""}
+                              </dd>
+                            </div>
+                          ) : null}
+                        </dl>
+                      </div>
+                    ) : (
+                      <p className="border-t border-neutral-100 px-4 py-4 text-sm text-neutral-500 sm:px-6">
+                        Lote sin ficha Tasaciones enlazada.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <footer className="flex flex-wrap gap-3 px-5 py-4 sm:px-6">
-                  <span className="inline-flex rounded-xl bg-[#e8f4fc] px-4 py-2 text-sm font-bold text-[#1a2c4e]">
-                    Precio base {formatClp(active.precio_base)}
-                  </span>
-                  <span className="inline-flex rounded-xl bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-800">
-                    Siguiente oferta mín. {formatClp(minNext)}
-                  </span>
-                </footer>
-              </article>
+                <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm ring-1 ring-neutral-100/80">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Precios del lote</p>
+                    <p className="mt-2 text-2xl font-black tabular-nums text-neutral-900">{formatClp(active.precio_base)}</p>
+                    <p className="mt-1 text-xs text-neutral-600">Precio base publicado</p>
+                    <div className="mt-4 border-t border-neutral-100 pt-4">
+                      <p className="text-sm font-semibold text-neutral-700">Siguiente oferta mínima</p>
+                      <p className="mt-1 text-xl font-bold tabular-nums text-[#0f3d5c]">{formatClp(minNext)}</p>
+                    </div>
+                  </div>
 
-              <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
-                <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                  <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
-                  {!canBid ? (
-                    <p className="mt-2 text-sm text-neutral-600">
-                      {remate.estado !== "en_curso"
-                        ? "Cuando el remate esté en curso podrás ofertar."
-                        : countdownLive !== null && countdownLive <= 0
-                          ? "El remate ya cerró según la fecha de fin."
-                          : tick === null
-                            ? "Cargando estado del remate…"
-                            : !viewerId
-                              ? "Iniciá sesión para ofertar."
-                              : remate.starts_at && new Date(remate.starts_at).getTime() > tick
-                                ? "Esperando la hora de inicio."
-                                : "No podés ofertar en este momento."}
-                    </p>
-                  ) : (
-                    <>
-                      <label className="mt-3 block text-sm text-neutral-600">
-                        Monto (CLP)
-                        <input
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          inputMode="numeric"
-                          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                          placeholder={String(Math.ceil(minNext))}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void placeBid()}
-                        className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
-                      >
-                        {busy ? "Enviando…" : "Confirmar oferta"}
-                      </button>
-                    </>
-                  )}
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                    <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
+                    {!canBid ? (
+                      <p className="mt-2 text-sm text-neutral-600">
+                        {remate.estado !== "en_curso"
+                          ? "Cuando el remate esté en curso podrás ofertar."
+                          : countdownLive !== null && countdownLive <= 0
+                            ? "El remate ya cerró según la fecha de fin."
+                            : tick === null
+                              ? "Cargando estado del remate…"
+                              : !viewerId
+                                ? "Iniciá sesión para ofertar."
+                                : remate.starts_at && new Date(remate.starts_at).getTime() > tick
+                                  ? "Esperando la hora de inicio."
+                                  : "No podés ofertar en este momento."}
+                      </p>
+                    ) : (
+                      <>
+                        <label className="mt-3 block text-sm text-neutral-600">
+                          Monto (CLP)
+                          <input
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            inputMode="numeric"
+                            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                            placeholder={String(Math.ceil(minNext))}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void placeBid()}
+                          className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
+                        >
+                          {busy ? "Enviando…" : "Confirmar oferta"}
+                        </button>
+                      </>
+                    )}
                   {msg ? <p className="mt-3 text-sm text-neutral-700">{msg}</p> : null}
-                </div>
+                  </div>
 
-                <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
                   <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
                     {listForActive.length === 0 ? (
@@ -363,6 +382,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                 </div>
               </aside>
             </div>
+            </>
           ) : null}
         </div>
       )}

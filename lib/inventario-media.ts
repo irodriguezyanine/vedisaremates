@@ -240,6 +240,30 @@ export function isGlo3dOr360Url(url: string): boolean {
   return GLO3D_HINT.test(url);
 }
 
+/** Un solo visor por ID Glo3D (evita 20 URLs duplicadas por json anidado). */
+function dedupeGlo3dViewerUrlsStable(urls: string[]): string[] {
+  const seenIds = new Set<string>();
+  const seenRaw = new Set<string>();
+  const result: string[] = [];
+  for (const raw of urls) {
+    const u = raw.trim();
+    if (!u) continue;
+    const id = extractGlo3dId(u);
+    if (id) {
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+      result.push(buildGlo3dIframeNovaUrl(id));
+    } else {
+      let n = u;
+      if (n.startsWith("//")) n = normalizeGlo3dUrl(n);
+      if (seenRaw.has(n)) continue;
+      seenRaw.add(n);
+      result.push(n);
+    }
+  }
+  return result;
+}
+
 export function getInventarioGlo3dIframeUrls(inv: InventarioRow & Record<string, unknown>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -281,7 +305,7 @@ export function getInventarioGlo3dIframeUrls(inv: InventarioRow & Record<string,
     add(resolveView3dUrlFromRaw(s));
   });
 
-  return out;
+  return dedupeGlo3dViewerUrlsStable(out);
 }
 
 export function getInventarioStaticImageUrls(inv: InventarioRow & Record<string, unknown>): string[] {

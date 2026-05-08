@@ -10,9 +10,15 @@ type Props = {
   inventario: (InventarioRow & Record<string, unknown>) | null;
   /** `showcase`: ficha tipo portal de autos — 360° destacado + fotos en bloque único tipo listado profesional */
   presentation?: "standard" | "showcase";
+  /** Miniaturas verticales al lado de la foto principal (tipo avisos estilo Chileautos). */
+  verticalPhotoThumbs?: boolean;
 };
 
-export function InventarioMediaGallery({ inventario, presentation = "standard" }: Props) {
+export function InventarioMediaGallery({
+  inventario,
+  presentation = "standard",
+  verticalPhotoThumbs = true,
+}: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
   const { statics, glo3d } = useMemo(() => {
@@ -68,37 +74,21 @@ export function InventarioMediaGallery({ inventario, presentation = "standard" }
               <iframe
                 title={`360° — ${label || "vehículo"}`}
                 src={glo3Primary}
-                className="h-[min(60vh,560px)] w-full min-h-[280px]"
+                className="h-[min(52vh,520px)] w-full min-h-[260px]"
                 allow="fullscreen; gyroscope"
                 loading="lazy"
                 referrerPolicy="strict-origin-when-cross-origin"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
               />
             </div>
-            {glo3d.length > 1 ? (
-              <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                {glo3d.slice(1).map((src, j) => (
-                  <li key={src}>
-                    <a
-                      href={src}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-[#009ade] underline underline-offset-2 hover:text-[#007bb5]"
-                    >
-                      Abrir visor {j + 2} en nueva pestaña
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
           </section>
         ) : null}
 
         {statics.length ? (
           <section aria-label="Galería de fotografías">
             <h3 className="text-sm font-bold tracking-tight text-neutral-900">Galería de fotografías</h3>
-            <div className="mt-3 space-y-3">
-              <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 shadow-sm">
+            <div className={`mt-3 ${verticalPhotoThumbs && statics.length > 1 ? "flex flex-col gap-3 lg:flex-row lg:items-stretch" : "space-y-3"}`}>
+              <div className="relative aspect-video min-h-[200px] w-full flex-1 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 shadow-sm lg:aspect-auto lg:min-h-[min(52vh,440px)]">
                 {mainStill ? (
                   useOptimizer ? (
                     <Image
@@ -122,7 +112,27 @@ export function InventarioMediaGallery({ inventario, presentation = "standard" }
                 ) : null}
               </div>
 
-              {statics.length > 1 ? (
+              {statics.length > 1 && verticalPhotoThumbs ? (
+                <div
+                  className="flex flex-row gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin] lg:max-h-[min(52vh,440px)] lg:w-[7.25rem] lg:shrink-0 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar]:h-auto [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-neutral-300"
+                  style={{ scrollbarWidth: "thin" }}
+                >
+                  {statics.map((src, idx) => (
+                    <button
+                      key={src}
+                      type="button"
+                      onClick={() => setPhotoIndex(idx)}
+                      aria-label={`Foto ${idx + 1} de ${statics.length}`}
+                      className={`relative h-16 w-[5.25rem] shrink-0 overflow-hidden rounded-lg border-2 lg:h-[4.5rem] lg:w-full ${
+                        idx === photoIndex ? "border-[#009ade] ring-2 ring-[#009ade]/25" : "border-transparent ring-1 ring-neutral-200"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              ) : statics.length > 1 ? (
                 <div
                   className="flex gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-neutral-300"
                   style={{ scrollbarWidth: "thin" }}
