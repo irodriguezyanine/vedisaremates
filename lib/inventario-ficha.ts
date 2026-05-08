@@ -1,5 +1,7 @@
 /** Ficha técnica desde fila Tasaciones Vedisa / inventario Supabase dinámico (similar detalle Rainworks). */
 
+import type { PortalInventarioFichaConfigV1 } from "@/lib/portal-ficha-config";
+import { parsePortalInventarioFichaConfig } from "@/lib/portal-ficha-config";
 import type { InventarioRow } from "@/lib/portal-types";
 
 export type InventarioSpecRow = {
@@ -16,7 +18,7 @@ export type InventarioFichaSection = {
 };
 
 /** Campos conocidos ordenados tipo listado público Vedisa ([vehículos chocados LotDetails](https://vehiculoschocados.cl/Event/LotDetails/11889124)). */
-const ORDERED_GROUPS: readonly {
+export const ORDERED_GROUPS: readonly {
   title: string;
   description?: string;
   fields: readonly { label: string; keys: readonly string[] }[];
@@ -108,14 +110,6 @@ const ORDERED_GROUPS: readonly {
     title: "Valoración y empresa (referencia Tasaciones)",
     fields: [
       { label: "Empresa / aseguradora", keys: ["empresa", "aseguradora", "companía", "insurer"] },
-      {
-        label: "Estado inventario Tasaciones",
-        keys: ["estado", "estado_remate", "estado_retiro", "estado_vehículo"], // filtrar placeholders vacíos después
-      },
-      {
-        label: "Categoría Tasaciones",
-        keys: ["categoria", "categoría"],
-      },
       { label: "Valor mínimo / referencia", keys: ["valor_minimo"] },
       { label: "Valor esperado Tasaciones", keys: ["valor_esperado"] },
     ],
@@ -125,6 +119,13 @@ const ORDERED_GROUPS: readonly {
     fields: [{ label: "Descripción Tasaciones / observaciones", keys: ["descripcion", "observaciones"] }],
   },
 ];
+
+const OTROS_DATOS_SECTION_TITLE = "Otros datos del sistema";
+
+/** Orden sugerido de bloques para el panel Personalizar + `sectionOrder` en Supabase. */
+export function defaultFichaSectionOrderTitles(): readonly string[] {
+  return [...ORDERED_GROUPS.map((g) => g.title), OTROS_DATOS_SECTION_TITLE];
+}
 
 const SKIP_VALUE_RE =
   /^(-|\.{2,}|n\/?a|no informa(no)?|s\/|s\/info|sin info|undefined|null)$/i;
@@ -207,7 +208,7 @@ export function expandInventarioRecord(row: Record<string, unknown>): Record<str
   return out;
 }
 
-function normalizeMapKey(key: string): string {
+export function normalizeMapKey(key: string): string {
   return key
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -287,6 +288,16 @@ function excludedFromAdicionalesKey(keyNorm: string, keyRaw: string): boolean {
   return false;
 }
 
+const UUID_TAIL_RE = /\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/i;
+
+/** Evita etiquetas muy técnicas o valores puramente UUID en alcance empresa (p. ej. CIA SCOPE). */
+function noisyAdicionalTechnicalRow(keyNorm: string, labelHuman: string, value: string): boolean {
+  if (/cia_scope|_scope\b|enterprise_scope|compan(y|ia)_scope/i.test(keyNorm)) return true;
+  if (/^empresa[:]/.test(value.trim()) && UUID_TAIL_RE.test(value)) return true;
+  if (/^aws_campos_/i.test(keyNorm) && /cia\b|scope\b|uuid/i.test(labelHuman) && UUID_TAIL_RE.test(value)) return true;
+  return false;
+}
+
 export type LotePortalContext = {
   id: string;
   orden?: number | null;
@@ -302,6 +313,180 @@ export type RematePortalContext = {
   starts_at?: string | null;
   ends_at?: string | null;
 };
+
+/** Claves estables del bloque “Este lote en Vedisa Remates” (config admin). */
+export const PORTAL_BANNER_KEYS = {
+  LOTE_ID: "portal:lote:id",
+  LOTE_ORDEN: "portal:lote:orden",
+  LOTE_TITULO: "portal:lote:titulo",
+  REMATE_ID: "portal:remate:id",
+  REMATE_NOMBRE: "portal:remate:titulo",
+  REMATE_CIERRA: "portal:remate:fecha_cierre",
+  REMATE_INICIA: "portal:remate:fecha_inicio",
+  LOTE_DESC: "portal:lote:descripcion_complementaria",
+  LOTE_PRECIO_BASE: "portal:lote:precio_base",
+  LOTE_INCREMENTO: "portal:lote:incremento_minimo",
+} as const;
+
+export type PortalBannerFieldAdminDef = {
+  key: string;
+  defaultLabel: string;
+  defaultOrder: number;
+  hiddenByDefault: boolean;
+};
+
+export const PORTAL_BANNER_ADMIN_DEFS: readonly PortalBannerFieldAdminDef[] = [
+  { key: PORTAL_BANNER_KEYS.LOTE_ID, defaultLabel: "ID de sistema", defaultOrder: 15, hiddenByDefault: true },
+  { key: PORTAL_BANNER_KEYS.LOTE_ORDEN, defaultLabel: "Posición / orden en remate", defaultOrder: 25, hiddenByDefault: true },
+  { key: PORTAL_BANNER_KEYS.LOTE_TITULO, defaultLabel: "Título del lote", defaultOrder: 35, hiddenByDefault: false },
+  { key: PORTAL_BANNER_KEYS.REMATE_ID, defaultLabel: "Identificador del remate", defaultOrder: 44, hiddenByDefault: true },
+  { key: PORTAL_BANNER_KEYS.REMATE_NOMBRE, defaultLabel: "Nombre del remate", defaultOrder: 48, hiddenByDefault: true },
+  { key: PORTAL_BANNER_KEYS.REMATE_CIERRA, defaultLabel: "Fecha de cierre programada", defaultOrder: 110, hiddenByDefault: false },
+  { key: PORTAL_BANNER_KEYS.REMATE_INICIA, defaultLabel: "Inicio programado del remate", defaultOrder: 105, hiddenByDefault: false },
+  { key: PORTAL_BANNER_KEYS.LOTE_DESC, defaultLabel: "Descripción complementaria del lote", defaultOrder: 165, hiddenByDefault: false },
+  { key: PORTAL_BANNER_KEYS.LOTE_PRECIO_BASE, defaultLabel: "Precio base publicado", defaultOrder: 220, hiddenByDefault: false },
+  { key: PORTAL_BANNER_KEYS.LOTE_INCREMENTO, defaultLabel: "Incremento mínimo de oferta", defaultOrder: 230, hiddenByDefault: false },
+];
+
+const DEFAULT_PORTAL_BANNER_HIDDEN = new Set<string>(
+  PORTAL_BANNER_ADMIN_DEFS.filter((d) => d.hiddenByDefault).map((d) => d.key),
+);
+
+const PORTAL_BANNER_DEFAULT_ORDER: Record<string, number> = Object.fromEntries(
+  PORTAL_BANNER_ADMIN_DEFS.map((d) => [d.key, d.defaultOrder]),
+);
+
+function buildDefaultSourceKeyOrder(): Map<string, number> {
+  const m = new Map<string, number>();
+  let g = 0;
+  for (const grp of ORDERED_GROUPS) {
+    let f = 0;
+    for (const fld of grp.fields) {
+      const ordBase = g * 10_000 + f * 10;
+      for (const alias of fld.keys) {
+        const nk = normalizeMapKey(alias);
+        if (!m.has(nk)) m.set(nk, ordBase);
+      }
+      f += 1;
+    }
+    g += 1;
+  }
+  return m;
+}
+
+const DEFAULT_SOURCE_KEY_ORDER = buildDefaultSourceKeyOrder();
+
+function compareSectionTitles(a: string, b: string, preset: readonly string[]): number {
+  const ia = preset.indexOf(a);
+  const ib = preset.indexOf(b);
+  const ra = ia === -1 ? 1_000_000 : ia;
+  const rb = ib === -1 ? 1_000_000 : ib;
+  if (ra !== rb) return ra - rb;
+  return a.localeCompare(b, "es");
+}
+
+export function collectAdminInventoryPresetRows(): readonly {
+  sourceKeyHint: string;
+  aliases: readonly string[];
+  sectionTitle: string;
+  defaultLabel: string;
+}[] {
+  const out: {
+    sourceKeyHint: string;
+    aliases: readonly string[];
+    sectionTitle: string;
+    defaultLabel: string;
+  }[] = [];
+  for (const grp of ORDERED_GROUPS) {
+    for (const fld of grp.fields) {
+      const aliases = fld.keys.map((k) => normalizeMapKey(k));
+      const sourceKeyHint = aliases[0] ?? "";
+      if (!sourceKeyHint) continue;
+      out.push({ sourceKeyHint, aliases, sectionTitle: grp.title, defaultLabel: fld.label });
+    }
+  }
+  return out;
+}
+
+export function applyFichaPublicConfig(
+  sections: InventarioFichaSection[],
+  portalRows: InventarioSpecRow[],
+  rawConfig?: unknown | null,
+): { sections: InventarioFichaSection[]; portalRows: InventarioSpecRow[] } {
+  const parsed = parsePortalInventarioFichaConfig(rawConfig ?? null);
+  const cfg: PortalInventarioFichaConfigV1 = parsed ?? { version: 1 };
+  const overrides = cfg.fieldOverrides ?? {};
+  const sectionPreset = cfg.sectionOrder ?? [];
+
+  const portalHidden = new Set(DEFAULT_PORTAL_BANNER_HIDDEN);
+  for (const k of cfg.portalBannerHiddenKeys ?? []) {
+    if (k.trim()) portalHidden.add(k.trim());
+  }
+
+  type PortalPrep = { row: InventarioSpecRow; ord: number };
+  const portalPrep: PortalPrep[] = [];
+  for (const r of portalRows) {
+    const sk = r.sourceKey?.trim();
+    if (!sk) continue;
+    const ov = overrides[sk];
+    if (ov?.visible === false) continue;
+    if (ov?.visible !== true && portalHidden.has(sk)) continue;
+    const label = typeof ov?.label === "string" && ov.label.trim() ? ov.label.trim() : r.label;
+    const ord =
+      typeof ov?.order === "number" && Number.isFinite(ov.order) ? ov.order : (PORTAL_BANNER_DEFAULT_ORDER[sk] ?? 500);
+    portalPrep.push({ row: { label, value: r.value, sourceKey: sk }, ord });
+  }
+  portalPrep.sort((a, b) => {
+    if (a.ord !== b.ord) return a.ord - b.ord;
+    return a.row.label.localeCompare(b.row.label, "es");
+  });
+  const portalOut = portalPrep.map((p) => p.row);
+
+  const descByTitle = new Map<string, string | undefined>();
+  for (const sec of sections) descByTitle.set(sec.title, sec.description);
+
+  type InvPrep = { row: InventarioSpecRow; ord: number; sectionTitle: string };
+  const inventoryPrep: InvPrep[] = [];
+  for (const sec of sections) {
+    for (const row of sec.rows) {
+      const sk = row.sourceKey?.trim();
+      if (!sk) continue;
+      const ov = overrides[sk];
+      if (ov?.visible === false) continue;
+      const label = typeof ov?.label === "string" && ov.label.trim() ? ov.label.trim() : row.label;
+      const sectionTitle =
+        typeof ov?.sectionTitle === "string" && ov.sectionTitle.trim() ? ov.sectionTitle.trim() : sec.title;
+      const baseOrd = DEFAULT_SOURCE_KEY_ORDER.get(sk) ?? 8_000_000 + sk.charCodeAt(0) + sk.length;
+      const ord = typeof ov?.order === "number" && Number.isFinite(ov.order) ? ov.order : baseOrd;
+      inventoryPrep.push({ row: { label, value: row.value, sourceKey: sk }, ord, sectionTitle });
+    }
+  }
+
+  const bySec = new Map<string, InvPrep[]>();
+  for (const p of inventoryPrep) {
+    const list = bySec.get(p.sectionTitle) ?? [];
+    list.push(p);
+    bySec.set(p.sectionTitle, list);
+  }
+
+  const secTitles = [...bySec.keys()].sort((a, b) => compareSectionTitles(a, b, sectionPreset));
+  const sectionsOut: InventarioFichaSection[] = [];
+  for (const title of secTitles) {
+    const list = bySec.get(title);
+    if (!list?.length) continue;
+    list.sort((a, b) => {
+      if (a.ord !== b.ord) return a.ord - b.ord;
+      return a.row.label.localeCompare(b.row.label, "es");
+    });
+    sectionsOut.push({
+      title,
+      description: descByTitle.get(title),
+      rows: list.map((p) => p.row),
+    });
+  }
+
+  return { sections: sectionsOut, portalRows: portalOut };
+}
 
 export function buildInventarioFichaSections(row: InventarioRow & Record<string, unknown>): InventarioFichaSection[] {
   const expanded = expandInventarioRecord(row);
@@ -341,14 +526,16 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     /** Evitar párrafos largos duplicados de descripción. */
     const valKey = text.trim().toLowerCase().slice(0, 280);
     if (seenVals.has(valKey)) continue;
+    const hum = humanizeKeyDisplay(kRaw);
+    if (noisyAdicionalTechnicalRow(nk, hum, text)) continue;
     if (text.length > 4000) {
       adicionalRows.push({
-        label: humanizeKeyDisplay(kRaw),
+        label: hum,
         value: text.slice(0, 4000) + "…",
         sourceKey: nk,
       });
     } else {
-      adicionalRows.push({ label: humanizeKeyDisplay(kRaw), value: text, sourceKey: nk });
+      adicionalRows.push({ label: hum, value: text, sourceKey: nk });
     }
     seenVals.add(valKey);
   }
@@ -357,9 +544,9 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
 
   if (adicionalRows.length) {
     sections.push({
-      title: "Otros datos del sistema",
+      title: OTROS_DATOS_SECTION_TITLE,
       description:
-        "Campos adicionales informados por Tasaciones u orígenes de datos; la disponibilidad varía por registro.",
+        "Información técnica o comercial adicional según el origen del registro; disponibilidad y etiquetas pueden variar por vehículo.",
       rows: adicionalRows,
     });
   }
@@ -368,15 +555,26 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
 }
 
 export function humanizeKeyDisplay(raw: string): string {
-  return raw
-    .replace(/__/g, " · ")
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+  let nk = normalizeMapKey(raw);
+  nk = nk
+    .replace(/^aws_campos_fields?_?/, "")
+    .replace(/^aws_campos_/, "")
+    .replace(/^aws_/, "")
+    .replace(/^fields?_?/, "")
+    .replace(/^campos?_?/, "");
+  nk = nk.replace(/^fields?_?/, "");
+  nk = nk.replace(/_+/g, "_");
+
+  let s = nk.replace(/__/g, " · ").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (!s.length) return raw.replace(/_/g, " ").trim();
+  return s.replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
 }
 
 export type InventarioPortalLoteBanner = InventarioSpecRow[];
+
+function portalBannerDefaultLabel(portalRowKey: string): string {
+  return PORTAL_BANNER_ADMIN_DEFS.find((d) => d.key === portalRowKey)?.defaultLabel ?? portalRowKey;
+}
 
 export function buildLotePortalRows(
   lote: LotePortalContext,
@@ -387,26 +585,36 @@ export function buildLotePortalRows(
   },
 ): InventarioPortalLoteBanner {
   const out: InventarioSpecRow[] = [];
-  const add = (label: string, value: unknown) => {
+  const addRow = (portalRowKey: string, value: unknown) => {
     const v = typeof value === "string" ? value.trim() : formatCellValue(value);
     if (v === null) return;
     if (meaninglessString(String(v))) return;
-    out.push({ label, value: String(v) });
+    const label = portalBannerDefaultLabel(portalRowKey);
+    out.push({ label, value: String(v), sourceKey: portalRowKey });
   };
 
-  add("ID de sistema (portal)", lote.id);
-  if (lote.orden != null) add("Posición / orden en remate", String(lote.orden));
-  if (lote.titulo?.trim()) add("Título de lote (portal)", lote.titulo);
-  add("Identificador de remate", remate.id);
-  add("Remate", remate.titulo);
+  addRow(PORTAL_BANNER_KEYS.LOTE_ID, lote.id);
+  if (lote.orden != null) addRow(PORTAL_BANNER_KEYS.LOTE_ORDEN, String(lote.orden));
+  if (lote.titulo?.trim()) addRow(PORTAL_BANNER_KEYS.LOTE_TITULO, lote.titulo.trim());
+  addRow(PORTAL_BANNER_KEYS.REMATE_ID, remate.id);
+  addRow(PORTAL_BANNER_KEYS.REMATE_NOMBRE, remate.titulo);
   const fin = formatter.fechaLarga(remate.ends_at);
   const ini = formatter.fechaLarga(remate.starts_at);
-  if (fin) add("Fecha programada de cierre del remate", fin);
-  if (ini) add("Inicio programado del remate", ini);
-  if (lote.descripcion?.trim())
-    add("Descripción complementaria del lote (portal)", lote.descripcion.trim());
-  if (formatter.clp && lote.precio_base != null) add("Precio base publicado (portal)", formatter.clp(lote.precio_base) ?? "");
-  if (formatter.clp && lote.incremento_minimo != null)
-    add("Incremento mínimo de oferta (portal)", formatter.clp(lote.incremento_minimo) ?? "");
+  if (fin) addRow(PORTAL_BANNER_KEYS.REMATE_CIERRA, fin);
+  if (ini) addRow(PORTAL_BANNER_KEYS.REMATE_INICIA, ini);
+  if (lote.descripcion?.trim()) addRow(PORTAL_BANNER_KEYS.LOTE_DESC, lote.descripcion.trim());
+  if (formatter.clp && lote.precio_base != null) {
+    addRow(PORTAL_BANNER_KEYS.LOTE_PRECIO_BASE, formatter.clp(lote.precio_base) ?? "");
+  }
+  if (formatter.clp && lote.incremento_minimo != null) {
+    addRow(PORTAL_BANNER_KEYS.LOTE_INCREMENTO, formatter.clp(lote.incremento_minimo) ?? "");
+  }
+
+  out.sort((a, b) => {
+    const oa = PORTAL_BANNER_DEFAULT_ORDER[a.sourceKey ?? ""] ?? 500;
+    const ob = PORTAL_BANNER_DEFAULT_ORDER[b.sourceKey ?? ""] ?? 500;
+    if (oa !== ob) return oa - ob;
+    return a.label.localeCompare(b.label, "es");
+  });
   return out;
 }

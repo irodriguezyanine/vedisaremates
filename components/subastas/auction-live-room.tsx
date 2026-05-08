@@ -28,9 +28,10 @@ type Props = {
   initialRemate: PortalRemateRow;
   initialLotes: Lote[];
   viewerId?: string | null;
+  fichaDisplayConfig?: unknown | null;
 };
 
-export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props) {
+export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId, fichaDisplayConfig }: Props) {
   const [remate, setRemate] = useState(initialRemate);
   const [lotes] = useState<Lote[]>(initialLotes);
   const [activeId, setActiveId] = useState<string | null>(initialLotes[0]?.id ?? null);
@@ -285,6 +286,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                             starts_at: remate.starts_at,
                             ends_at: remate.ends_at,
                           }}
+                          fichaDisplayConfig={fichaDisplayConfig}
                         />
                       </div>
                     ) : (

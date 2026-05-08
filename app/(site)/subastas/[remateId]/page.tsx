@@ -57,7 +57,14 @@ export default async function SubastaDetallePage({ params }: Props) {
     inventario: l.inventario_id ? invLookup[l.inventario_id] ?? null : null,
   }));
 
-  return (
-    <AuctionLiveRoom initialRemate={r} initialLotes={lotesEnriquecidos} viewerId={user?.id ?? null} />
-  );
+  const { data: fichaCfgRow, error: fichaCfgErr } = await supabase
+    .from("portal_inventario_ficha_config")
+    .select("config")
+    .eq("id", 1)
+    .maybeSingle();
+
+  let fichaDisplayConfig: unknown | null = null;
+  if (!fichaCfgErr) {
+    fichaDisplayConfig = (fichaCfgRow as { config?: unknown } | null)?.config ?? null;
+  }
 }

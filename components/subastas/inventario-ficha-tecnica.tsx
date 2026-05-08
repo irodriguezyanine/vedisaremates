@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioFichaSection } from "@/lib/inventario-ficha";
 import {
+  applyFichaPublicConfig,
   buildInventarioFichaSections,
   buildLotePortalRows,
   type LotePortalContext,
@@ -135,20 +136,31 @@ function sectionGlyph(title: string): ReactNode {
   return <IconCar className={cls} />;
 }
 
-function SpecCard({ row }: { row: InventarioFichaSection["rows"][number] }) {
+function CatalogSpecRow({ row }: { row: InventarioFichaSection["rows"][number] }) {
   const wrap = /\n|.{140,}/.test(row.value);
   return (
-    <div className="flex gap-3 rounded-xl border border-neutral-200/95 bg-white p-4 shadow-[0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-neutral-100/70 transition hover:border-[#009ade]/30 hover:shadow-sm">
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e8f4fc] text-[#0f5f87] shadow-inner ring-1 ring-[#009ade]/15">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
-        </svg>
+    <div className="grid gap-1 py-3 sm:grid-cols-[minmax(0,min(36%,240px))_1fr] sm:gap-8 sm:items-baseline">
+      <div className="flex items-start gap-2">
+        <span className="mt-1.5 hidden h-1.5 w-1.5 shrink-0 rounded-full bg-[#009ade]/75 sm:block" aria-hidden />
+        <span className="text-[12px] font-bold uppercase tracking-[0.1em] text-neutral-500">{row.label}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">{row.label}</p>
-        <p className={`mt-1 font-semibold leading-snug text-neutral-900 ${wrap ? "whitespace-pre-wrap text-[15px] font-medium" : "text-[15px]"}`}>
-          {row.value}
-        </p>
+      <p
+        className={`text-[15px] font-semibold leading-snug text-neutral-900 ${wrap ? "whitespace-pre-wrap font-medium leading-relaxed" : ""}`}
+      >
+        {row.value}
+      </p>
+    </div>
+  );
+}
+
+function CatalogBlock({ rows }: { rows: InventarioFichaSection["rows"] }) {
+  if (!rows.length) return null;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-sm ring-1 ring-neutral-100/80">
+      <div className="divide-y divide-neutral-100 px-4 sm:px-5">
+        {rows.map((row) => (
+          <CatalogSpecRow key={`${row.sourceKey ?? row.label}-${row.value.slice(0, 40)}`} row={row} />
+        ))}
       </div>
     </div>
   );
@@ -161,6 +173,8 @@ export type InventarioFichaTecnicaProps = {
   rematePortal?: RematePortalContext | null;
   /** Tarjeta con recordatorio sobre transferencia administrativa (enlaza a términos). */
   transferenciaDisclaimer?: boolean;
+  /** JSON `portal_inventario_ficha_config` (v1) desde el servidor. */
+  fichaDisplayConfig?: unknown | null;
 };
 
 export function InventarioFichaTecnica({
@@ -168,10 +182,11 @@ export function InventarioFichaTecnica({
   lotePortal,
   rematePortal,
   transferenciaDisclaimer = true,
+  fichaDisplayConfig = null,
 }: InventarioFichaTecnicaProps) {
-  const sections = useMemo(() => buildInventarioFichaSections(inventario), [inventario]);
+  const rawSections = useMemo(() => buildInventarioFichaSections(inventario), [inventario]);
 
-  const portalRows = useMemo(() => {
+  const rawPortalRows = useMemo(() => {
     if (!lotePortal || !rematePortal) return [];
     return buildLotePortalRows(lotePortal, rematePortal, {
       fechaLarga: fechaLargaCl,
@@ -179,21 +194,25 @@ export function InventarioFichaTecnica({
     });
   }, [lotePortal, rematePortal]);
 
+  const { sections, portalRows } = useMemo(
+    () => applyFichaPublicConfig(rawSections, rawPortalRows, fichaDisplayConfig),
+    [rawSections, rawPortalRows, fichaDisplayConfig],
+  );
+
   return (
     <div className="space-y-10">
       {portalRows.length ? (
-        <section className="space-y-3" aria-labelledby="ficha-lote-portal">
+        <section className="space-y-4" aria-labelledby="ficha-lote-portal">
           <div className="flex items-center gap-3">
             {sectionGlyph("Este lote")}
-            <h3 id="ficha-lote-portal" className="text-lg font-black tracking-tight text-neutral-900">
-              Este lote en Vedisa Remates
-            </h3>
+            <div>
+              <h3 id="ficha-lote-portal" className="text-lg font-black tracking-tight text-neutral-900">
+                Este lote en Vedisa Remates
+              </h3>
+              <p className="mt-1 text-sm text-neutral-500">Datos públicos del lote y del calendario del remate.</p>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {portalRows.map((row) => (
-              <SpecCard key={`${row.label}-${row.value}`} row={{ ...row, sourceKey: undefined }} />
-            ))}
-          </div>
+          <CatalogBlock rows={portalRows} />
         </section>
       ) : null}
 
@@ -220,20 +239,16 @@ export function InventarioFichaTecnica({
 
       {sections.map((sec) => (
         <section key={sec.title} className="space-y-4" aria-labelledby={`sec-${normalizeId(sec.title)}`}>
-          <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-3">
+          <div className="flex flex-wrap items-start gap-3 border-b border-neutral-100 pb-3">
             {sectionGlyph(sec.title)}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 id={`sec-${normalizeId(sec.title)}`} className="text-lg font-black tracking-tight text-neutral-900">
                 {sec.title}
               </h3>
-              {sec.description ? <p className="mt-1 text-sm text-neutral-500">{sec.description}</p> : null}
+              {sec.description ? <p className="mt-1 max-w-[65ch] text-sm text-neutral-500">{sec.description}</p> : null}
             </div>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {sec.rows.map((row) => (
-              <SpecCard key={`${sec.title}-${row.label}-${row.value.slice(0, 42)}`} row={row} />
-            ))}
-          </div>
+          <CatalogBlock rows={sec.rows} />
         </section>
       ))}
     </div>
