@@ -28,15 +28,13 @@ export default async function SubastasIndexPage() {
     <div className="mx-auto max-w-4xl px-4 py-14">
       <h1 className="text-3xl font-black text-neutral-900">Sala de subastas</h1>
       <p className="mt-3 max-w-2xl text-neutral-600">
-        Eventos en vivo con ofertas en tiempo real. Iniciá sesión para participar; las cuentas son las mismas que en
-        Tasaciones Vedisa.
+        Eventos en vivo con ofertas en tiempo real. Iniciá sesión para participar; si ya tenés usuario Vedisa desde otro canal, podés
+        usar ese mismo correo y clave.
       </p>
 
       {error ? (
         <p className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No se pudo cargar la lista ({error.message}). Revisá variables{" "}
-          <code className="rounded bg-black/5 px-1">NEXT_PUBLIC_SUPABASE_*</code> y que ejecutaste el SQL portal en tu
-          Supabase.
+          No se pudo cargar la lista. Verificá conexión o probá dentro de unos minutos.
         </p>
       ) : null}
 

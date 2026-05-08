@@ -26,7 +26,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
       setEmail(user?.email ?? null);
       if (user?.id) {
         const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
-        setAdmin(data?.rol === "admin");
+        setAdmin((data?.rol ?? "").toLowerCase() === "admin");
       } else {
         setAdmin(false);
       }
@@ -42,7 +42,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
       void (async () => {
         if (user?.id) {
           const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
-          setAdmin(data?.rol === "admin");
+          setAdmin((data?.rol ?? "").toLowerCase() === "admin");
         } else {
           setAdmin(false);
         }
@@ -72,6 +72,13 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
         <span className="max-w-[200px] truncate text-xs text-white/80" title={email}>
           {email}
         </span>
+        <Link
+          href="/mi-cuenta"
+          onClick={onNavigate}
+          className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white/95 hover:border-[#33C7E3] hover:text-[#33C7E3]"
+        >
+          Mi cuenta
+        </Link>
         {admin ? (
           <Link
             href="/admin"

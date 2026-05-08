@@ -127,7 +127,7 @@ export function AuctionFeed() {
               {heading}
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Datos demostrativos — pronto sincronizados con Supabase y calendario real de remates.
+              Vista demostrativa — el calendario en vivo aparecerá acá cuando haya lotes destacados configurados desde la sala oficial.
             </p>
           </div>
           <p className="max-w-md rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">

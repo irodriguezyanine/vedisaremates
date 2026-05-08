@@ -23,9 +23,7 @@ export function RegisterForm() {
     try {
       const supabase = createClient();
       if (!supabase) {
-        setError(
-          "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en el despliegue. Configúralas en Vercel (Environment Variables) y redesplegar.",
-        );
+        setError("El registro en línea no está disponible en este entorno. Probá más tarde o contactá a Vedisa.");
         return;
       }
       const { error: signErr } = await supabase.auth.signUp({
@@ -53,7 +51,7 @@ export function RegisterForm() {
     <form onSubmit={onSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-bold text-neutral-900">Crear cuenta en el portal</h2>
       <p className="mt-1 text-sm text-neutral-600">
-        Usamos la misma base Supabase que Tasaciones Vedisa; un solo usuario sirve para ambas plataformas.
+        Podés usar la misma cuenta en los canales Vedisa que compartan este registro.
       </p>
       <div className="mt-6 flex flex-col gap-4">
         <label className="block text-sm font-medium text-neutral-700">

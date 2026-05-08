@@ -29,7 +29,7 @@ export default async function AdminHomePage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Panel general</h1>
         <p className="mt-2 max-w-xl text-sm text-neutral-400">
-          Gestioná remates enlazados al inventario de Tasaciones Vedisa y las cuentas compartidas vía Supabase Auth.
+          Gestioná remates, lotes vinculados al inventario y cuentas de participantes.
         </p>
       </div>
 
@@ -42,7 +42,7 @@ export default async function AdminHomePage() {
       <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
         <h2 className="font-semibold text-white">Pasos rápidos</h2>
         <ol className="mt-6 list-inside list-decimal space-y-3 text-sm text-neutral-400">
-          <li>Ejecutá el SQL nuevo en tu proyecto Supabase (`supabase/migrations/portal_subastas_vedisaremates.sql`).</li>
+          <li>Si es la primera vez, aplicá los scripts SQL del repositorio en la base del proyecto antes de usar subastas en vivo.</li>
           <li>En Remates creá un evento con fechas de inicio y fin.</li>
           <li>Añadí lotes desde Inventario; publicá y luego marcá estado &quot;en curso&quot; para habilitar ofertas.</li>
           <li>

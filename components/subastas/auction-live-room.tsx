@@ -129,7 +129,7 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
     }
     const sb = createClient();
     if (!sb) {
-      setMsg("Falta configuración de Supabase en el despliegue.");
+      setMsg("No se pudo iniciar la conexión. Actualizá la página o intentá más tarde.");
       setBusy(false);
       return;
     }

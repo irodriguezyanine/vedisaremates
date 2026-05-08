@@ -23,9 +23,7 @@ export function LoginForm() {
     try {
       const supabase = createClient();
       if (!supabase) {
-        setError(
-          "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY. En Vercel: proyecto → Settings → Environment Variables → añade ambas (igual que Tasaciones Vedisa, con prefijo NEXT_PUBLIC_) → Redeploy.",
-        );
+        setError("El ingreso web no está disponible en este entorno. Probá más tarde o contactá soporte Vedisa.");
         return;
       }
       const { error: signErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });

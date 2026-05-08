@@ -19,7 +19,7 @@ const links = [
   { href: "/privacidad", label: "Política de privacidad" },
   { href: "/buscar", label: "Búsqueda avanzada" },
   { href: "/registro", label: "Registro" },
-  { href: "/ingreso", label: "Inicio de sesión" },
+  { href: "/mi-cuenta", label: "Mi cuenta" },
   { href: catalogoHref(), label: "Catálogo público (externo)", external: true },
 ];
 

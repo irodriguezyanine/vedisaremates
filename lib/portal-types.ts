@@ -1,4 +1,4 @@
-/** Fila típica de listar_usuarios() en Tasaciones */
+/** Fila del listado administrativo de usuarios */
 export type ListaUsuarioRow = {
   id: string;
   email: string | null;
@@ -38,6 +38,18 @@ export type PortalOfertaRow = {
   lote_id: string;
   user_id: string;
   monto: number;
+};
+
+/** Fila de `portal_listar_mis_ofertas()` */
+export type PortalMisOfertaRow = {
+  oferta_id: string;
+  created_at: string;
+  monto: number;
+  lote_id: string;
+  lote_titulo: string;
+  remate_id: string;
+  remate_titulo: string;
+  remate_estado: string;
 };
 
 /** Inventario Tasaciones: columnas comunes; el resto llega como Record */
