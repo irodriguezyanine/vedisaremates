@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/admin", label: "Resumen" },
-  { href: "/admin/usuarios", label: "Usuarios (Supabase)" },
+  { href: "/admin/usuarios", label: "Usuarios" },
   { href: "/admin/inventario", label: "Inventario Tasaciones" },
   { href: "/admin/remates", label: "Remates y lotes" },
 ];
@@ -47,10 +47,7 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-      <div className="mt-auto pt-8 text-xs text-neutral-500">
-        Misma cuenta y Edge Functions que en{" "}
-        <span className="text-neutral-400">Tasaciones Vedisa</span>.
-      </div>
+      <div className="mt-auto pt-8 text-xs text-neutral-500">Panel restringido a personal autorizado.</div>
     </aside>
   );
 }
