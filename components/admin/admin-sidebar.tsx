@@ -9,8 +9,9 @@ import { SITE } from "@/lib/site-config";
 const links = [
   { href: "/admin", label: "Resumen" },
   { href: "/admin/usuarios", label: "Usuarios" },
-  { href: "/admin/inventario", label: "Inventario Tasaciones" },
+  { href: "/admin/inventario", label: "Inventario" },
   { href: "/admin/remates", label: "Remates y lotes" },
+  { href: "/admin/personalizar", label: "Personalizar" },
 ];
 
 export function AdminSidebar() {

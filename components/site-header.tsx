@@ -44,10 +44,21 @@ export function SiteHeader() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setCatOpen(false);
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <ScrollHeader>
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-4">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 overflow-visible px-4 py-2 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-visible lg:gap-4">
           <Link
             href="/"
             className="flex shrink-0 items-center hover:opacity-90"
@@ -64,25 +75,33 @@ export function SiteHeader() {
             />
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto lg:flex xl:justify-center" aria-label="Principal">
+          <nav
+            className="hidden min-w-0 flex-1 items-center justify-start gap-0.5 overflow-visible lg:flex xl:justify-center"
+            aria-label="Principal"
+          >
             <Link href="/" className={navClasses(isActive("/"))}>
               Inicio
             </Link>
 
-            <div className="relative shrink-0" ref={catRef}>
+            <div className="relative z-[60] shrink-0" ref={catRef}>
               <button
                 type="button"
                 className={navClasses(false)}
                 aria-expanded={catOpen}
-                aria-haspopup="true"
-                onClick={() => setCatOpen((o) => !o)}
+                aria-haspopup="menu"
+                id="nav-ver-trigger"
+                onClick={() => {
+                  setMoreOpen(false);
+                  setCatOpen((o) => !o);
+                }}
               >
-                Ver&nbsp;<span aria-hidden className="text-[10px]">▾</span>
+                Ver
               </button>
               {catOpen ? (
                 <div
                   role="menu"
-                  className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+                  aria-labelledby="nav-ver-trigger"
+                  className="absolute left-0 top-full z-[70] mt-1.5 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
                 >
                   <Link href="/" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
                     Todas las categorías
@@ -118,20 +137,25 @@ export function SiteHeader() {
               Subastas
             </Link>
 
-            <div className="relative shrink-0" ref={moreRef}>
+            <div className="relative z-[60] shrink-0" ref={moreRef}>
               <button
                 type="button"
                 className={navClasses(false)}
                 aria-expanded={moreOpen}
-                aria-haspopup="true"
-                onClick={() => setMoreOpen((o) => !o)}
+                aria-haspopup="menu"
+                id="nav-mas-trigger"
+                onClick={() => {
+                  setCatOpen(false);
+                  setMoreOpen((o) => !o);
+                }}
               >
-                Más&nbsp;<span aria-hidden className="text-[10px]">▾</span>
+                Más
               </button>
               {moreOpen ? (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+                  aria-labelledby="nav-mas-trigger"
+                  className="absolute right-0 top-full z-[70] mt-1.5 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
                 >
                   <Link
                     href="/como-participar"

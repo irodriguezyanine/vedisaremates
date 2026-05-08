@@ -63,7 +63,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   if (!mounted) {
-    return <span className="h-9 w-32 animate-pulse rounded-md bg-white/10" aria-hidden />;
+    return <div className="h-9 min-w-[10rem] shrink-0" aria-hidden />;
   }
 
   if (email) {

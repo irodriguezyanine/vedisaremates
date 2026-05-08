@@ -1,4 +1,12 @@
 /** URLs y textos centralizados (sin secretos). */
+import {
+  FALLBACK_HERO_SLIDES,
+  resolveHeroSlides,
+  type HeroSlide,
+} from "@/lib/hero-slides-shared";
+
+export type { HeroSlide };
+
 export const SITE = {
   name: "VEDISA Remates",
   tagline: "Maximizar recupero vehicular",
@@ -21,38 +29,10 @@ export function heroVideoId() {
   return process.env.NEXT_PUBLIC_HERO_YOUTUBE_ID ?? "2BLLkGCIQWI";
 }
 
-export type HeroSlide = { src: string; href: string; alt: string };
-
+/** Sin consultar base: útil donde solo haga falta env + fallback estático. */
 export function defaultHeroSlides(): HeroSlide[] {
-  const raw = process.env.NEXT_PUBLIC_HERO_SLIDES_JSON;
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as HeroSlide[];
-    } catch {
-      /* noop */
-    }
-  }
-  return [
-    {
-      src: "https://i.postimg.cc/nhjnrxmT/portada-1-V3.jpg",
-      href: "/",
-      alt: "VEDISA Remates — campaña 1",
-    },
-    {
-      src: "https://i.postimg.cc/nhjnrxmk/PORTADA-2.jpg",
-      href: "/",
-      alt: "VEDISA Remates — campaña 2",
-    },
-    {
-      src: "https://i.postimg.cc/y8g7xKRc/portada-3-1.jpg.jpg",
-      href: "/",
-      alt: "VEDISA Remates — campaña 3",
-    },
-    {
-      src: "https://i.postimg.cc/Gm8btRDK/portada-3-2.jpg",
-      href: "/",
-      alt: "VEDISA Remates — campaña 4",
-    },
-  ];
+  return resolveHeroSlides({ envJson: process.env.NEXT_PUBLIC_HERO_SLIDES_JSON ?? null });
 }
+
+/** @internal export para si se necesitan los valores estáticos fuera del carrusel. */
+export const staticHeroSlidesFallback = FALLBACK_HERO_SLIDES satisfies readonly HeroSlide[];

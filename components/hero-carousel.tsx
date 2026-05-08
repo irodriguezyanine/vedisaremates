@@ -4,34 +4,85 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { defaultHeroSlides, type HeroSlide } from "@/lib/site-config";
+import {
+  FALLBACK_HERO_SLIDES,
+  resolveHeroSlides,
+  slidesFromEnv,
+  type HeroSlide,
+} from "@/lib/hero-slides-shared";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
-function useSlides(): HeroSlide[] {
-  const [slides] = useState(() => defaultHeroSlides());
-  return slides;
+function heroLinkHref(slide: HeroSlide): string {
+  const href = slide.href.trim() || "/";
+  if (href.startsWith("/") || href.startsWith("http")) return href;
+  return `/${href}`;
 }
 
 export function HeroCarousel() {
-  const slides = useSlides();
-  const [i, setI] = useState(0);
-
-  const next = useCallback(() => setI((v) => (v + 1) % slides.length), [slides.length]);
-  const prev = useCallback(() => setI((v) => (v - 1 + slides.length) % slides.length), [slides.length]);
+  const [slides, setSlides] = useState<HeroSlide[]>(() => slidesFromEnv() ?? [...FALLBACK_HERO_SLIDES]);
 
   useEffect(() => {
+    if (slidesFromEnv()?.length) return;
+    if (!isSupabaseConfigured()) return;
+
+    let cancelled = false;
+
+    async function load() {
+      const sb = createClient();
+      if (!sb) return;
+      const { data, error } = await sb.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        setSlides([...FALLBACK_HERO_SLIDES]);
+        return;
+      }
+      const resolved = resolveHeroSlides({ envJson: null, dbValue: data?.slides ?? null });
+      setSlides(resolved);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    if (!slides.length) return;
+    setI((idx) => Math.min(idx, slides.length - 1));
+  }, [slides.length]);
+
+  const next = useCallback(() => setI((v) => (slides.length ? (v + 1) % slides.length : 0)), [slides.length]);
+  const prev = useCallback(
+    () =>
+      setI((v) => (slides.length ? (v - 1 + slides.length) % slides.length : 0)),
+    [slides.length],
+  );
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
     const t = setInterval(next, 6500);
     return () => clearInterval(t);
-  }, [next]);
+  }, [next, slides.length]);
 
-  if (slides.length === 0) return null;
+  if (!slides.length) return null;
 
   const s = slides[i]!;
+
+  let isCloudinaryHost = false;
+  try {
+    isCloudinaryHost = /\.cloudinary\.com$/i.test(new URL(s.src).hostname.replace(/^www\./, ""));
+  } catch {
+    isCloudinaryHost = false;
+  }
 
   return (
     <section className="w-full bg-white" aria-roledescription="carrusel" aria-label="Carrusel destacado">
       <div className="relative">
         <Link
-          href={s.href}
+          href={heroLinkHref(s)}
           className="relative flex w-full items-center justify-center bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#009ade]"
         >
           <div className="relative h-[clamp(160px,26vh,280px)] w-full sm:h-[clamp(180px,28vh,300px)] md:h-[clamp(200px,30vh,340px)]">
@@ -39,9 +90,10 @@ export function HeroCarousel() {
               src={s.src}
               alt={s.alt}
               fill
-              priority
+              priority={i === 0}
               sizes="100vw"
               className="object-contain object-center"
+              unoptimized={isCloudinaryHost}
             />
           </div>
         </Link>

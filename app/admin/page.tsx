@@ -27,12 +27,12 @@ export default async function AdminHomePage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Panel general</h1>
         <p className="mt-2 max-w-xl text-sm text-neutral-400">
-          Gestioná remates, lotes vinculados al inventario y cuentas de participantes.
+          Gestiona remates, lotes vinculados al inventario y cuentas de participantes.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard title="Ítems inventario Tasaciones" value={invCount} />
+        <MetricCard title="Ítems en inventario" value={invCount} />
         <MetricCard title="Remates configurados" value={rematesCount} />
         <MetricCard title="Lotes sumados" value={lotesCount} />
       </div>

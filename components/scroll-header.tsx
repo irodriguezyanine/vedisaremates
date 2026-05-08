@@ -13,7 +13,7 @@ export function ScrollHeader({ children }: { children: ReactNode }) {
 
   return (
     <header
-      className={`sticky top-0 z-50 border-b border-white/10 bg-[#1a2332] text-white transition-shadow duration-200 ${
+      className={`sticky top-0 z-50 overflow-visible border-b border-white/10 bg-[#1a2332] text-white transition-shadow duration-200 ${
         raised ? "shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm" : ""
       }`}
     >

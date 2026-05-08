@@ -52,7 +52,7 @@ export type PortalMisOfertaRow = {
   remate_estado: string;
 };
 
-/** Inventario Tasaciones: columnas comunes; el resto llega como Record */
+/** Inventario Tasaciones Vedisa: columnas comunes; el resto llega como Record */
 export type InventarioRow = {
   id: string;
   created_at?: string;
@@ -61,6 +61,9 @@ export type InventarioRow = {
   modelo?: string | null;
   ano?: string | null;
   categoria?: string | null;
+  /** Estado operativo del vehículo (texto Tasaciones Vedisa); puede variar por despliegue */
+  estado?: string | null;
+  empresa?: string | null;
   valor_minimo?: number | null;
   valor_esperado?: number | null;
   imagenes?: string[] | null;

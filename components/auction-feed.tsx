@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { classifyRemateForFeed, countdownLabelFromEndsAt, type RemateFeedSlice } from "@/lib/portal-remate-feed";
@@ -104,135 +104,187 @@ function tabToSlice(tab: AuctionTab): RemateFeedSlice {
 }
 
 const cardShell =
-  "group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)] md:flex-row md:items-stretch";
+  "group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)]";
+
+const THUMB_VISIBLE = 4;
 
 const EMPTY_SLIDES: string[] = [];
 
-function RemateCarousel({
+function RemateLotsStrip({
   urls,
-  badge,
   altBase,
 }: {
   urls: string[];
-  badge: ReactNode;
   altBase: string;
 }) {
   const n = urls.length;
-  const [idx, setIdx] = useState(0);
+  const [start, setStart] = useState(0);
 
   useEffect(() => {
-    setIdx(0);
+    setStart(0);
   }, [urls.join("|")]);
 
-  useEffect(() => {
-    if (n <= 1) return;
-    const id = window.setInterval(() => setIdx((i) => (i + 1) % n), 5500);
-    return () => window.clearInterval(id);
-  }, [n]);
+  const maxStart = Math.max(0, n - THUMB_VISIBLE);
 
-  const slide = n > 0 ? idx % n : 0;
+  useEffect(() => {
+    if (start > maxStart) setStart(maxStart);
+  }, [start, maxStart]);
+
+  useEffect(() => {
+    if (n <= THUMB_VISIBLE) return;
+    const id = window.setInterval(() => {
+      setStart((s) => (s >= maxStart ? 0 : s + 1));
+    }, 5200);
+    return () => window.clearInterval(id);
+  }, [n, maxStart]);
+
+  function go(delta: number) {
+    setStart((s) => {
+      const next = s + delta;
+      if (next < 0) return maxStart;
+      if (next > maxStart) return 0;
+      return next;
+    });
+  }
+
+  if (n === 0) {
+    return (
+      <div className="relative min-h-[132px] w-full overflow-hidden rounded-xl border border-neutral-200/80 bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/35">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.2),transparent_55%)]" />
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          <span className="rounded-full bg-white/80 px-4 py-1.5 text-center text-xs font-semibold text-neutral-500 backdrop-blur-sm">
+            Este remate aún no tiene fotos disponibles en sus lotes
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (n < THUMB_VISIBLE) {
+    return (
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+      >
+        {urls.map((u, i) => (
+          <div key={`${u}-${i}`} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={u}
+              alt={`${altBase} — lote ${i + 1}`}
+              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+              loading={i === 0 ? "eager" : "lazy"}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="relative min-h-[200px] w-full overflow-hidden bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/40 md:h-full md:min-h-[220px] lg:min-h-[260px]">
-      {n === 0 ? (
+    <div className="relative">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {Array.from({ length: THUMB_VISIBLE }).map((_, i) => {
+          const src = urls[start + i];
+          const globalIdx = start + i;
+          return (
+            <div
+              key={`thumb-${globalIdx}-${src ?? "pad"}`}
+              className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner"
+            >
+              {src ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={src}
+                  alt={`${altBase} — lote ${globalIdx + 1}`}
+                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                  loading={i === 0 && start === 0 ? "eager" : "lazy"}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-neutral-200/70" aria-hidden />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {maxStart > 0 ? (
         <>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <span className="rounded-full bg-white/75 px-4 py-1.5 text-center text-xs font-semibold text-neutral-500 backdrop-blur-sm">
-              Sin fotos en los lotes del remate
-            </span>
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center sm:w-11">
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              className="pointer-events-auto ml-1 rounded-full bg-neutral-900/55 p-1.5 text-white shadow backdrop-blur-sm transition hover:bg-neutral-900/75"
+              aria-label="Ver cuatro fotos anteriores"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                <path strokeWidth="2" d="M15 6l-6 6 6 6" />
+              </svg>
+            </button>
           </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center sm:w-11">
+            <button
+              type="button"
+              onClick={() => go(1)}
+              className="pointer-events-auto mr-1 rounded-full bg-neutral-900/55 p-1.5 text-white shadow backdrop-blur-sm transition hover:bg-neutral-900/75"
+              aria-label="Ver cuatro fotos siguientes"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                <path strokeWidth="2" d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[11px] text-neutral-500">
+            {n} fotos · lotes visibles en esta vista: del {start + 1} al {Math.min(start + THUMB_VISIBLE, n)}{" "}
+            <span className="tabular-nums text-neutral-400">({start + 1}/{maxStart + 1})</span>
+          </p>
         </>
       ) : (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={urls[slide]}
-            alt={`${altBase} — imagen ${slide + 1} de ${n}`}
-            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-            loading={slide === 0 ? "eager" : "lazy"}
-          />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" aria-hidden />
-          {n > 1 ? (
-            <>
-              <div className="absolute inset-y-0 left-0 flex w-10 items-center justify-center md:w-11">
-                <button
-                  type="button"
-                  onClick={() => setIdx((i) => (i - 1 + n) % n)}
-                  className="pointer-events-auto rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/50"
-                  aria-label="Imagen anterior"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
-                    <path strokeWidth="2" d="M15 6l-6 6 6 6" />
-                  </svg>
-                </button>
-              </div>
-              <div className="absolute inset-y-0 right-0 flex w-10 items-center justify-center md:w-11">
-                <button
-                  type="button"
-                  onClick={() => setIdx((i) => (i + 1) % n)}
-                  className="pointer-events-auto rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/50"
-                  aria-label="Imagen siguiente"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
-                    <path strokeWidth="2" d="M9 18l6-6-6-6" />
-                  </svg>
-                </button>
-              </div>
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                {urls.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setIdx(i)}
-                    className={`h-2 w-2 rounded-full transition ${i === slide ? "scale-110 bg-white shadow" : "bg-white/45 hover:bg-white/70"}`}
-                    aria-label={`Ir a la imagen ${i + 1}`}
-                    aria-current={i === slide}
-                  />
-                ))}
-              </div>
-            </>
-          ) : null}
-        </>
+        <p className="mt-2 text-center text-[11px] text-neutral-500">
+          {n} {n === 1 ? "foto de un lote" : "fotos de lotes distintos"}
+        </p>
       )}
-      <div className="pointer-events-none absolute left-3 top-3 z-[1]">{badge}</div>
-      {n > 1 ? (
-        <span className="pointer-events-none absolute right-3 top-3 z-[1] rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-bold tabular-nums text-white backdrop-blur-sm">
-          {slide + 1}/{n}
-        </span>
-      ) : null}
     </div>
   );
 }
 
-function DemoRemateCarousel({ badge }: { badge: ReactNode }) {
-  const slides = [
-    "from-neutral-200 via-sky-100/70 to-neutral-100",
-    "from-amber-100/90 via-neutral-100 to-sky-50",
-    "from-neutral-300 via-neutral-100 to-emerald-50/80",
+function DemoRemateLotsStrip() {
+  const [start, setStart] = useState(0);
+  const demoSlides = [
+    "from-neutral-200 via-sky-100 to-neutral-100",
+    "from-amber-100 via-neutral-100 to-sky-50",
+    "from-neutral-300 via-neutral-100 to-emerald-50/70",
+    "from-neutral-200 via-violet-100 to-neutral-100",
+    "from-sky-100 via-neutral-200 to-neutral-100",
+    "from-neutral-200 via-orange-100/80 to-neutral-100",
   ];
-  const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const id = window.setInterval(() => setIdx((i) => (i + 1) % slides.length), 4500);
+    const id = window.setInterval(() => setStart((s) => (s >= 2 ? 0 : s + 1)), 4800);
     return () => window.clearInterval(id);
   }, []);
 
   return (
-    <div className="relative min-h-[200px] w-full overflow-hidden md:h-full md:min-h-[220px] lg:min-h-[260px]">
-      {slides.map((grad, i) => (
-        <div
-          key={`demo-slide-${i}`}
-          className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-500 ${grad} ${idx === i ? "opacity-100" : "opacity-0"}`}
-          aria-hidden
-        />
-      ))}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-600 backdrop-blur-sm">
-          Ejemplo {idx + 1}/{slides.length}
-        </span>
+    <div className="relative rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 px-3 py-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {Array.from({ length: THUMB_VISIBLE }).map((_, i) => {
+          const grad = demoSlides[(start + i) % demoSlides.length];
+          return (
+            <div
+              key={`demo-slot-${start}-${i}`}
+              className={`relative aspect-[4/3] overflow-hidden rounded-lg bg-gradient-to-br ${grad}`}
+              aria-hidden
+            >
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold uppercase tracking-wide text-neutral-600/80">
+                Lote ejemplo
+              </span>
+            </div>
+          );
+        })}
       </div>
-      <div className="pointer-events-none absolute left-3 top-3 z-[1]">{badge}</div>
+      <p className="mt-2 text-center text-[11px] text-neutral-500">
+        Ejemplo: {THUMB_VISIBLE} fotos por vista (carrusel)
+      </p>
     </div>
   );
 }
@@ -335,7 +387,7 @@ export function AuctionFeed() {
 
   const renderLiveSubtitle = useCallback((r: PortalRemateRow) => {
     if (r.descripcion?.trim()) return r.descripcion.trim().slice(0, 280);
-    return "Revisá ficha en la sala oficial y verificá condiciones antes de ofertar.";
+    return "Consulta la ficha y las condiciones en la sala oficial antes de ofertar.";
   }, []);
 
   return (
@@ -409,11 +461,11 @@ export function AuctionFeed() {
                 : useDemo
                   ? (
                       <>
-                        Ejemplo visual — así se verán los bloques destacados cuando publiques remates reales desde el panel{" "}
+                        Ejemplo visual: así lucirán las tarjetas cuando publiques remates reales desde el panel{" "}
                         <span className="font-medium text-neutral-800">Administración → Remates y lotes</span>.
                       </>
                     )
-                  : "Estos remates son los mismos que administrás en el panel y los que participantes ven en la sala en línea."}
+                  : "Son los mismos remates que gestionas en el panel administrativo y que los participantes ven en línea."}
             </p>
           </div>
           {useDemo ? (
@@ -432,15 +484,17 @@ export function AuctionFeed() {
         {bundle.kind === "loading" ? (
           <div className="mx-auto flex max-w-5xl flex-col gap-7">
             {[0, 1, 2].map((k) => (
-              <div
-                key={k}
-                className="flex h-[200px] animate-pulse overflow-hidden rounded-2xl border border-neutral-200/80 md:h-[260px] md:flex-row"
-              >
-                <div className="h-full min-h-[200px] w-full bg-gradient-to-br from-neutral-100 to-neutral-200/60 md:w-[42%]" />
-                <div className="hidden flex-1 flex-col gap-3 p-6 md:flex">
-                  <div className="h-6 w-2/3 rounded bg-neutral-200" />
-                  <div className="h-4 w-full rounded bg-neutral-100" />
-                  <div className="mt-auto h-4 w-40 rounded bg-neutral-100" />
+              <div key={k} className="overflow-hidden rounded-2xl border border-neutral-200/80 animate-pulse">
+                <div className="border-b border-neutral-100 p-6">
+                  <div className="h-7 w-1/2 rounded bg-neutral-200" />
+                  <div className="mt-3 h-4 w-full rounded bg-neutral-100" />
+                  <div className="mt-2 h-4 w-2/3 rounded bg-neutral-100" />
+                  <div className="mt-4 h-3 w-40 rounded bg-neutral-200" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-[4/3] rounded-lg bg-gradient-to-br from-neutral-100 to-neutral-200/70" />
+                  ))}
                 </div>
               </div>
             ))}
@@ -449,22 +503,25 @@ export function AuctionFeed() {
           <div className="mx-auto flex max-w-5xl flex-col gap-7">
             {DEMO_LOTES.map((lote, i) => (
               <article key={i} className={cardShell}>
-                <div className="relative w-full md:w-[min(42%,420px)] md:shrink-0">
-                  <DemoRemateCarousel badge={estadoBadge(lote.estado)} />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col p-5">
-                  <h3 className="line-clamp-2 text-lg font-bold text-neutral-900">{lote.titulo}</h3>
+                <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{lote.titulo}</h3>
+                    {estadoBadge(lote.estado)}
+                  </div>
                   <p className="mt-2 text-sm text-neutral-600">{lote.subtitulo}</p>
                   {lote.countdown ? (
                     <p className="mt-3 text-xs font-medium text-red-700">
                       Cierra en: <span className="tabular-nums font-bold">{lote.countdown}</span>
                     </p>
                   ) : (
-                    <p className="mt-3 text-xs text-neutral-500">Verificá ficha y condiciones antes de ofertar.</p>
+                    <p className="mt-3 text-xs text-neutral-500">Verifica la ficha y las condiciones antes de ofertar.</p>
                   )}
-                  <div className="mt-auto border-t border-neutral-100 pt-4">
-                    <span className="text-sm font-bold text-neutral-400">Conectá la base para habilitar enlaces</span>
+                  <div className="mt-4 border-t border-neutral-100 pt-4">
+                    <span className="text-sm font-bold text-neutral-400">Conecta la base para habilitar enlaces</span>
                   </div>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <DemoRemateLotsStrip />
                 </div>
               </article>
             ))}
@@ -472,7 +529,7 @@ export function AuctionFeed() {
         ) : slicedLive.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/80 px-6 py-14 text-center">
             <p className="text-neutral-700">
-              No hay remates en esta categoría todavía. Creá o publicá eventos desde{" "}
+              No hay remates en esta categoría aún. Crea o publica eventos desde{" "}
               <strong className="font-semibold text-neutral-900">Administración → Remates y lotes</strong>.
             </p>
             <Link href="/subastas" className="mt-4 inline-block font-bold text-[#009ade] hover:underline">
@@ -488,11 +545,11 @@ export function AuctionFeed() {
 
               return (
                 <article key={r.id} className={cardShell}>
-                  <div className="relative w-full md:w-[min(42%,420px)] md:shrink-0">
-                    <RemateCarousel urls={slides} badge={badgeForSlice(slice, r.estado)} altBase={r.titulo} />
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col p-5">
-                    <h3 className="line-clamp-2 text-lg font-bold text-neutral-900">{r.titulo}</h3>
+                  <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{r.titulo}</h3>
+                      {badgeForSlice(slice, r.estado)}
+                    </div>
                     <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{renderLiveSubtitle(r)}</p>
                     {cd ? (
                       <p className="mt-3 text-xs font-medium text-red-700">
@@ -503,7 +560,7 @@ export function AuctionFeed() {
                         Cierre: {new Date(r.ends_at).toLocaleString("es-CL")}
                       </p>
                     )}
-                    <div className="mt-auto border-t border-neutral-100 pt-4">
+                    <div className="mt-4 border-t border-neutral-100 pt-4">
                       <Link
                         href={`/subastas/${r.id}`}
                         className="text-sm font-bold text-[#009ade] underline-offset-4 hover:underline group-hover:text-[#005f8a]"
@@ -511,6 +568,9 @@ export function AuctionFeed() {
                         Ir a la sala del remate →
                       </Link>
                     </div>
+                  </div>
+                  <div className="p-4 sm:p-5">
+                    <RemateLotsStrip urls={slides} altBase={r.titulo} />
                   </div>
                 </article>
               );
