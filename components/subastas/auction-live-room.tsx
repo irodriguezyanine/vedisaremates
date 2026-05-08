@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Session } from "@supabase/supabase-js";
@@ -29,12 +30,26 @@ type Props = {
   initialLotes: Lote[];
   viewerId?: string | null;
   fichaDisplayConfig?: unknown | null;
+  /** Lote activo inicial (ej. viene de ?lote= al abrir desde el catálogo de fotos). */
+  initialActiveLoteId?: string | null;
 };
 
-export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId, fichaDisplayConfig }: Props) {
+export function AuctionLiveRoom({
+  initialRemate,
+  initialLotes,
+  viewerId,
+  fichaDisplayConfig,
+  initialActiveLoteId = null,
+}: Props) {
+  const searchParams = useSearchParams();
+
   const [remate, setRemate] = useState(initialRemate);
   const [lotes] = useState<Lote[]>(initialLotes);
-  const [activeId, setActiveId] = useState<string | null>(initialLotes[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(
+    initialActiveLoteId && initialLotes.some((l) => l.id === initialActiveLoteId)
+      ? initialActiveLoteId
+      : (initialLotes[0]?.id ?? null),
+  );
   const [offersByLote, setOffersByLote] = useState<Record<string, PortalOfertaRow[]>>({});
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,6 +85,13 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId, fichaDi
       void loadOffers(lotes.map((l) => l.id));
     });
   }, [lotes, loadOffers]);
+
+  const loteFromQuery = searchParams.get("lote")?.trim() ?? "";
+
+  useEffect(() => {
+    if (!loteFromQuery || !lotes.some((l) => l.id === loteFromQuery)) return;
+    setActiveId(loteFromQuery);
+  }, [loteFromQuery, lotes]);
 
   useEffect(() => {
     setTick(Date.now());
@@ -205,7 +227,9 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId, fichaDi
         </div>
         <div className="w-full shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-sm shadow-sm sm:max-w-sm">
           <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</p>
-          <p className="mt-2 text-lg font-bold capitalize text-neutral-900">{remate.estado.replaceAll("_", " ")}</p>
+          <p className="mt-2 text-lg font-bold capitalize text-neutral-900">
+            {String(remate.estado ?? "").replaceAll("_", " ") || "—"}
+          </p>
           <p className={`mt-2 text-xs font-medium ${countdownLive !== null && countdownLive <= 0 ? "text-red-600" : "text-emerald-700"}`}>
             {countdownLive !== null && countdownLive <= 0
               ? "Este remate ya cerró según la fecha configurada."

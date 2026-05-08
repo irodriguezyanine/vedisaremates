@@ -331,21 +331,94 @@ export const PORTAL_BANNER_KEYS = {
 export type PortalBannerFieldAdminDef = {
   key: string;
   defaultLabel: string;
+  /** Título en el panel administrador (sin códigos técnicos). */
+  tituloEnPanel: string;
+  ayudaParaAdmin: string;
   defaultOrder: number;
   hiddenByDefault: boolean;
 };
 
 export const PORTAL_BANNER_ADMIN_DEFS: readonly PortalBannerFieldAdminDef[] = [
-  { key: PORTAL_BANNER_KEYS.LOTE_ID, defaultLabel: "ID de sistema", defaultOrder: 15, hiddenByDefault: true },
-  { key: PORTAL_BANNER_KEYS.LOTE_ORDEN, defaultLabel: "Posición / orden en remate", defaultOrder: 25, hiddenByDefault: true },
-  { key: PORTAL_BANNER_KEYS.LOTE_TITULO, defaultLabel: "Título del lote", defaultOrder: 35, hiddenByDefault: false },
-  { key: PORTAL_BANNER_KEYS.REMATE_ID, defaultLabel: "Identificador del remate", defaultOrder: 44, hiddenByDefault: true },
-  { key: PORTAL_BANNER_KEYS.REMATE_NOMBRE, defaultLabel: "Nombre del remate", defaultOrder: 48, hiddenByDefault: true },
-  { key: PORTAL_BANNER_KEYS.REMATE_CIERRA, defaultLabel: "Fecha de cierre programada", defaultOrder: 110, hiddenByDefault: false },
-  { key: PORTAL_BANNER_KEYS.REMATE_INICIA, defaultLabel: "Inicio programado del remate", defaultOrder: 105, hiddenByDefault: false },
-  { key: PORTAL_BANNER_KEYS.LOTE_DESC, defaultLabel: "Descripción complementaria del lote", defaultOrder: 165, hiddenByDefault: false },
-  { key: PORTAL_BANNER_KEYS.LOTE_PRECIO_BASE, defaultLabel: "Precio base publicado", defaultOrder: 220, hiddenByDefault: false },
-  { key: PORTAL_BANNER_KEYS.LOTE_INCREMENTO, defaultLabel: "Incremento mínimo de oferta", defaultOrder: 230, hiddenByDefault: false },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_ID,
+    defaultLabel: "ID de sistema",
+    tituloEnPanel: "Código interno del lote",
+    ayudaParaAdmin: "Solo sirve para equipos de soporte. En el sitio conviene mantenerlo oculto.",
+    defaultOrder: 15,
+    hiddenByDefault: true,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_ORDEN,
+    defaultLabel: "Posición / orden en remate",
+    tituloEnPanel: "Número de orden dentro del catálogo del remate",
+    ayudaParaAdmin: 'Es el orden en la lista administrativa ("lote 1, 2, 3"). Los visitantes no lo necesitan ver.',
+    defaultOrder: 25,
+    hiddenByDefault: true,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_TITULO,
+    defaultLabel: "Título del lote",
+    tituloEnPanel: "Título destacado del lote",
+    ayudaParaAdmin: 'Es el texto principal que ves en la ficha, por ejemplo marca y modelo combinados.',
+    defaultOrder: 35,
+    hiddenByDefault: false,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.REMATE_ID,
+    defaultLabel: "Identificador del remate",
+    tituloEnPanel: "Identificador interno del evento",
+    ayudaParaAdmin: "Identificador de base de datos. No tiene valor público.",
+    defaultOrder: 44,
+    hiddenByDefault: true,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.REMATE_NOMBRE,
+    defaultLabel: "Nombre del remate",
+    tituloEnPanel: "Nombre del evento de remate",
+    ayudaParaAdmin: 'Si ya aparece arriba en la página suele estar de más repetirlo; podés ocultarlo.',
+    defaultOrder: 48,
+    hiddenByDefault: true,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.REMATE_CIERRA,
+    defaultLabel: "Fecha de cierre programada",
+    tituloEnPanel: "¿Cuándo cierra?",
+    ayudaParaAdmin: "Momento público más importante junto al precio base.",
+    defaultOrder: 110,
+    hiddenByDefault: false,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.REMATE_INICIA,
+    defaultLabel: "Inicio programado del remate",
+    tituloEnPanel: "¿Cuándo parte?",
+    ayudaParaAdmin: "Útil si querés destacar también la fecha de comienzo del evento.",
+    defaultOrder: 105,
+    hiddenByDefault: false,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_DESC,
+    defaultLabel: "Descripción complementaria del lote",
+    tituloEnPanel: "Texto aclaratorio sobre el lote",
+    ayudaParaAdmin: "Descripción opcional cargada desde el portal para este lote.",
+    defaultOrder: 165,
+    hiddenByDefault: false,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_PRECIO_BASE,
+    defaultLabel: "Precio base publicado",
+    tituloEnPanel: "Precio de partida visible",
+    ayudaParaAdmin: "Valor que ve el público como base para ofertar.",
+    defaultOrder: 220,
+    hiddenByDefault: false,
+  },
+  {
+    key: PORTAL_BANNER_KEYS.LOTE_INCREMENTO,
+    defaultLabel: "Incremento mínimo de oferta",
+    tituloEnPanel: "Pasos entre ofertas (mínimo)",
+    ayudaParaAdmin: "Ayuda al comprador a entender de cuánto en cuánto conviene aumentar cada oferta.",
+    defaultOrder: 230,
+    hiddenByDefault: false,
+  },
 ];
 
 const DEFAULT_PORTAL_BANNER_HIDDEN = new Set<string>(

@@ -1,15 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { AuctionLiveRoom } from "@/components/subastas/auction-live-room";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/server";
 
-type Props = { params: Promise<{ remateId: string }> };
+type Props = {
+  params: Promise<{ remateId: string }>;
+  searchParams: Promise<{ lote?: string }>;
+};
 
-export default async function SubastaDetallePage({ params }: Props) {
+export default async function SubastaDetallePage({ params, searchParams }: Props) {
   const { remateId } = await params;
+  const q = await searchParams;
   const supabase = await createClient();
 
   if (!supabase) {
@@ -67,4 +72,20 @@ export default async function SubastaDetallePage({ params }: Props) {
   if (!fichaCfgErr) {
     fichaDisplayConfig = (fichaCfgRow as { config?: unknown } | null)?.config ?? null;
   }
+
+  const requestedLote = typeof q.lote === "string" ? q.lote.trim() : "";
+  const initialActiveLoteId =
+    requestedLote && lotesEnriquecidos.some((l) => l.id === requestedLote) ? requestedLote : null;
+
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-16 text-center text-neutral-500">Cargando sala…</div>}>
+      <AuctionLiveRoom
+        initialRemate={r}
+        initialLotes={lotesEnriquecidos}
+        viewerId={user?.id ?? null}
+        fichaDisplayConfig={fichaDisplayConfig}
+        initialActiveLoteId={initialActiveLoteId}
+      />
+    </Suspense>
+  );
 }

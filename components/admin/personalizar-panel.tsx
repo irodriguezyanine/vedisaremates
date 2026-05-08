@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getPublicCloudinaryConfig, uploadImageToCloudinary } from "@/lib/cloudinary-upload";
 import {
@@ -63,7 +63,8 @@ export function PersonalizarPanel() {
   const [ok, setOk] = useState<string | null>(null);
   const [uploadIx, setUploadIx] = useState<number | null>(null);
   const [fichaOverrides, setFichaOverrides] = useState<Record<string, PortalFichaFieldOverride>>({});
-  const [fichaSectionOrder, setFichaSectionOrder] = useState("");
+  const [sectionOrderList, setSectionOrderList] = useState<string[]>(() => [...defaultFichaSectionOrderTitles()]);
+  const [showTechRefs, setShowTechRefs] = useState(false);
   const [fichaSaving, setFichaSaving] = useState(false);
   const [fichaOk, setFichaOk] = useState<string | null>(null);
   const [fichaErr, setFichaErr] = useState<string | null>(null);
@@ -105,12 +106,12 @@ export function PersonalizarPanel() {
     if (fichaRes.error) {
       setFichaLoadErr(fichaRes.error.message);
       setFichaOverrides({});
-      setFichaSectionOrder([...defaultFichaSectionOrderTitles()].join("\n"));
+      setSectionOrderList([...defaultFichaSectionOrderTitles()]);
     } else {
       const cfg = parsePortalInventarioFichaConfig(fichaRes.data?.config ?? null);
       setFichaOverrides(cfg?.fieldOverrides ? { ...cfg.fieldOverrides } : {});
       const orderTitles = cfg?.sectionOrder?.length ? cfg.sectionOrder : [...defaultFichaSectionOrderTitles()];
-      setFichaSectionOrder(orderTitles.join("\n"));
+      setSectionOrderList(orderTitles.map((s) => s.trim()).filter(Boolean));
       setFichaLoadErr(null);
     }
 
@@ -221,10 +222,7 @@ export function PersonalizarPanel() {
     const config = {
       version: 1 as const,
       fieldOverrides: pruneFieldOverrides(fichaOverrides),
-      sectionOrder: fichaSectionOrder
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean),
+      sectionOrder: sectionOrderList.map((l) => l.trim()).filter(Boolean),
     };
     const { error } = await sb.from("portal_inventario_ficha_config").upsert({ id: 1, config }, { onConflict: "id" });
     if (error) {
@@ -232,9 +230,34 @@ export function PersonalizarPanel() {
       setFichaSaving(false);
       return;
     }
-    setFichaOk("Ficha de subastas guardada correctamente.");
+    setFichaOk("Listo: la ficha pública ya quedó guardada como la configuraste.");
     setFichaSaving(false);
   }
+
+  function moveSection(ix: number, delta: number) {
+    setFichaOk(null);
+    setSectionOrderList((prev) => {
+      const next = [...prev];
+      const j = ix + delta;
+      if (j < 0 || j >= next.length) return prev;
+      const a = next[ix];
+      const b = next[j];
+      if (a === undefined || b === undefined) return prev;
+      next[ix] = b;
+      next[j] = a;
+      return next;
+    });
+  }
+
+  const presetsPorSeccion = useMemo(() => {
+    const map = new Map<string, (typeof INV_FICHA_PRESETS)[number][]>();
+    for (const row of INV_FICHA_PRESETS) {
+      const list = map.get(row.sectionTitle) ?? [];
+      list.push(row);
+      map.set(row.sectionTitle, list);
+    }
+    return [...map.entries()];
+  }, []);
 
   const extraFieldKeys = Object.keys(fichaOverrides).filter((k) => !PORTAL_KEY_SET.has(k) && !INVENTORY_PRESET_KEY_SET.has(k));
 
@@ -401,68 +424,118 @@ export function PersonalizarPanel() {
 
           <hr className="border-white/10" />
 
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-[#84d8ec]">Ficha pública en subastas</p>
-              <p className="mt-1 max-w-[70ch] text-xs text-neutral-400">
-                Controlá títulos, visibilidad y orden de los campos en la vista de cada vehículo. Las claves técnicas de inventario
-                coinciden con los nombres internos normalizados (ej. <span className="font-mono text-neutral-300">marca</span>,{" "}
-                <span className="font-mono text-neutral-300">fields_model</span>). Podés mover un campo a otro bloque con
-                &quot;Agrupación&quot;.
+          <div className="space-y-6">
+            <div className="rounded-xl border border-[#33C7E3]/30 bg-[#0c141f] p-5">
+              <p className="text-base font-bold text-[#dcf6ff]">Guía rápida (sin cosas raras)</p>
+              <p className="mt-2 max-w-[74ch] text-sm leading-relaxed text-neutral-200">
+                El orden va de arriba hacia abajo como lo verá cualquier persona en Internet. Mové los bloques con{" "}
+                <strong className="text-white">Subir</strong> / <strong className="text-white">Bajar</strong>. Para cada dato sólo decidís si se ve o no,
+                cómo se llama y en qué capítulo aparece — sin tener que conocer cómo llegan desde Tasaciones.
               </p>
+              <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs text-neutral-400">
+                <input
+                  type="checkbox"
+                  checked={showTechRefs}
+                  onChange={(e) => setShowTechRefs(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 bg-black/50"
+                />
+                <span>
+                  ¿Necesitás el código interno que usa el equipo de sistemas? Activá esta casilla sólo cuando alguien de soporte te lo pida.
+                </span>
+              </label>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-sm font-semibold text-white">Orden de bloques (títulos de sección)</p>
-              <p className="mt-1 text-xs text-neutral-400">Una línea por título, en el orden deseado (como en el catálogo).</p>
-              <textarea
-                value={fichaSectionOrder}
-                onChange={(e) => {
-                  setFichaSectionOrder(e.target.value);
-                  setFichaOk(null);
-                }}
-                rows={10}
-                className="mt-3 w-full rounded border border-white/15 bg-black/35 px-3 py-2 font-mono text-xs text-neutral-100"
-              />
+              <p className="text-base font-bold text-white">Primer paso · orden del catálogo en la página</p>
+              <p className="mt-2 text-xs text-neutral-400">
+                Ejemplo: Primero aparece Identificación del vehículo, luego colores… como en un sitio profesional automotriz.
+              </p>
+              <ol className="mt-4 space-y-2">
+                {sectionOrderList.map((title, ix) => (
+                  <li
+                    key={`${ix}-${title}`}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-3 sm:flex-nowrap"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#33C7E3]/28 text-sm font-black text-[#dcf6ff]">
+                      {ix + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm font-medium text-neutral-50">{title}</span>
+                    <div className="flex shrink-0 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={ix === 0 || fichaSaving}
+                        onClick={() => moveSection(ix, -1)}
+                        aria-label={`Mover "${title}" hacia arriba`}
+                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Subir
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ix >= sectionOrderList.length - 1 || fichaSaving}
+                        onClick={() => moveSection(ix, 1)}
+                        aria-label={`Mover "${title}" hacia abajo`}
+                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-neutral-100 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Bajar
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
               <button
                 type="button"
                 disabled={fichaSaving}
                 onClick={() => {
-                  setFichaSectionOrder([...defaultFichaSectionOrderTitles()].join("\n"));
+                  setSectionOrderList([...defaultFichaSectionOrderTitles()]);
                   setFichaOk(null);
                 }}
-                className="mt-3 rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-neutral-200 hover:bg-white/5"
+                className="mt-4 rounded-lg border border-white/20 px-4 py-2 text-xs font-bold text-neutral-100 hover:bg-white/[0.06]"
               >
-                Restaurar orden sugerido
+                Resetear orden al que recomendamos nosotros
               </button>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-sm font-semibold text-white">Bloque «Este lote en Vedisa Remates»</p>
+              <p className="text-base font-bold text-white">Segundo paso · recuadro superior del vehículo</p>
+              <p className="mt-2 text-xs text-neutral-400">
+                Fechas importantes del remate, precios y textos aclaratorios tal como aparecen arriba de la fotografía grande. Ocultamos por vos lo que casi nadie debe ver (códigos internos).
+              </p>
               <div className="mt-4 space-y-4">
                 {PORTAL_BANNER_ADMIN_DEFS.map((def) => (
-                  <div key={def.key} className="rounded-lg border border-white/10 bg-black/25 p-4">
-                    <p className="break-all font-mono text-[11px] text-[#81e0f5]/90">{def.key}</p>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Por defecto: {def.hiddenByDefault ? "oculto" : "visible"}. Etiqueta sugerida: {def.defaultLabel}
-                    </p>
+                  <div key={def.key} className="rounded-xl border border-white/10 bg-black/25 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{def.tituloEnPanel}</p>
+                      <p className="mt-1 max-w-[68ch] text-xs leading-relaxed text-neutral-400">{def.ayudaParaAdmin}</p>
+                      <p className="mt-2 text-[11px] text-neutral-500">
+                        Como venimos cargándolo:{" "}
+                        <strong className="text-neutral-300">{def.hiddenByDefault ? "usualmente invisible" : "usualmente visible"}</strong>.
+                      </p>
+                      {showTechRefs ? (
+                        <p className="mt-2 break-all font-mono text-[10px] text-amber-200/85">Soporte: {def.key}</p>
+                      ) : null}
+                    </div>
                     <div className="mt-3 grid gap-3 lg:grid-cols-12 lg:gap-4">
                       <label className="lg:col-span-4">
-                        <span className="block text-[11px] text-neutral-400">Visibilidad</span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                          ¿Se muestra?
+                        </span>
                         <select
                           className="mt-1 w-full rounded border border-white/15 bg-black/35 px-2 py-2 text-sm text-white"
                           value={visSelectValue(def.key)}
                           onChange={(e) => setVisibilityMode(def.key, e.target.value as "def" | "show" | "hide")}
                         >
-                          <option value="def">Predeterminado del sitio</option>
-                          <option value="show">Mostrar siempre</option>
-                          <option value="hide">Ocultar siempre</option>
+                          <option value="def">Dejar como lo armó Vedisa</option>
+                          <option value="show">Siempre visible</option>
+                          <option value="hide">Ocultarlo siempre</option>
                         </select>
                       </label>
                       <label className="lg:col-span-5">
-                        <span className="block text-[11px] text-neutral-400">Título público</span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                          Nombre público frente al cliente (opcional)
+                        </span>
                         <input
-                          placeholder={def.defaultLabel}
+                          placeholder={`Predeterminado: ${def.defaultLabel}`}
                           value={fichaOverrides[def.key]?.label ?? ""}
                           onChange={(e) => {
                             const raw = e.target.value;
@@ -482,7 +555,9 @@ export function PersonalizarPanel() {
                         />
                       </label>
                       <label className="lg:col-span-3">
-                        <span className="block text-[11px] text-neutral-400">Orden (menor primero)</span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                          Orden (número bajo antes)
+                        </span>
                         <input
                           type="number"
                           placeholder={String(def.defaultOrder)}
@@ -517,146 +592,185 @@ export function PersonalizarPanel() {
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-sm font-semibold text-white">Ficha técnica / inventario (presets Tasaciones)</p>
-              <p className="mt-2 text-[11px] text-neutral-500">
-                Tip: cada fila muestra alias posibles entre paréntesis. La configuración usa la primera clave (hint); si tus datos llegan solo bajo otro alias, agregalo abajo como clave manual.
+              <p className="text-base font-bold text-white">Tercer paso · ficha del vehículo (marca, modelo…)</p>
+              <p className="mt-2 text-xs text-neutral-400">
+                Está ordenado igual que tus capítulos del primer paso. Abrís cada grupo, localizás el dato (“Marca”, “Color”, etc.) y lo ponés donde corresponda.
               </p>
-              <div className="mt-4 max-h-[560px] space-y-3 overflow-auto pr-1">
-                {INV_FICHA_PRESETS.map((pre) => {
-                  const fk = pre.sourceKeyHint;
-                  const aliasPretty = [...new Set(pre.aliases)].join(", ");
-                  return (
-                    <div key={fk} className="rounded-lg border border-white/10 bg-black/25 p-4">
-                      <p className="font-mono text-[11px] text-[#81e0f5]/90">{fk}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">
-                        Agrupación sugerida: {pre.sectionTitle}. Aliases técn.: {aliasPretty}
-                      </p>
-                      <div className="mt-3 grid gap-3 lg:grid-cols-12 lg:gap-4">
-                        <label className="lg:col-span-3">
-                          <span className="block text-[11px] text-neutral-400">Visibilidad</span>
-                          <select
-                            className="mt-1 w-full rounded border border-white/15 bg-black/35 px-2 py-2 text-sm text-white"
-                            value={visSelectValue(fk)}
-                            onChange={(e) => setVisibilityMode(fk, e.target.value as "def" | "show" | "hide")}
-                          >
-                            <option value="def">Predeterminado (visible si hay valor)</option>
-                            <option value="show">Mostrar siempre</option>
-                            <option value="hide">Ocultar siempre</option>
-                          </select>
-                        </label>
-                        <label className="lg:col-span-4">
-                          <span className="block text-[11px] text-neutral-400">Título público</span>
-                          <input
-                            placeholder={pre.defaultLabel}
-                            value={fichaOverrides[fk]?.label ?? ""}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              setFichaOk(null);
-                              setFichaOverrides((prev) => {
-                                const next = { ...prev };
-                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                const t = raw.trim().slice(0, 320);
-                                if (!t) delete cur.label;
-                                else cur.label = t;
-                                if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                else next[fk] = cur;
-                                return next;
-                              });
-                            }}
-                            className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                          />
-                        </label>
-                        <label className="lg:col-span-3">
-                          <span className="block text-[11px] text-neutral-400">Agrupación (bloque visible)</span>
-                          <input
-                            placeholder={pre.sectionTitle}
-                            value={fichaOverrides[fk]?.sectionTitle ?? ""}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              setFichaOk(null);
-                              setFichaOverrides((prev) => {
-                                const next = { ...prev };
-                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                const t = raw.trim().slice(0, 240);
-                                if (!t) delete cur.sectionTitle;
-                                else cur.sectionTitle = t;
-                                if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                else next[fk] = cur;
-                                return next;
-                              });
-                            }}
-                            className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                          />
-                        </label>
-                        <label className="lg:col-span-2">
-                          <span className="block text-[11px] text-neutral-400">Orden</span>
-                          <input
-                            type="number"
-                            placeholder="auto"
-                            value={typeof fichaOverrides[fk]?.order === "number" ? String(fichaOverrides[fk]!.order) : ""}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              setFichaOk(null);
-                              setFichaOverrides((prev) => {
-                                const next = { ...prev };
-                                const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
-                                if (!raw.trim()) delete cur.order;
-                                else {
-                                  const n = Number(raw);
-                                  if (Number.isFinite(n)) cur.order = Math.round(n);
-                                }
-                                if (isEmptyOverrideEntry(cur)) delete next[fk];
-                                else next[fk] = cur;
-                                return next;
-                              });
-                            }}
-                            className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                          />
-                        </label>
-                      </div>
+              <div className="mt-5 space-y-3">
+                {presetsPorSeccion.map(([sectionTitle, rows]) => (
+                  <details key={sectionTitle} open className="group rounded-xl border border-white/10 bg-black/27">
+                    <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-[#bdefff] [&::-webkit-details-marker]:hidden">
+                      <span className="flex items-center justify-between gap-3">
+                        <span>{sectionTitle}</span>
+                        <span className="text-xs font-medium text-neutral-400">{rows.length} datos</span>
+                      </span>
+                    </summary>
+                    <div className="border-t border-white/10 px-4 py-4 space-y-4">
+                      {rows.map((pre) => {
+                        const fk = pre.sourceKeyHint;
+                        const aliasPretty = [...new Set(pre.aliases)].filter((a) => a !== fk).join(", ");
+                        return (
+                          <div key={`${sectionTitle}-${fk}`} className="rounded-xl border border-white/10 bg-black/30 p-4">
+                            <p className="text-sm font-semibold text-neutral-50">{pre.defaultLabel}</p>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              Hoy se agrupa dentro de «{sectionTitle}». También puede llamarse en origen como:{" "}
+                              {aliasPretty || "solo con el mismo nombre anterior"}.
+                            </p>
+                            {showTechRefs ? (
+                              <p className="mt-2 break-all font-mono text-[10px] text-amber-200/80">Soporte: {fk}</p>
+                            ) : null}
+                            <div className="mt-3 grid gap-3 lg:grid-cols-12 lg:gap-4">
+                              <label className="lg:col-span-3">
+                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                                  ¿Mostrar si hay texto?
+                                </span>
+                                <select
+                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-2 py-2 text-sm text-white"
+                                  value={visSelectValue(fk)}
+                                  onChange={(e) => setVisibilityMode(fk, e.target.value as "def" | "show" | "hide")}
+                                >
+                                  <option value="def">Cuando existe valor en la base</option>
+                                  <option value="show">Forzar visible siempre</option>
+                                  <option value="hide">No mostrar jamás</option>
+                                </select>
+                              </label>
+                              <label className="lg:col-span-4">
+                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                                  Cómo se lee públicamente (opcional)
+                                </span>
+                                <input
+                                  placeholder={`Sugerimos: ${pre.defaultLabel}`}
+                                  value={fichaOverrides[fk]?.label ?? ""}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    setFichaOk(null);
+                                    setFichaOverrides((prev) => {
+                                      const next = { ...prev };
+                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                      const t = raw.trim().slice(0, 320);
+                                      if (!t) delete cur.label;
+                                      else cur.label = t;
+                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                      else next[fk] = cur;
+                                      return next;
+                                    });
+                                  }}
+                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                              <label className="lg:col-span-3">
+                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                                  ¿En qué capítulo aparece?
+                                </span>
+                                <input
+                                  placeholder={sectionTitle}
+                                  value={fichaOverrides[fk]?.sectionTitle ?? ""}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    setFichaOk(null);
+                                    setFichaOverrides((prev) => {
+                                      const next = { ...prev };
+                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                      const t = raw.trim().slice(0, 240);
+                                      if (!t) delete cur.sectionTitle;
+                                      else cur.sectionTitle = t;
+                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                      else next[fk] = cur;
+                                      return next;
+                                    });
+                                  }}
+                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                              <label className="lg:col-span-2">
+                                <span className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                                  Prioridad dentro del grupo
+                                </span>
+                                <input
+                                  type="number"
+                                  placeholder="auto"
+                                  value={typeof fichaOverrides[fk]?.order === "number" ? String(fichaOverrides[fk]!.order) : ""}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    setFichaOk(null);
+                                    setFichaOverrides((prev) => {
+                                      const next = { ...prev };
+                                      const cur: PortalFichaFieldOverride = { ...(next[fk] ?? {}) };
+                                      if (!raw.trim()) delete cur.order;
+                                      else {
+                                        const n = Number(raw);
+                                        if (Number.isFinite(n)) cur.order = Math.round(n);
+                                      }
+                                      if (isEmptyOverrideEntry(cur)) delete next[fk];
+                                      else next[fk] = cur;
+                                      return next;
+                                    });
+                                  }}
+                                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </details>
+                ))}
               </div>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-5">
-              <p className="text-sm font-semibold text-white">Campos dinámicos / claves fuera del preset</p>
-              <p className="mt-1 text-xs text-neutral-400">
-                Cuando llegan claves específicas (p. ej. <span className="font-mono">aws_campos_cylinder_capacity</span>), agregalas
-                acá usando el mismo texto normalizado de la etiqueta técnica.
+              <p className="text-base font-bold text-white">Último paso · sólo cuando falta algo raro que no está arriba</p>
+              <p className="mt-2 text-xs text-neutral-400">
+                Si llegó un texto nuevo desde Tasaciones que no encuentras en los grupos , podés agregarlo vos: escribí palabras pegadas tipo “cilindrada_motor”; si no está segura, pedile a Soporte Vedisa una captura donde se ve el nombre técnico.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  placeholder="clave_tecnica"
-                  value={customKeyInput}
-                  onChange={(e) => setCustomKeyInput(e.target.value)}
-                  className="min-w-[200px] flex-1 rounded border border-white/15 bg-black/35 px-3 py-2 font-mono text-sm text-white"
-                />
-                <input
-                  placeholder="Título opcional para la clave nueva"
-                  value={customLabelDraft}
-                  onChange={(e) => setCustomLabelDraft(e.target.value)}
-                  className="min-w-[200px] flex-[2] rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
-                />
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                <label className="min-w-[200px] flex-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nombre interno (sin espacios)</span>
+                  <input
+                    value={customKeyInput}
+                    onChange={(e) => setCustomKeyInput(e.target.value)}
+                    className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                    placeholder='Ejemplo: cilindrada_motor'
+                  />
+                </label>
+                <label className="min-w-[200px] flex-[2]">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                    Titulo bonito para el público <span className="text-rose-200">(requerido)</span>
+                  </span>
+                  <input
+                    value={customLabelDraft}
+                    onChange={(e) => setCustomLabelDraft(e.target.value)}
+                    className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-sm text-white"
+                    placeholder='Ejemplo: “Cilindrada del motor”'
+                  />
+                </label>
                 <button
                   type="button"
                   disabled={fichaSaving}
                   onClick={() => addCustomFieldKey()}
-                  className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-neutral-100 hover:bg-white/[0.14]"
+                  className="rounded-xl bg-[#33C7E3] px-5 py-2.5 text-sm font-bold text-[#0f1f2c] hover:bg-[#5ad4ec] disabled:opacity-45"
                 >
-                  Añadir clave al mapa de personalización
+                  Guardarlo en este formulario (después pulsá Guardar todo abajo)
                 </button>
               </div>
 
               {extraFieldKeys.length ? (
                 <ul className="mt-4 space-y-3">
                   {extraFieldKeys.map((ek) => (
-                    <li key={ek} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2">
-                      <span className="font-mono text-xs text-neutral-300">{ek}</span>
+                    <li
+                      key={ek}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-neutral-100">
+                          {fichaOverrides[ek]?.label?.trim() || "Nombre pendiente"}
+                        </p>
+                        {showTechRefs ? <p className="break-all font-mono text-[10px] text-amber-200/80">{ek}</p> : null}
+                      </div>
                       <button
                         type="button"
-                        className="text-xs font-semibold text-rose-300 hover:underline"
+                        className="text-xs font-bold text-rose-300 underline-offset-2 hover:underline"
                         onClick={() => {
                           setFichaOverrides((prev) => {
                             const next = { ...prev };
@@ -666,13 +780,15 @@ export function PersonalizarPanel() {
                           setFichaOk(null);
                         }}
                       >
-                        Quitar personalización para esta clave
+                        Borrar
                       </button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-xs text-neutral-500">Por ahora no hay claves extra en la configuración.</p>
+                <p className="mt-3 text-xs text-neutral-500">
+                  Todavía no agregaste nada desde este cuadrito (y está perfecto así).
+                </p>
               )}
             </div>
 
@@ -682,7 +798,7 @@ export function PersonalizarPanel() {
               onClick={() => void saveFicha()}
               className="rounded-lg bg-[#33C7E3] px-6 py-2.5 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
             >
-              {fichaSaving ? "Guardando…" : "Guardar ficha de subastas"}
+              {fichaSaving ? "Guardando…" : "Guardar estos cambios de la ficha"}
             </button>
           </div>
         </>

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { classifyRemateForFeed, countdownLabelFromEndsAt, type RemateFeedSlice } from "@/lib/portal-remate-feed";
-import { fetchRemateCarouselThumbnailsMap } from "@/lib/remate-cover-thumbnails";
+import { fetchRemateCarouselSlidesMap, type RemateCarouselSlide } from "@/lib/remate-cover-thumbnails";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 import { catalogoHref } from "@/lib/site-config";
@@ -108,21 +108,25 @@ const cardShell =
 
 const THUMB_VISIBLE = 4;
 
-const EMPTY_SLIDES: string[] = [];
+const EMPTY_SLIDES: RemateCarouselSlide[] = [];
 
 function RemateLotsStrip({
-  urls,
+  slides,
+  remateId,
   altBase,
 }: {
-  urls: string[];
+  slides: RemateCarouselSlide[];
+  remateId: string;
   altBase: string;
 }) {
-  const n = urls.length;
+  const n = slides.length;
   const [start, setStart] = useState(0);
+
+  const slidesStableKey = useMemo(() => slides.map((s) => s.loteId).join("|"), [slides]);
 
   useEffect(() => {
     setStart(0);
-  }, [urls.join("|")]);
+  }, [slidesStableKey]);
 
   const maxStart = Math.max(0, n - THUMB_VISIBLE);
 
@@ -160,21 +164,31 @@ function RemateLotsStrip({
     );
   }
 
+  function thumbHref(loteId: string) {
+    return `/subastas/${remateId}?lote=${encodeURIComponent(loteId)}`;
+  }
+
   if (n < THUMB_VISIBLE) {
     return (
       <div
         className="grid gap-2"
         style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
       >
-        {urls.map((u, i) => (
-          <div key={`${u}-${i}`} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={u}
-              alt={`${altBase} — lote ${i + 1}`}
-              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-              loading={i === 0 ? "eager" : "lazy"}
-            />
+        {slides.map((s, i) => (
+          <div key={s.loteId} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
+            <Link
+              href={thumbHref(s.loteId)}
+              className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
+              aria-label={`Ver detalle del lote ${i + 1} en la sala`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={s.url}
+                alt={`${altBase} — foto del lote ${i + 1}`}
+                className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/thumb:scale-[1.02]"
+                loading={i === 0 ? "eager" : "lazy"}
+              />
+            </Link>
           </div>
         ))}
       </div>
@@ -185,21 +199,27 @@ function RemateLotsStrip({
     <div className="relative">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {Array.from({ length: THUMB_VISIBLE }).map((_, i) => {
-          const src = urls[start + i];
+          const slide = slides[start + i];
           const globalIdx = start + i;
           return (
             <div
-              key={`thumb-${globalIdx}-${src ?? "pad"}`}
+              key={slide ? `thumb-${slide.loteId}-${globalIdx}` : `thumb-pad-${globalIdx}`}
               className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner"
             >
-              {src ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={src}
-                  alt={`${altBase} — lote ${globalIdx + 1}`}
-                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                  loading={i === 0 && start === 0 ? "eager" : "lazy"}
-                />
+              {slide ? (
+                <Link
+                  href={thumbHref(slide.loteId)}
+                  className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
+                  aria-label={`Ver detalle del lote ${globalIdx + 1} en la sala`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={slide.url}
+                    alt={`${altBase} — foto del lote ${globalIdx + 1}`}
+                    className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/thumb:scale-[1.02]"
+                    loading={i === 0 && start === 0 ? "eager" : "lazy"}
+                  />
+                </Link>
               ) : (
                 <div className="absolute inset-0 bg-neutral-200/70" aria-hidden />
               )}
@@ -235,13 +255,14 @@ function RemateLotsStrip({
             </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-neutral-500">
-            {n} fotos · lotes visibles en esta vista: del {start + 1} al {Math.min(start + THUMB_VISIBLE, n)}{" "}
+            Podés hacer clic en una foto para abrir ese lote en la sala. Vista {start + 1}–
+            {Math.min(start + THUMB_VISIBLE, n)} de {n}{" "}
             <span className="tabular-nums text-neutral-400">({start + 1}/{maxStart + 1})</span>
           </p>
         </>
       ) : (
         <p className="mt-2 text-center text-[11px] text-neutral-500">
-          {n} {n === 1 ? "foto de un lote" : "fotos de lotes distintos"}
+          Hacé clic en una foto para ver el detalle del lote.
         </p>
       )}
     </div>
@@ -332,7 +353,7 @@ export function AuctionFeed() {
   const liveRows = bundle.kind === "live" ? bundle.rows : [];
   const liveError = bundle.kind === "live" ? bundle.err : null;
   const [, setTick] = useState(0);
-  const [carouselMap, setCarouselMap] = useState<Record<string, string[]>>({});
+  const [carouselMap, setCarouselMap] = useState<Record<string, RemateCarouselSlide[]>>({});
 
   const liveIdsKey =
     bundle.kind === "live" ? [...bundle.rows].map((r) => r.id).sort().join(",") : "";
@@ -354,7 +375,7 @@ export function AuctionFeed() {
       const sb = createClient();
       if (!sb) return;
       try {
-        const m = await fetchRemateCarouselThumbnailsMap(sb, ids);
+        const m = await fetchRemateCarouselSlidesMap(sb, ids);
         if (!cancelled) setCarouselMap(m);
       } catch {
         if (!cancelled) setCarouselMap({});
@@ -570,7 +591,7 @@ export function AuctionFeed() {
                     </div>
                   </div>
                   <div className="p-4 sm:p-5">
-                    <RemateLotsStrip urls={slides} altBase={r.titulo} />
+                    <RemateLotsStrip slides={slides} remateId={r.id} altBase={r.titulo} />
                   </div>
                 </article>
               );

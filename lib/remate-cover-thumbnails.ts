@@ -4,9 +4,16 @@ import { preferredThumbnailUrl } from "@/lib/inventario-media";
 import type { InventarioRow } from "@/lib/portal-types";
 
 type LoteMini = {
+  id: string;
   remate_id: string;
   orden: number;
   inventario_id: string | null;
+};
+
+export type RemateCarouselSlide = {
+  /** Lote público enlazado a la miniatura */
+  loteId: string;
+  url: string;
 };
 
 /**
@@ -21,7 +28,7 @@ export async function fetchRemateThumbnailMap(
 
   const { data: lotesData, error: e1 } = await supabase
     .from("portal_remate_lotes")
-    .select("remate_id, orden, inventario_id")
+    .select("id, remate_id, orden, inventario_id")
     .in("remate_id", remateIds)
     .order("orden", { ascending: true });
 
@@ -56,31 +63,31 @@ export async function fetchRemateThumbnailMap(
 }
 
 /**
- * Para cada remate, URLs de miniatura de todos los lotes con inventario (orden de lote), sin duplicados consecutivos.
+ * Miniaturas de todos los lotes con foto (orden de lote). Cada una enlaza al detalle del lote en `/subastas/[remateId]?lote=…`.
  */
-export async function fetchRemateCarouselThumbnailsMap(
+export async function fetchRemateCarouselSlidesMap(
   supabase: SupabaseClient,
   remateIds: string[],
-): Promise<Record<string, string[]>> {
-  const out: Record<string, string[]> = {};
+): Promise<Record<string, RemateCarouselSlide[]>> {
+  const out: Record<string, RemateCarouselSlide[]> = {};
   if (!remateIds.length) return out;
 
   const { data: lotesData, error: e1 } = await supabase
     .from("portal_remate_lotes")
-    .select("remate_id, orden, inventario_id")
+    .select("id, remate_id, orden, inventario_id")
     .in("remate_id", remateIds)
     .order("orden", { ascending: true });
 
   if (e1 || !lotesData?.length) return out;
 
   const lotes = lotesData as LoteMini[];
-  const invOrderByRemate = new Map<string, string[]>();
+  const lotesPorRemate = new Map<string, { loteId: string; inventarioId: string }[]>();
 
   for (const row of lotes) {
     if (!row.remate_id || !row.inventario_id) continue;
-    const list = invOrderByRemate.get(row.remate_id) ?? [];
-    list.push(row.inventario_id);
-    invOrderByRemate.set(row.remate_id, list);
+    const list = lotesPorRemate.get(row.remate_id) ?? [];
+    list.push({ loteId: row.id, inventarioId: row.inventario_id });
+    lotesPorRemate.set(row.remate_id, list);
   }
 
   const inventarioIds = [...new Set(lotes.map((l) => l.inventario_id).filter(Boolean) as string[])];
@@ -96,17 +103,28 @@ export async function fetchRemateCarouselThumbnailsMap(
   }
 
   for (const remateId of remateIds) {
-    const chain = invOrderByRemate.get(remateId) ?? [];
-    const urls: string[] = [];
-    let prev: string | undefined;
-    for (const iid of chain) {
-      const u = thumbByInv.get(iid);
-      if (!u || u === prev) continue;
-      urls.push(u);
-      prev = u;
+    const chain = lotesPorRemate.get(remateId) ?? [];
+    const slides: RemateCarouselSlide[] = [];
+    for (const { loteId, inventarioId } of chain) {
+      const u = thumbByInv.get(inventarioId);
+      if (!u) continue;
+      slides.push({ loteId, url: u });
     }
-    out[remateId] = urls;
+    out[remateId] = slides;
   }
 
+  return out;
+}
+
+/** @deprecated Prefer `fetchRemateCarouselSlidesMap` para conservar vínculo a cada lote. */
+export async function fetchRemateCarouselThumbnailsMap(
+  supabase: SupabaseClient,
+  remateIds: string[],
+): Promise<Record<string, string[]>> {
+  const rich = await fetchRemateCarouselSlidesMap(supabase, remateIds);
+  const out: Record<string, string[]> = {};
+  for (const id of Object.keys(rich)) {
+    out[id] = rich[id]!.map((s) => s.url);
+  }
   return out;
 }
