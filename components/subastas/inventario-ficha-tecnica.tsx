@@ -2,7 +2,7 @@
 
 import type { ReactNode, SVGProps } from "react";
 import Link from "next/link";
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { formatClp } from "@/lib/format-clp";
 import {
@@ -270,6 +270,24 @@ export function InventarioFichaTecnica({
     [rawSections, rawPortalRows, fichaDisplayConfig],
   );
 
+  const tabbedSections = useMemo(() => sections.filter((sec) => isTabbedSectionTitle(sec.title)), [sections]);
+  const regularSections = useMemo(() => sections.filter((sec) => !isTabbedSectionTitle(sec.title)), [sections]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tabbedSections.length) {
+      setActiveTabId(null);
+      return;
+    }
+    const currentIsValid = tabbedSections.some((sec) => normalizeId(sec.title) === activeTabId);
+    if (!currentIsValid) setActiveTabId(normalizeId(tabbedSections[0].title));
+  }, [tabbedSections, activeTabId]);
+
+  const activeTabbedSection = useMemo(() => {
+    if (!tabbedSections.length) return null;
+    return tabbedSections.find((sec) => normalizeId(sec.title) === activeTabId) ?? tabbedSections[0];
+  }, [tabbedSections, activeTabId]);
+
   return (
     <div className="space-y-10">
       {portalRows.length ? (
@@ -308,21 +326,58 @@ export function InventarioFichaTecnica({
         </aside>
       ) : null}
 
-      {sections.map((sec) => (
-        <section key={sec.title} className="space-y-4" aria-labelledby={`sec-${normalizeId(sec.title)}`}>
-          <div className="flex flex-wrap items-start gap-3 border-b border-neutral-100 pb-3">
-            {sectionGlyph(sec.title)}
-            <div className="min-w-0 flex-1">
-              <h3 id={`sec-${normalizeId(sec.title)}`} className="text-lg font-black tracking-tight text-neutral-900">
-                {sec.title}
-              </h3>
-              {sec.description ? <p className="mt-1 max-w-[65ch] text-sm text-neutral-500">{sec.description}</p> : null}
-            </div>
+      {tabbedSections.length ? (
+        <section className="space-y-4" aria-labelledby="ficha-tabbed-sections">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 id="ficha-tabbed-sections" className="text-lg font-black tracking-tight text-neutral-900">
+              Información del vehículo
+            </h3>
           </div>
-          <CatalogBlock rows={sec.rows} />
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-neutral-200/90 bg-neutral-50 p-2">
+            {tabbedSections.map((sec) => {
+              const tabId = normalizeId(sec.title);
+              const active = tabId === normalizeId(activeTabbedSection?.title ?? "");
+              return (
+                <button
+                  key={tabId}
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-sm font-bold transition ${
+                    active ? "bg-white text-[#006ea1] shadow-sm ring-1 ring-[#009ade]/20" : "text-neutral-600 hover:bg-white/70 hover:text-neutral-900"
+                  }`}
+                  onClick={() => setActiveTabId(tabId)}
+                  aria-pressed={active}
+                >
+                  {tabTitle(sec.title)}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTabbedSection ? <SectionContent sec={activeTabbedSection} /> : null}
         </section>
+      ) : null}
+
+      {regularSections.map((sec) => (
+        <SectionContent key={sec.title} sec={sec} />
       ))}
     </div>
+  );
+}
+
+function SectionContent({ sec }: { sec: InventarioFichaSection }) {
+  return (
+    <section className="space-y-4" aria-labelledby={`sec-${normalizeId(sec.title)}`}>
+      <div className="flex flex-wrap items-start gap-3 border-b border-neutral-100 pb-3">
+        {sectionGlyph(sec.title)}
+        <div className="min-w-0 flex-1">
+          <h3 id={`sec-${normalizeId(sec.title)}`} className="text-lg font-black tracking-tight text-neutral-900">
+            {sec.title}
+          </h3>
+          {sec.description ? <p className="mt-1 max-w-[65ch] text-sm text-neutral-500">{sec.description}</p> : null}
+        </div>
+      </div>
+      <CatalogBlock rows={sec.rows} />
+    </section>
   );
 }
 
@@ -332,4 +387,14 @@ function normalizeId(s: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .slice(0, 64);
+}
+
+function isTabbedSectionTitle(title: string): boolean {
+  const id = normalizeId(title).toLowerCase();
+  return id.includes("identificacion_del_vehiculo") || id.includes("otros_datos_del_sistema") || id.includes("precios_referenciales");
+}
+
+function tabTitle(title: string): string {
+  if (normalizeId(title).toLowerCase().includes("otros_datos_del_sistema")) return "Otros datos";
+  return title;
 }
