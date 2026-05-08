@@ -108,11 +108,36 @@ export const ORDERED_GROUPS: readonly {
     ],
   },
   {
-    title: "Valoración y empresa (referencia Tasaciones)",
+    title: "Precios referenciales",
     fields: [
       { label: "Empresa / aseguradora", keys: ["empresa", "aseguradora", "companía", "insurer"] },
       { label: "Valor mínimo / referencia", keys: ["valor_minimo"] },
       { label: "Precio aproximado referencial Vedisa", keys: ["valor_esperado"] },
+      {
+        label: "Avalúo fiscal",
+        keys: [
+          "avaluo_fiscal",
+          "avaluo_tasacion",
+          "avaluo_tasacion_fiscal",
+          "tasacion_fiscal",
+          "valor_avaluo_fiscal",
+          "valor_tasacion_fiscal",
+          "monto_avaluo_fiscal",
+          "fiscal_avaluo",
+        ],
+      },
+      {
+        label: "Valor permiso de circulación",
+        keys: [
+          "valor_permiso_circulacion",
+          "valor_permiso_de_circulacion",
+          "valor_permiso",
+          "monto_permiso_circulacion",
+          "precio_permiso_circulacion",
+          "valor_pcirculacion",
+          "valor_perm_circulacion",
+        ],
+      },
     ],
   },
   {
@@ -135,6 +160,38 @@ function meaninglessString(s: string): boolean {
   const t = s.trim();
   if (!t) return true;
   return SKIP_VALUE_RE.test(t);
+}
+
+/** Ocultar filas cuyo valor no aporta nada útil en la web. */
+export function inventarioValorVisiblePublico(value: string): boolean {
+  const t = value.trim();
+  if (!t || meaninglessString(t)) return false;
+  if (/^[—\-–]+$/.test(t)) return false;
+  return true;
+}
+
+/** Ej. «vehículo liviano», «solo propietario» — sin código snake_case tipo interno. */
+function humanizarValorPorSegmentosTipoCatalogo(raw: string): string {
+  const t = raw.trim().replace(/^["']+|["']+$/g, "");
+  if (!t.includes("_")) return raw;
+  if (t.includes(" ") || t.length > 120 || /^https?:\/\//i.test(t)) return raw;
+  if (!/^[a-z][a-z0-9]*(_[a-z0-9]*)+$/i.test(t.replace(/__/g, "_"))) return raw;
+  return t
+    .replace(/__/g, " · ")
+    .split("_")
+    .filter(Boolean)
+    .map((w) => {
+      if (/^[ivxlcdm]+$/i.test(w)) return w.toUpperCase();
+      const cap = w.slice(0, 1).toLocaleUpperCase("es-CL") + w.slice(1).toLocaleLowerCase("es-CL");
+      if (/^si$/i.test(cap)) return "Sí";
+      if (/^no$/i.test(cap)) return "No";
+      return cap;
+    })
+    .join(" ");
+}
+
+function formatoValorOtrosDatosSistema(displayText: string): string {
+  return humanizarValorPorSegmentosTipoCatalogo(displayText);
 }
 
 function absorbSpecArrays(row: Record<string, unknown>): Record<string, unknown> {
@@ -222,8 +279,17 @@ const MONEY_FIELD_KEYS_NORM: ReadonlySet<string> = (() => {
   const s = new Set<string>();
   function fieldIsMonetary(field: { label: string; keys: readonly string[] }): boolean {
     const lbl = field.label.toLowerCase();
-    if (/\b(valor\s+m[ií]nimo|valor\s+esperado|precio\b|incremento\b|monto\b)/i.test(lbl)) return true;
-    return field.keys.some((k) => /valor_(minimo|esperado)|precio_|incremento_|monto_/i.test(normalizeMapKey(k)));
+    if (
+      /\b(valor\s+m[ií]nimo|valor\s+esperado|precio\b|incremento\b|monto\b|aval[uú]o|permiso\s+de\s+circulaci)/i.test(
+        lbl,
+      )
+    )
+      return true;
+    return field.keys.some((k) =>
+      /valor_(minimo|esperado)|precio_|incremento_|monto_|avaluo|tasacion_fiscal|permiso_circulacion|valor_permiso/i.test(
+        normalizeMapKey(k),
+      ),
+    );
   }
   for (const grp of ORDERED_GROUPS) {
     for (const fld of grp.fields) {
@@ -239,8 +305,11 @@ function isLikelyMoneyKeyNorm(nk: string): boolean {
   let rest = nk.replace(/^fields_/, "").replace(/^field_/, "");
   rest = rest.replace(/^fields_/, "").replace(/^field_/, "");
   if (MONEY_FIELD_KEYS_NORM.has(rest)) return true;
-  return /(^|_)valor_(minimo|esperado|referencia)|precio_|(^|_)incremento|monto_|_clp_/i.test(nk) ||
-    /(^|_)(suggested_price|valor_sugerido|reference_price|precio_sugerido)(_|$)/i.test(nk);
+  return (
+    /(^|_)valor_(minimo|esperado|referencia)|precio_|(^|_)incremento|monto_|_clp_/i.test(nk) ||
+    /(^|_)(suggested_price|valor_sugerido|reference_price|precio_sugerido)(_|$)/i.test(nk) ||
+    /avaluo|tasacion_fiscal|valor_permiso|permiso_circulacion_(valor|monto)|_avaluo_/i.test(nk)
+  );
 }
 
 function formatMoneyCellDisplayIfKey(nk: string, displayText: string): string {
@@ -348,6 +417,8 @@ const EXCLUDED_FROM_ADICIONALES = [
 function excludedFromAdicionalesKey(keyNorm: string, keyRaw: string): boolean {
   if (EXCLUDED_FROM_ADICIONALES.some((re) => re.test(keyRaw))) return true;
   if (/\b(src|iframe|thumbnail|gallery|photos|spin)\b/i.test(keyNorm)) return true;
+  const bare = otroSistemaBareKey(keyNorm).replace(/^_+/, "");
+  if (/^(request_id|trace_id|version_id|awsrequestid|x_amzn_requestid)$/i.test(bare)) return true;
   return false;
 }
 
@@ -408,6 +479,15 @@ function shouldExcludeOtrosAdicional(
   if (/(^|_)empresa_?id($|_)/i.test(normalizeMapKey(kRaw.replace(/\s+/g, "_")))) return true;
   if (/^origen$/i.test(bare) || /^origen$/i.test(nk) || lab === "origen") return true;
   if (/^src$/i.test(bare) || /^iframe_?src$/i.test(nk)) return true;
+
+  if (
+    /^request_?id$/i.test(bare) ||
+    /^x_amzn_?request_?id$/i.test(bare) ||
+    /^awsrequestid$/i.test(bare)
+  )
+    return true;
+  if (/^trace_?id$/i.test(bare)) return true;
+  if (/version_?id$/i.test(bare.replace(/^_+/, "")) || /(^|_)version_?id($|_)/i.test(nk)) return true;
 
   const v = valueShown.trim();
   if (/^https?:\/\//i.test(v)) return true;
@@ -660,6 +740,7 @@ export function applyFichaPublicConfig(
     const ov = overrides[sk];
     if (ov?.visible === false) continue;
     if (ov?.visible !== true && portalHidden.has(sk)) continue;
+    if (!inventarioValorVisiblePublico(r.value)) continue;
     const label = typeof ov?.label === "string" && ov.label.trim() ? ov.label.trim() : r.label;
     const ord =
       typeof ov?.order === "number" && Number.isFinite(ov.order) ? ov.order : (PORTAL_BANNER_DEFAULT_ORDER[sk] ?? 500);
@@ -682,6 +763,7 @@ export function applyFichaPublicConfig(
       if (!sk) continue;
       const ov = overrides[sk];
       if (ov?.visible === false) continue;
+      if (!inventarioValorVisiblePublico(row.value)) continue;
       const label = typeof ov?.label === "string" && ov.label.trim() ? ov.label.trim() : row.label;
       const sectionTitle =
         typeof ov?.sectionTitle === "string" && ov.sectionTitle.trim() ? ov.sectionTitle.trim() : sec.title;
@@ -732,7 +814,7 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     const rows: InventarioSpecRow[] = [];
     for (const fld of grp.fields) {
       const picked = lookupKey(flatMap, fld.keys);
-      if (picked) {
+      if (picked && inventarioValorVisiblePublico(picked.value)) {
         consumedKeys.add(picked.key);
         rows.push({ label: fld.label, value: picked.value, sourceKey: picked.key });
       }
@@ -755,6 +837,7 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     if (text === null) continue;
 
     const shown = composeCellDisplayFormatting(nk, text);
+    if (!inventarioValorVisiblePublico(shown)) continue;
 
     /** Evitar párrafos largos duplicados de descripción. */
     const valKey = shown.trim().toLowerCase().slice(0, 280);
@@ -764,15 +847,16 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     if (noisyAdicionalTechnicalRow(nk, hum, text)) continue;
 
     const etiqueta = resolveOtrosPublicLabel(nk, hum);
+    const valorMostrado = formatoValorOtrosDatosSistema(shown);
 
-    if (shown.length > 4000) {
+    if (valorMostrado.length > 4000) {
       adicionalRows.push({
         label: etiqueta,
-        value: shown.slice(0, 4000) + "…",
+        value: valorMostrado.slice(0, 4000) + "…",
         sourceKey: nk,
       });
     } else {
-      adicionalRows.push({ label: etiqueta, value: shown, sourceKey: nk });
+      adicionalRows.push({ label: etiqueta, value: valorMostrado, sourceKey: nk });
     }
     seenVals.add(valKey);
   }

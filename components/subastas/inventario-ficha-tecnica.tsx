@@ -136,7 +136,9 @@ function sectionGlyph(title: string): ReactNode {
   if (t.includes("propiedad") || t.includes("ubicaci")) return <IconPin className={cls} />;
   if (t.includes("permiso") || t.includes("documentaci")) return <IconDocs className={cls} />;
   if (t.includes("chasis") || t.includes("motor")) return <IconEngine className={cls} />;
-  if (t.includes("valoraci") || t.includes("empresa")) return <IconCash className={cls} />;
+  if (t.includes("precios referencia") || t.includes("valoraci") || t.includes("empresa")) return (
+    <IconCash className={cls} />
+  );
   if (t.includes("descripción") || t.includes("extendida")) return <IconDocs className={cls} />;
   if (t.includes("otros")) return <IconGrid className={cls} />;
   return <IconCar className={cls} />;
