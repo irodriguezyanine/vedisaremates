@@ -22,6 +22,7 @@ export function AdminSidebar() {
       <div className="border-b border-white/10 pb-6">
         <Link
           href="/"
+          prefetch={false}
           className="block rounded-xl p-2 -m-2 outline-none ring-offset-[#141c28] transition hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-[#33C7E3]"
           aria-label={`${SITE.name} — Ir al inicio público (mantener sesión iniciada)`}
           title="Ir al inicio del sitio público"

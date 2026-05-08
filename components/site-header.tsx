@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { catalogoHref, SITE } from "@/lib/site-config";
 
 import { HeaderAuth } from "@/components/header-auth";
+import { NavVerMenuContent } from "@/components/nav-ver-menu-content";
 import { ScrollHeader } from "./scroll-header";
 
 const navClasses = (active: boolean) =>
@@ -29,9 +30,11 @@ export function SiteHeader() {
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   useEffect(() => {
-    setCatOpen(false);
-    setMoreOpen(false);
-    setMobileOpen(false);
+    queueMicrotask(() => {
+      setCatOpen(false);
+      setMoreOpen(false);
+      setMobileOpen(false);
+    });
   }, [pathname]);
 
   useEffect(() => {
@@ -101,23 +104,15 @@ export function SiteHeader() {
                 <div
                   role="menu"
                   aria-labelledby="nav-ver-trigger"
-                  className="absolute left-0 top-full z-[70] mt-1.5 min-w-[220px] rounded-lg border border-black/10 bg-white py-2 text-neutral-800 shadow-xl"
+                  className="absolute left-0 top-full z-[70] mt-1.5 min-w-[280px] max-h-[min(70vh,520px)] overflow-y-auto rounded-lg border border-black/10 bg-white py-0 text-neutral-800 shadow-xl"
                 >
-                  <Link href="/" role="menuitem" className="block px-4 py-2 text-sm hover:bg-neutral-50">
-                    Todas las categorías
-                  </Link>
-                  <div className="border-t border-neutral-100 px-4 py-2 text-xs text-neutral-500">
-                    DESARME <span className="text-neutral-400">0</span>
-                  </div>
-                  <div className="px-4 py-2 text-xs text-neutral-500">
-                    LIVIANOS <span className="font-medium text-neutral-800">1</span>
-                  </div>
-                  <div className="px-4 py-2 text-xs text-neutral-500">
-                    PESADOS <span className="text-neutral-400">0</span>
-                  </div>
-                  <div className="px-4 py-2 text-xs text-neutral-500">
-                    VENTA DIRECTA <span className="font-medium text-neutral-800">17</span>
-                  </div>
+                  <NavVerMenuContent
+                    variant="dropdown"
+                    onNavigate={() => {
+                      setCatOpen(false);
+                      setMobileOpen(false);
+                    }}
+                  />
                 </div>
               ) : null}
             </div>
@@ -210,6 +205,7 @@ export function SiteHeader() {
             <Link href="/" className="rounded-md px-3 py-3 text-white/90 hover:bg-white/5" onClick={closeMobile}>
               Inicio
             </Link>
+            <NavVerMenuContent variant="mobile" onNavigate={closeMobile} />
             <Link
               href={cat}
               target="_blank"

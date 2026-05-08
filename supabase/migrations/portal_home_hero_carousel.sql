@@ -38,3 +38,8 @@ CREATE POLICY portal_home_hero_update_admin
   WITH CHECK (public.auth_user_es_admin() AND id = 1);
 
 COMMENT ON TABLE public.portal_home_hero IS 'Banners del carrusel del home (JSON array {src,href,alt})';
+
+-- Fila inicial: evita 404 en cliente si la tabla fue creada sin datos (HeroCarousel puede consultar antes de “Personalizar”).
+INSERT INTO public.portal_home_hero (id, slides)
+VALUES (1, '[]'::jsonb)
+ON CONFLICT (id) DO NOTHING;

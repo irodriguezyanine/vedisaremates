@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
-import { preferredThumbnailUrl } from "@/lib/inventario-media";
+import { firstGlo3dViewerUrl, preferredThumbnailUrl } from "@/lib/inventario-media";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
@@ -75,7 +75,7 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     const from = (modalPage - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    let q = sb.from("inventario").select("id, patente, marca, modelo, valor_minimo, categoria, imagenes", { count: "exact" });
+    let q = sb.from("inventario").select("*", { count: "exact" });
 
     if (usedIds.length > 0) {
       q = q.not("id", "in", `(${usedIds.join(",")})`);
@@ -444,7 +444,9 @@ export function RemateEditor({ remateId }: { remateId: string }) {
                   </thead>
                   <tbody>
                     {modalRows.map((row) => {
-                      const thumb = preferredThumbnailUrl(row as InventarioRow & Record<string, unknown>);
+                      const invRow = row as InventarioRow & Record<string, unknown>;
+                      const thumb = preferredThumbnailUrl(invRow);
+                      const gloViewer = firstGlo3dViewerUrl(invRow);
                       const checked = selectedInvById.has(row.id);
                       return (
                         <tr key={row.id} className="border-t border-white/10">
@@ -462,6 +464,18 @@ export function RemateEditor({ remateId }: { remateId: string }) {
                               {thumb ? (
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+                              ) : gloViewer ? (
+                                <a
+                                  href={gloViewer}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex h-full w-full flex-col items-center justify-center bg-neutral-950 px-0.5 text-center text-[7px] font-bold leading-tight text-[#33C7E3] hover:bg-neutral-900 hover:underline"
+                                  title={`Abrir visor 360° / Glo3D (${String(row.patente ?? "").trim() || "vehículo"})`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span className="text-[8px]">360°</span>
+                                  <span className="font-normal opacity-75">visor</span>
+                                </a>
                               ) : (
                                 <span className="px-1 text-center text-[9px] text-neutral-600">—</span>
                               )}

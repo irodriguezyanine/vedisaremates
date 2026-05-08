@@ -10,6 +10,13 @@ const EXTRA_IMAGE_KEYS = [
   "url_miniatura",
   "imagen_principal",
   "foto_principal",
+  "glo3d_url",
+  "glo3d_link",
+  "url_glo3d",
+  "viewer_360_url",
+  "visor_360_url",
+  "url_visita_virtual",
+  "link_visita_virtual",
 ] as const;
 
 function isHttpsUrl(v: unknown): v is string {
@@ -26,7 +33,20 @@ function urlsFromJsonItem(x: unknown): string[] {
   if (isHttpsUrl(x)) return [x.trim()];
   if (!x || typeof x !== "object") return [];
   const o = x as Record<string, unknown>;
-  for (const k of ["url", "src", "href", "link", "imagen"]) {
+  for (const k of [
+    "url",
+    "src",
+    "href",
+    "link",
+    "imagen",
+    "viewer",
+    "embed",
+    "embed_url",
+    "spin",
+    "glo3d",
+    "url_360",
+    "link_visita",
+  ]) {
     const v = o[k];
     if (isHttpsUrl(v)) return [String(v).trim()];
   }
@@ -83,7 +103,8 @@ export function collectInventarioMediaUrls(inv: InventarioRow & Record<string, u
   return out;
 }
 
-const GLO3D_HINT = /\bglo3d\b|capture\.360|theta360|ricoh/i;
+const GLO3D_HINT =
+  /\bglo3d\b|glo3d\.net|glo3d\.com|capture\.360|theta360|ricoh|spin\.glo3d|viewer\/embed|embed\/viewer|my360|sphere\.js/i;
 
 export function isGlo3dOr360Url(url: string): boolean {
   return GLO3D_HINT.test(url);
@@ -97,6 +118,12 @@ export function bucketInventarioStaticImages(urls: string[]): string[] {
 /** URLs para visor embed (360 / Glo3D tal como llegan desde Tasaciones/catálogo). */
 export function bucketGlo3dViewerUrls(urls: string[]): string[] {
   return urls.filter((u) => isGlo3dOr360Url(u));
+}
+
+/** Primera URL pensada para iframe / visor 360° (no sirve como `<img src>` plano). */
+export function firstGlo3dViewerUrl(inv: InventarioRow & Record<string, unknown>): string | null {
+  const g = bucketGlo3dViewerUrls(collectInventarioMediaUrls(inv));
+  return g[0] ?? null;
 }
 
 /** Miniatura tipo catálogo: prioriza JPG/PNG/WebP explícitos, si no primera URL plana disponible. */
