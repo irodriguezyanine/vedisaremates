@@ -1,5 +1,6 @@
 /**
- * Subida no firmada a Cloudinary (requiere NEXT_PUBLIC_CLOUDINARY_*).
+ * Subida no firmada a Cloudinary. En tiempo de compilación Next inyecta
+ * `NEXT_PUBLIC_CLOUDINARY_*` desde `next.config.ts` (también aceptando `VITE_CLOUDINARY_*` en el entorno).
  */
 
 export type CloudinaryConfig = {

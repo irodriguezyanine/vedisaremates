@@ -52,7 +52,7 @@ export function VideoModal({ triggerClassName }: Props) {
 
       {open ? (
         <div
-          className="fixed inset-0 z-[300] flex items-start justify-center bg-black/60 p-4 pt-[8vh] backdrop-blur-[2px]"
+          className="fixed inset-0 z-[300] flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-[2px]"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) close();
@@ -62,7 +62,7 @@ export function VideoModal({ triggerClassName }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby={id}
-            className="relative w-full max-w-5xl overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="relative my-4 w-full max-w-5xl shrink-0 overflow-hidden rounded-xl bg-white shadow-2xl"
           >
             <h2 id={id} className="sr-only">
               Video: cómo participar

@@ -120,13 +120,16 @@ export function NavVerMenuContent({ onNavigate, variant = "dropdown" }: Props) {
       >
         Inventario por categoría
       </p>
+      <p className={`${pad} pt-0 ${subtle} -mt-1 leading-snug`}>
+        Solo vehículos en lotes de subastas publicadas, en curso o cerradas.
+      </p>
       {loading ? (
         <p className={`${pad} ${subtle}`}>Cargando…</p>
       ) : err ? (
         <p className={`${pad} text-xs text-amber-700 dark:text-amber-200`}>{err}</p>
       ) : buckets.length === 0 ? (
         <p className={`${pad} ${subtle}`}>
-          No hay categorías visibles para tu sesión (revisá RLS del inventario o la conexión).
+          Aún no hay lotes cargados en subastas visibles para el público, o revisá la conexión con Supabase.
         </p>
       ) : (
         buckets.map((b) => (

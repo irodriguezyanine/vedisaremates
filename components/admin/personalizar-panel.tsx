@@ -58,7 +58,9 @@ export function PersonalizarPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
+    queueMicrotask(() => {
+      void load();
+    });
   }, [load]);
 
   function update(ix: number, patch: Partial<HeroSlide>) {
@@ -119,12 +121,6 @@ export function PersonalizarPanel() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-xl font-bold text-white">Personalizar</h1>
-        <p className="mt-2 text-sm text-neutral-400">
-          Carrusel superior del sitio público ({HERO_CAROUSEL_SLOT_COUNT} banners): subí imágenes con Cloudinary o pega una
-          URL <code className="text-neutral-300">https</code> por slide. Prioridad visual: primero cuenta la variable{" "}
-          <code className="text-neutral-300">NEXT_PUBLIC_HERO_SLIDES_JSON</code>, luego estos datos guardados aquí y por
-          último las portadas incluidas en el proyecto.
-        </p>
       </div>
 
       {err ? (
@@ -139,19 +135,6 @@ export function PersonalizarPanel() {
         </p>
       ) : null}
       {ok ? <p className="rounded-lg border border-emerald-500/35 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">{ok}</p> : null}
-
-      {!cld.configured ? (
-        <div className="rounded-lg border border-amber-500/35 bg-amber-950/20 px-4 py-3 text-sm text-amber-100">
-          Opcional para subidas: configurá{" "}
-          <code className="text-xs text-neutral-300">NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME</code> y{" "}
-          <code className="text-xs text-neutral-300">NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET</code>
-          . Podés igualmente pegar la URL HTTPS de Cloudinary manualmente tras subir desde el dashboard.
-        </div>
-      ) : (
-        <p className="text-xs text-neutral-500">
-          Cloudinary listo (<span className="text-neutral-400">{cld.cloudName ?? "sin nombre"}</span> · preset público configurado).
-        </p>
-      )}
 
       {loading ? (
         <p className="text-neutral-400">Cargando…</p>

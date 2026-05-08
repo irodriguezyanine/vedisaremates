@@ -8,51 +8,19 @@ import type { InventarioRow } from "@/lib/portal-types";
 import {
   etiquetaCategoriaHumana,
   hrefBuscarPorCategoria,
+  listarInventarioPublicoEnRemates,
   obtenerBucketsCategoriaInventario,
   type InventarioCategoriaBucket,
+  type ListaFiltroInventarioPublico,
 } from "@/lib/nav-ver-stats";
 import { catalogoHref } from "@/lib/site-config";
 import { formatClp } from "@/lib/format-clp";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
-const PAGE_FETCH = 1000;
 const MOSTRAR_MAX = 2000;
 
 type Row = InventarioRow & Record<string, unknown>;
-
-type ListaFiltro = { tipo: "nada" } | { tipo: "sin_categoria" } | { tipo: "categoria"; valor: string };
-
-async function obtenerFilasLista(
-  supabase: NonNullable<ReturnType<typeof createClient>>,
-  filtro: ListaFiltro,
-): Promise<Row[]> {
-  if (filtro.tipo === "nada") return [];
-
-  const out: Row[] = [];
-  const baseSelect =
-    "id,created_at,patente,marca,modelo,ano,categoria,estado,empresa,valor_minimo,valor_esperado";
-
-  const buildQueryPage = () => {
-    let q = supabase.from("inventario").select(baseSelect).order("created_at", { ascending: false });
-    if (filtro.tipo === "sin_categoria") {
-      q = q.or('categoria.is.null,categoria.eq.""');
-      return q;
-    }
-    return q.eq("categoria", filtro.valor);
-  };
-
-  for (let from = 0; ; from += PAGE_FETCH) {
-    const q = buildQueryPage().range(from, from + PAGE_FETCH - 1);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    const chunk = (data ?? []) as Row[];
-    out.push(...chunk);
-    if (chunk.length < PAGE_FETCH || out.length >= MOSTRAR_MAX) break;
-  }
-
-  return out.slice(0, MOSTRAR_MAX);
-}
 
 /** Deriva modo de lista según URL; `categoria=vacío` se ignora como filtro válido */
 function filtroDesdeBusqueda({
@@ -61,7 +29,7 @@ function filtroDesdeBusqueda({
 }: {
   sinCategoria: boolean;
   categoriaDecoded: string | undefined;
-}): ListaFiltro {
+}): ListaFiltroInventarioPublico {
   if (sinCategoria) return { tipo: "sin_categoria" };
   if (categoriaDecoded === undefined) return { tipo: "nada" };
   const trimmed = String(categoriaDecoded).trim();
@@ -120,7 +88,7 @@ export function BuscarInventario() {
       return;
     }
     try {
-      const filas = await obtenerFilasLista(sb, modoLista);
+      const filas = await listarInventarioPublicoEnRemates(sb, modoLista, MOSTRAR_MAX);
       setRows(filas);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error al cargar inventario.");
@@ -166,8 +134,8 @@ export function BuscarInventario() {
 
   const subtitulo =
     modoLista.tipo !== "nada"
-      ? "Resultados según tus permisos y la categoría en la base de datos."
-      : "Elegí una categoría desde el menú Ver o desde la lista de la derecha para ver el inventario visible.";
+      ? "Solo aparecen vehículos en lotes de subastas publicadas, en curso o cerradas (igual que en la sala)."
+      : "Los números y listas muestran solo stock en esas subastas visibles, no todo el inventario interno.";
 
   const cat = catalogoHref();
 
@@ -199,8 +167,8 @@ export function BuscarInventario() {
 
           {!tieneFiltro ? (
             <p className="mt-10 text-neutral-600">
-              Todavía no hay filtro aplicado. Los conteos de cada categoría respetan lo que puede ver cada visitante por
-              políticas de seguridad del portal.
+              Todavía no hay filtro aplicado. Cuando filtres verás solo los vehículos que están cargados como lotes en
+              remates públicos (publicado, en curso o cerrados).
             </p>
           ) : loading ? (
             <p className="mt-10 text-neutral-500">Cargando inventario…</p>
