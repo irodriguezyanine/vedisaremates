@@ -7,6 +7,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
+import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
 import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow, PortalOfertaRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
@@ -267,35 +268,24 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                     </div>
 
                     {active.inventario ? (
-                      <div className="border-t border-neutral-100 bg-white px-4 py-5 sm:px-6 sm:py-6">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Ficha del vehículo</h3>
-                        <dl className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-2">
-                          <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70">
-                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Patente</dt>
-                            <dd className="mt-0.5 font-semibold text-neutral-900">{active.inventario.patente ?? "—"}</dd>
-                          </div>
-                          <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70">
-                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Marca / modelo</dt>
-                            <dd className="mt-0.5 font-semibold text-neutral-900">
-                              {[active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") || "—"}
-                            </dd>
-                          </div>
-                          {active.inventario.ano ? (
-                            <div className="rounded-xl bg-neutral-50/90 px-3 py-2 ring-1 ring-neutral-200/70 sm:col-span-2 sm:max-w-md">
-                              <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Año</dt>
-                              <dd className="mt-0.5 font-semibold text-neutral-900">{String(active.inventario.ano)}</dd>
-                            </div>
-                          ) : null}
-                          {active.inventario.descripcion ? (
-                            <div className="sm:col-span-2">
-                              <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Descripción</dt>
-                              <dd className="mt-2 leading-relaxed text-neutral-700">
-                                {String(active.inventario.descripcion).slice(0, 900)}
-                                {String(active.inventario.descripcion).length > 900 ? "…" : ""}
-                              </dd>
-                            </div>
-                          ) : null}
-                        </dl>
+                      <div className="border-t border-neutral-100 bg-white px-4 py-6 sm:px-6 sm:py-8">
+                        <InventarioFichaTecnica
+                          inventario={active.inventario as InventarioRow & Record<string, unknown>}
+                          lotePortal={{
+                            id: active.id,
+                            orden: active.orden,
+                            titulo: active.titulo,
+                            descripcion: active.descripcion,
+                            precio_base: active.precio_base,
+                            incremento_minimo: active.incremento_minimo,
+                          }}
+                          rematePortal={{
+                            id: remate.id,
+                            titulo: remate.titulo,
+                            starts_at: remate.starts_at,
+                            ends_at: remate.ends_at,
+                          }}
+                        />
                       </div>
                     ) : (
                       <p className="border-t border-neutral-100 px-4 py-4 text-sm text-neutral-500 sm:px-6">
