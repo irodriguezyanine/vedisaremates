@@ -51,8 +51,22 @@ export function UsuariosPanel() {
     const fd = new FormData(ev.currentTarget);
     const email = String(fd.get("email") ?? "").trim();
     const password = String(fd.get("password") ?? "");
-    const nombre = String(fd.get("nombre") ?? "").trim();
+    const password2 = String(fd.get("password2") ?? "");
+    const nombrePart = String(fd.get("nombre") ?? "").trim();
+    const apellido = String(fd.get("apellido") ?? "").trim();
+    const nombreCompleto = [nombrePart, apellido].filter(Boolean).join(" ").trim();
+    const rut = String(fd.get("rut") ?? "").trim();
+    const telefono = String(fd.get("telefono") ?? "").trim();
+    const direccion = String(fd.get("direccion") ?? "").trim();
+    const empresa = String(fd.get("empresa") ?? "").trim();
     const rol = String(fd.get("rol") ?? "cliente_remate").trim() || "cliente_remate";
+
+    if (password !== password2) {
+      setLoadErr("Las contraseñas no coinciden.");
+      setCreating(false);
+      return;
+    }
+
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("Servicio no disponible");
@@ -63,6 +77,22 @@ export function UsuariosPanel() {
       } = await supabase.auth.getSession();
       if (!session) throw new Error("Sesión caducada. Volvé a iniciar sesión.");
 
+      const payload: Record<string, string | undefined> = {
+        email,
+        password,
+        rol,
+        nombre: nombreCompleto || nombrePart || apellido || undefined,
+        apellido: apellido || undefined,
+        rut: rut || undefined,
+        telefono: telefono || undefined,
+        direccion: direccion || undefined,
+        empresa: empresa || undefined,
+      };
+
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === undefined) delete payload[k];
+      });
+
       const res = await fetch(`${pub.url}/functions/v1/create-user`, {
         method: "POST",
         headers: {
@@ -70,12 +100,7 @@ export function UsuariosPanel() {
           Authorization: `Bearer ${session.access_token}`,
           apikey: pub.key,
         },
-        body: JSON.stringify({
-          email,
-          password,
-          nombre: nombre || undefined,
-          rol,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok || json.error) {
@@ -207,66 +232,141 @@ export function UsuariosPanel() {
 
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-white/15 bg-[#141c28] p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
+          <div
+            role="dialog"
+            aria-labelledby="usuario-nuevo-title"
+            className="flex max-h-[min(92vh,880px)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/15 bg-[#141c28] shadow-xl"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
               <div>
-                <h3 className="text-lg font-bold text-white">Nuevo usuario</h3>
-                <p className="mt-1 text-sm text-neutral-400">Completá los datos y asigná el tipo de acceso.</p>
+                <h3 id="usuario-nuevo-title" className="text-lg font-bold text-white">
+                  Nuevo usuario
+                </h3>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Misma información que en alta de tasaciones Vedisa (nombre y contacto pueden quedar vacíos). Para la cuenta nueva
+                  hacen falta <strong className="font-semibold text-neutral-200">email</strong>,{" "}
+                  <strong className="font-semibold text-neutral-200">contraseña</strong> y{" "}
+                  <strong className="font-semibold text-neutral-200">tipo de usuario</strong>.
+                </p>
               </div>
               <button
                 type="button"
-                className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5"
+                className="shrink-0 rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5"
                 onClick={() => setCreateOpen(false)}
               >
                 Cerrar
               </button>
             </div>
-            <form onSubmit={(e) => void crearUsuario(e)} className="mt-6 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm sm:col-span-2">
-                <span className="block text-neutral-400">Nombre</span>
-                <input
-                  name="nombre"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
-                  placeholder="Visible en el perfil"
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="block text-neutral-400">Email</span>
-                <input
-                  required
-                  name="email"
-                  type="email"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="block text-neutral-400">Contraseña</span>
-                <input
-                  required
-                  name="password"
-                  type="password"
-                  minLength={6}
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="block text-neutral-400">Tipo de usuario</span>
-                <select
-                  name="rol"
-                  defaultValue="cliente_remate"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
-                >
-                  {ADMIN_CREATABLE_ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex flex-wrap gap-3 sm:col-span-2">
+            <form onSubmit={(e) => void crearUsuario(e)} className="flex min-h-0 flex-1 flex-col">
+              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 sm:grid-cols-2 sm:px-6">
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Nombre (opcional)</span>
+                  <input
+                    name="nombre"
+                    autoComplete="given-name"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Apellido (opcional)</span>
+                  <input
+                    name="apellido"
+                    autoComplete="family-name"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Email</span>
+                  <input
+                    required
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">RUT (opcional)</span>
+                  <input
+                    name="rut"
+                    autoComplete="off"
+                    inputMode="text"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Teléfono (opcional)</span>
+                  <input
+                    name="telefono"
+                    type="tel"
+                    autoComplete="tel"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Dirección (opcional)</span>
+                  <input
+                    name="direccion"
+                    autoComplete="street-address"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Contraseña</span>
+                  <input
+                    required
+                    name="password"
+                    type="password"
+                    minLength={6}
+                    autoComplete="new-password"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Repetir contraseña</span>
+                  <input
+                    required
+                    name="password2"
+                    type="password"
+                    minLength={6}
+                    autoComplete="new-password"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Tipo de usuario</span>
+                  <select
+                    name="rol"
+                    required
+                    defaultValue="cliente_remate"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  >
+                    {ADMIN_CREATABLE_ROLES.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Empresa (opcional)</span>
+                  <input
+                    name="empresa"
+                    autoComplete="organization"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                    placeholder=""
+                  />
+                </label>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-3 border-t border-white/10 bg-[#141c28] px-5 py-4 sm:px-6">
                 <button
                   type="button"
-                  className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white"
+                  className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/5"
                   onClick={() => setCreateOpen(false)}
                 >
                   Cancelar
