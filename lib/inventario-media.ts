@@ -21,9 +21,39 @@ const VIEW3D_FIELD_KEYS = [
   "iframe_with_params",
   "src",
   "src_with_params",
+  /** Respuesta típica API inventario Glo3D (Catalogo-Vedisa). */
+  "foto3d",
+  "foto_3d",
+  "embed_360",
+  "vista_360",
+  "captura_360",
+  "viewer_url",
+  "visor_url",
 ] as const;
 
 const VIEW3D_KEY_SET = new Set<string>(VIEW3D_FIELD_KEYS);
+
+const MAX_JSON_WALK_DEPTH = 14;
+const MAX_STRING_COLLECT_LEN = 12_000;
+
+/** Recoge strings dentro de objetos/array (p. ej. `imagenes` JSON denso desde Tasaciones). */
+function forEachNestedString(node: unknown, visitor: (s: string) => void, depth = 0): void {
+  if (depth > MAX_JSON_WALK_DEPTH) return;
+  if (typeof node === "string") {
+    const t = node.trim();
+    if (t && t.length <= MAX_STRING_COLLECT_LEN) visitor(t);
+    return;
+  }
+  if (node === null || node === undefined) return;
+  if (typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const x of node) forEachNestedString(x, visitor, depth + 1);
+    return;
+  }
+  for (const v of Object.values(node)) {
+    forEachNestedString(v, visitor, depth + 1);
+  }
+}
 
 /** Campos de imagen / galería frecuentes en Tasaciones y catálogo. */
 const EXTRA_IMAGE_KEYS = [
@@ -85,6 +115,11 @@ function urlsFromJsonItem(x: unknown): string[] {
     "link",
     "imagen",
     "image",
+    "image_url",
+    "photo",
+    "preview",
+    "thumbnail",
+    "picture",
     "viewer",
     "embed",
     "embed_url",
@@ -92,10 +127,20 @@ function urlsFromJsonItem(x: unknown): string[] {
     "glo3d",
     "url_360",
     "link_visita",
+    "vista360",
+    "vista_360",
   ]) {
     const v = o[k];
     const n = toCollectableUrl(v);
     if (n) return [n];
+  }
+  for (const v of Object.values(o)) {
+    if (typeof v === "string") {
+      const t = v.trim();
+      if (t.includes("<iframe") || /\bglo3d\.(?:net|com)\b/i.test(t)) return [t];
+    }
+    const nested = urlsFromImagenesField(v);
+    if (nested.length) return nested;
   }
   return [];
 }
@@ -167,6 +212,12 @@ export function collectInventarioMediaUrls(inv: InventarioRow & Record<string, u
     }
   }
 
+  /** URLs sueltas muy anidadas (`metadata`, blobs JSON en columnas tipo Tasaciones). */
+  forEachNestedString(inv, (s) => {
+    const n = toCollectableUrl(s);
+    if (n && !out.includes(n)) out.push(n);
+  });
+
   return out;
 }
 
@@ -177,10 +228,11 @@ const GLO3D_HINT =
 export function isLikelyRasterImageUrl(url?: string): boolean {
   if (!url || !url.startsWith("http")) return false;
   const normalized = url.toLowerCase();
-  if (normalized.includes("glo3d.net/iframe") || normalized.includes("glo3d.net/iframenova") || normalized.includes("<iframe")) {
-    return false;
-  }
-  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|$)/i.test(normalized)) return true;
+  if (normalized.includes("<iframe")) return false;
+  if (normalized.includes("glo3d.net/ifram")) return false;
+  /** Capturas / rutas Glo3D que no son el visor iframe. */
+  if (/glo3d\.(net|com)\//i.test(normalized) && !/\/(?:iframe|iframenova)(?:\/|\?|$)/i.test(normalized)) return true;
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)) return true;
   return /cdn\.|cloudfront|amazonaws|supabase|img|image|media|cloudinary/.test(normalized);
 }
 
@@ -223,6 +275,12 @@ export function getInventarioGlo3dIframeUrls(inv: InventarioRow & Record<string,
     add(resolveView3dUrlFromRaw(val));
   }
 
+  /** HTML embebido o URLs dentro de objetos (`imagenes` complejos, blobs sync). */
+  forEachNestedString(inv, (s) => {
+    if (!/\bglo3d\b|<iframe|\biframeNova\b|\bsrc_with_params\b|\biframe_with_params\b/i.test(s)) return;
+    add(resolveView3dUrlFromRaw(s));
+  });
+
   return out;
 }
 
@@ -244,6 +302,11 @@ export function getInventarioStaticImageUrls(inv: InventarioRow & Record<string,
     const n = toCollectableUrl(blob);
     if (n) add(n);
   }
+
+  forEachNestedString(inv, (s) => {
+    const n = toCollectableUrl(s);
+    if (n) add(n);
+  });
 
   return out;
 }

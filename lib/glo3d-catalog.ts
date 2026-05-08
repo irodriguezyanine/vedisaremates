@@ -28,7 +28,14 @@ export function extractGlo3dId(value?: string): string | undefined {
   const s = value.trim();
   if (!s) return undefined;
 
-  const idQuery = s.match(/[?&]id=([^&\s]+)/);
+  /** `?id=` solo si el contexto es Glo3D / iframe (evita URLs ajenas con query id). */
+  const hostOrPathLooksGlo =
+    /\bglo3d\.(?:net|com)\b/i.test(s) ||
+    /\/(?:iframe|iframeNova)\b/i.test(s) ||
+    /^\/(?:iframe|iframeNova)\b/i.test(s) ||
+    s.startsWith("//glo3d");
+
+  const idQuery = hostOrPathLooksGlo ? s.match(/[?&]id=([^&\s]+)/) : null;
   if (idQuery?.[1]) return idQuery[1];
 
   const iframePath = s.match(/glo3d\.net\/(?:iframe|iframeNova)\/([^/?\s]+)/i);
