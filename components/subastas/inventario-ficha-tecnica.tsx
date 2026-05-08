@@ -2,14 +2,20 @@
 
 import type { ReactNode, SVGProps } from "react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
 import { formatClp } from "@/lib/format-clp";
+import {
+  normalizeDescripcionIntegrationText,
+  sanitizeBasicDescripcionHtml,
+  textoPareceHtmlDescripcion,
+} from "@/lib/catalog-descripcion-html";
 import type { InventarioFichaSection } from "@/lib/inventario-ficha";
 import {
   applyFichaPublicConfig,
   buildInventarioFichaSections,
   buildLotePortalRows,
+  normalizeMapKey,
   type LotePortalContext,
   type RematePortalContext,
 } from "@/lib/inventario-ficha";
@@ -136,7 +142,70 @@ function sectionGlyph(title: string): ReactNode {
   return <IconCar className={cls} />;
 }
 
+function isDescripcionTasacionesObservacionesRow(row: InventarioFichaSection["rows"][number]): boolean {
+  const nk = normalizeMapKey(row.sourceKey ?? "");
+  const sk = nk.replace(/^fields_/, "").replace(/^field_/, "").replace(/^fields_/, "");
+  if (sk === "descripcion" || sk === "observaciones") return true;
+
+  const L = row.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return L.includes("tasaciones") && (L.includes("descripcion") || L.includes("observaciones"));
+}
+
+function CatalogDescripcionRichText({ value }: { value: string }) {
+  const normalized = useMemo(() => normalizeDescripcionIntegrationText(value), [value]);
+  const renderAsHtml = useMemo(() => textoPareceHtmlDescripcion(normalized), [normalized]);
+  const safeHtml = useMemo(() => sanitizeBasicDescripcionHtml(normalized), [normalized]);
+
+  const richClasses =
+    "max-w-none w-full text-[15px] sm:text-[16px] leading-relaxed text-neutral-800 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_br]:leading-normal [&_strong]:font-bold [&_strong]:text-neutral-900 [&_b]:font-bold [&_em]:italic [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1 [&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:text-xl [&_h2]:font-black [&_h3]:mt-5 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-black [&_h4]:mt-4 [&_h4]:text-base [&_h4]:font-bold [&_blockquote]:border-l-[3px] [&_blockquote]:border-[#009ade]/35 [&_blockquote]:pl-4 [&_blockquote]:italic [&_a]:break-words [&_a]:font-semibold [&_a]:text-[#009ade] [&_a]:underline [&_a]:underline-offset-4";
+
+  if (renderAsHtml && safeHtml.trim()) {
+    return (
+      <div
+        className={`descripcion-catalogo-html ${richClasses}`}
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+
+  const blocks = normalized.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+
+  return (
+    <div className={`descripcion-catalogo-plain ${richClasses}`}>
+      {blocks.length === 0 ? (
+        <p className="text-neutral-500">{normalized || "—"}</p>
+      ) : (
+        blocks.map((block, i) => (
+          <p key={i} className="font-medium">
+            {block.split("\n").map((line, j) => (
+              <Fragment key={j}>
+                {j > 0 ? <br /> : null}
+                {line}
+              </Fragment>
+            ))}
+          </p>
+        ))
+      )}
+    </div>
+  );
+}
+
 function CatalogSpecRow({ row }: { row: InventarioFichaSection["rows"][number] }) {
+  if (isDescripcionTasacionesObservacionesRow(row)) {
+    return (
+      <div className="border-b border-neutral-100 py-5 sm:py-6 last:border-b-0">
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="mt-1 hidden h-2 w-2 shrink-0 rounded-full bg-[#009ade] sm:block" aria-hidden />
+          <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-neutral-500">{row.label}</span>
+        </div>
+        <div className="rounded-2xl border border-neutral-200/90 bg-gradient-to-br from-neutral-50/95 via-white to-[#f4fafc]/80 px-5 py-5 shadow-inner ring-1 ring-neutral-100 sm:px-8 sm:py-7">
+          <CatalogDescripcionRichText value={row.value} />
+        </div>
+      </div>
+    );
+  }
+
   const wrap = /\n|.{140,}/.test(row.value);
   return (
     <div className="grid gap-1 py-3 sm:grid-cols-[minmax(0,min(36%,240px))_1fr] sm:gap-8 sm:items-baseline">

@@ -1,13 +1,18 @@
 /** Pesos chilenos en UI: símbolo $, miles con punto (es-CL), sin sufijo «CLP». */
 
-const pesoEnteroFmt = new Intl.NumberFormat("es-CL", {
+export const grupoMilesEsClFmt = new Intl.NumberFormat("es-CL", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
 
 export function formatClp(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
-  return `$${pesoEnteroFmt.format(Math.round(Number(n)))}`;
+  return `$${grupoMilesEsClFmt.format(Math.round(Number(n)))}`;
+}
+
+/** Solo agrupación de miles es-CL (sin $), ej. kilometraje. */
+export function formatThousandsEsClInteger(n: number): string {
+  return grupoMilesEsClFmt.format(Math.round(n));
 }
 
 /**

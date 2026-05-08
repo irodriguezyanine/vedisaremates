@@ -3,7 +3,7 @@
 import type { PortalInventarioFichaConfigV1 } from "@/lib/portal-ficha-config";
 import { parsePortalInventarioFichaConfig } from "@/lib/portal-ficha-config";
 import type { InventarioRow } from "@/lib/portal-types";
-import { formatClp, tryParseMoneyInteger } from "@/lib/format-clp";
+import { formatClp, formatThousandsEsClInteger, tryParseMoneyInteger } from "@/lib/format-clp";
 
 export type InventarioSpecRow = {
   label: string;
@@ -112,7 +112,7 @@ export const ORDERED_GROUPS: readonly {
     fields: [
       { label: "Empresa / aseguradora", keys: ["empresa", "aseguradora", "companía", "insurer"] },
       { label: "Valor mínimo / referencia", keys: ["valor_minimo"] },
-      { label: "Valor esperado Tasaciones", keys: ["valor_esperado"] },
+      { label: "Precio aproximado referencial Vedisa", keys: ["valor_esperado"] },
     ],
   },
   {
@@ -239,13 +239,44 @@ function isLikelyMoneyKeyNorm(nk: string): boolean {
   let rest = nk.replace(/^fields_/, "").replace(/^field_/, "");
   rest = rest.replace(/^fields_/, "").replace(/^field_/, "");
   if (MONEY_FIELD_KEYS_NORM.has(rest)) return true;
-  return /(^|_)valor_(minimo|esperado|referencia)|precio_|(^|_)incremento|monto_|_clp_/i.test(nk);
+  return /(^|_)valor_(minimo|esperado|referencia)|precio_|(^|_)incremento|monto_|_clp_/i.test(nk) ||
+    /(^|_)(suggested_price|valor_sugerido|reference_price|precio_sugerido)(_|$)/i.test(nk);
 }
 
 function formatMoneyCellDisplayIfKey(nk: string, displayText: string): string {
   if (!isLikelyMoneyKeyNorm(nk)) return displayText;
   const n = tryParseMoneyInteger(displayText);
   return n !== null ? formatClp(n) : displayText;
+}
+
+const KILOMETRAJE_KEYS_NORM: ReadonlySet<string> = (() => {
+  const s = new Set<string>();
+  for (const grp of ORDERED_GROUPS) {
+    for (const fld of grp.fields) {
+      const L = fld.label.trim().toLowerCase();
+      if (!L.includes("kilomet")) continue;
+      for (const alias of fld.keys) s.add(normalizeMapKey(alias));
+    }
+  }
+  return s;
+})();
+
+function formatOdometerCellDisplayIfKey(nk: string, displayText: string): string {
+  const stripped = nk.replace(/^fields_/, "").replace(/^field_/, "");
+  const hit =
+    KILOMETRAJE_KEYS_NORM.has(nk) ||
+    KILOMETRAJE_KEYS_NORM.has(stripped) ||
+    /(^|_)(km|kms)$/i.test(stripped) ||
+    /(^|_)kilomet/i.test(stripped) ||
+    /\bodomet(ro)?\b|^mileage$/i.test(stripped);
+  if (!hit) return displayText;
+  const n = tryParseMoneyInteger(displayText);
+  if (n === null || n < 0 || n > 9_999_999) return displayText;
+  return `${formatThousandsEsClInteger(n)} km`;
+}
+
+function composeCellDisplayFormatting(nk: string, formattedBase: string): string {
+  return formatOdometerCellDisplayIfKey(nk, formatMoneyCellDisplayIfKey(nk, formattedBase));
 }
 
 function lookupKey(map: Map<string, string>, wanted: readonly string[]): { key: string; value: string } | null {
@@ -263,12 +294,12 @@ function buildLowerFlatMap(expanded: Record<string, unknown>): Map<string, strin
     const val = formatCellValue(v0);
     if (val === null) continue;
     const nk = normalizeMapKey(k0);
-    const shown = formatMoneyCellDisplayIfKey(nk, val);
+    const shown = composeCellDisplayFormatting(nk, val);
     if (!map.has(nk)) map.set(nk, shown);
     /** Dynamo / Tasaciones suele usar `fields_marca`, `fields_ppu`, etc. */
     if (/^fields_/i.test(nk)) {
       const rest = nk.replace(/^fields_/, "").replace(/^field_/, "");
-      if (rest && !map.has(rest)) map.set(rest, formatMoneyCellDisplayIfKey(rest, val));
+      if (rest && !map.has(rest)) map.set(rest, composeCellDisplayFormatting(rest, val));
     }
   }
   return map;
@@ -328,6 +359,86 @@ function noisyAdicionalTechnicalRow(keyNorm: string, labelHuman: string, value: 
   if (/^empresa[:]/.test(value.trim()) && UUID_TAIL_RE.test(value)) return true;
   if (/^aws_campos_/i.test(keyNorm) && /cia\b|scope\b|uuid/i.test(labelHuman) && UUID_TAIL_RE.test(value)) return true;
   return false;
+}
+
+/** Quitar prefijos Dynamo/Tasaciones para usar la cola como clave corta. */
+function otroSistemaBareKey(normFromRaw: string): string {
+  return normFromRaw
+    .replace(/^aws_campos_fields?_?/, "")
+    .replace(/^aws_campos_/, "")
+    .replace(/^aws_/, "")
+    .replace(/^fields?_?/, "")
+    .replace(/^campos?_?/, "")
+    .replace(/^field_/, "")
+    .replace(/_+/g, "_");
+}
+
+/** Nombres cortos o códigos que vienen en «Otros datos» con etiqueta poco clara. */
+const OTROS_DATOS_ETIQUETAS_LEGIBLES: Readonly<Record<string, string>> = {
+  categoria: "Categoría del vehículo",
+  clase: "Clase de vehículo",
+  tipo: "Tipo de registro",
+  aro: "Diámetro de aro / rines (pulgadas)",
+  rines: "Diámetro de aro / rines (pulgadas)",
+  cia: "Referencia compañía / aseguradora",
+  eda: "Estado declarado de airbags (EDA)",
+  lla: "Llaves disponibles",
+  pdd: "Prueba de desplazamiento (PDD)",
+  pdm: "Prueba básica del motor (PDM)",
+  ubi: "Ubicación / punto de retiro",
+  ubic: "Ubicación / punto de retiro",
+  combustible: "Combustible",
+  transmision: "Transmisión",
+  traccion: "Tracción",
+  color: "Color",
+  vin: "N° VIN / chasis",
+  motor: "N° motor",
+};
+
+function shouldExcludeOtrosAdicional(
+  nk: string,
+  kRaw: string,
+  valueShown: string,
+  labelHumanizado: string,
+): boolean {
+  const lab = normalizeMapKey(labelHumanizado);
+  const bare = otroSistemaBareKey(nk);
+  if (/(^|_)empresa_?id$|^id_empresa$|^company_id$|^cia_id$/i.test(nk)) return true;
+  if (/(^|_)empresa_?id$/i.test(bare)) return true;
+  if (/(^|_)empresa_?id($|_)/i.test(normalizeMapKey(kRaw.replace(/\s+/g, "_")))) return true;
+  if (/^origen$/i.test(bare) || /^origen$/i.test(nk) || lab === "origen") return true;
+  if (/^src$/i.test(bare) || /^iframe_?src$/i.test(nk)) return true;
+
+  const v = valueShown.trim();
+  if (/^https?:\/\//i.test(v)) return true;
+
+  return false;
+}
+
+function resolveOtrosPublicLabel(normFullKey: string, humanizado: string): string {
+  const bare = otroSistemaBareKey(normFullKey);
+  const hu = humanizado.trim();
+  const hlow = hu.toLowerCase();
+
+  if (
+    /suggested.?price|valor.?sugerido|precio.?sugerido|reference.?price|estimated.?sale|estimatedsale/i.test(bare) ||
+    (/\bsuggested\b/.test(hlow) && /\bprice\b/.test(hlow)) ||
+    hlow.includes("valor sugerido") ||
+    hlow.includes("precio sugerido")
+  )
+    return "Precio aproximado referencial Vedisa";
+
+  const mapped = OTROS_DATOS_ETIQUETAS_LEGIBLES[bare];
+  if (mapped) return mapped;
+
+  /** Único token corto claramente técnico: suaviza sin cambiar valores. */
+  if (/^[a-z]{2,4}$/i.test(bare.replace(/^_+/, ""))) {
+    const b = bare.replace(/^_+/, "").toLowerCase();
+    if (OTROS_DATOS_ETIQUETAS_LEGIBLES[b]) return OTROS_DATOS_ETIQUETAS_LEGIBLES[b];
+    return `Dato adicional («${bare.toUpperCase()}»)`;
+  }
+
+  return humanizado;
 }
 
 export type LotePortalContext = {
@@ -643,21 +754,25 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     const text = formatCellValue(v);
     if (text === null) continue;
 
-    const shown = formatMoneyCellDisplayIfKey(nk, text);
+    const shown = composeCellDisplayFormatting(nk, text);
 
     /** Evitar párrafos largos duplicados de descripción. */
     const valKey = shown.trim().toLowerCase().slice(0, 280);
     if (seenVals.has(valKey)) continue;
     const hum = humanizeKeyDisplay(kRaw);
+    if (shouldExcludeOtrosAdicional(nk, kRaw, shown, hum)) continue;
     if (noisyAdicionalTechnicalRow(nk, hum, text)) continue;
+
+    const etiqueta = resolveOtrosPublicLabel(nk, hum);
+
     if (shown.length > 4000) {
       adicionalRows.push({
-        label: hum,
+        label: etiqueta,
         value: shown.slice(0, 4000) + "…",
         sourceKey: nk,
       });
     } else {
-      adicionalRows.push({ label: hum, value: shown, sourceKey: nk });
+      adicionalRows.push({ label: etiqueta, value: shown, sourceKey: nk });
     }
     seenVals.add(valKey);
   }
@@ -668,7 +783,7 @@ export function buildInventarioFichaSections(row: InventarioRow & Record<string,
     sections.push({
       title: OTROS_DATOS_SECTION_TITLE,
       description:
-        "Información técnica o comercial adicional según el origen del registro; disponibilidad y etiquetas pueden variar por vehículo.",
+        "Datos útiles fuera del catálogo principal; algunos enlaces internos y códigos de sistema no se listan aquí.",
       rows: adicionalRows,
     });
   }
