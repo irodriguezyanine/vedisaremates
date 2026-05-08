@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Session } from "@supabase/supabase-js";
 
+import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { formatClp } from "@/lib/format-clp";
+import { preferredThumbnailUrl } from "@/lib/inventario-media";
 import type { InventarioRow, PortalOfertaRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -180,11 +182,11 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
           <p className="mt-2 max-w-xl text-neutral-600">{remate.descripcion ?? " "} </p>
         </div>
         <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm shadow-sm">
-          <p className="text-xs uppercase text-neutral-500">Estado dinámico</p>
+          <p className="text-xs uppercase text-neutral-500">Estado del remate</p>
           <p className="mt-1 font-bold text-neutral-900">{remate.estado.replaceAll("_", " ")}</p>
           <p className={`mt-1 text-xs ${countdown <= 0 ? "text-red-600" : "text-emerald-700"}`}>
             {countdown <= 0
-              ? "Cierre procesado por horario UTC del servidor."
+              ? "Este remate ya cerró según la fecha configurada."
               : `Cierra ${new Date(remate.ends_at).toLocaleString("es-CL")}`}
           </p>
           {viewerId ? (
@@ -204,25 +206,45 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
           <div className="space-y-4">
             <p className="text-sm font-semibold text-neutral-700">Seleccioná un lote</p>
             <div className="flex flex-wrap gap-2">
-              {lotes.map((l, i) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => setActiveId(l.id)}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-                    l.id === activeId
-                      ? "border-transparent bg-[#1a2c4e] text-white"
-                      : "border-neutral-300 bg-white text-neutral-700 hover:border-[#33C7E3]"
-                  }`}
-                >
-                  {i + 1}. {(l.inventario?.patente ?? l.titulo ?? "Lote").slice(0, 28)}
-                </button>
-              ))}
+              {lotes.map((l, i) => {
+                const inv = (l.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null;
+                const thumb = inv ? preferredThumbnailUrl(inv) : null;
+                const labelPat = (l.inventario?.patente ?? l.titulo ?? "Lote").slice(0, 28);
+
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => setActiveId(l.id)}
+                    className={`flex max-w-[min(100%,17rem)] items-center gap-2 rounded-full border px-3 py-1.5 text-left text-sm font-semibold transition-colors ${
+                      l.id === activeId
+                        ? "border-transparent bg-[#1a2c4e] text-white"
+                        : "border-neutral-300 bg-white text-neutral-700 hover:border-[#33C7E3]"
+                    }`}
+                  >
+                    {thumb ? (
+                      <span className="relative h-10 w-[3.75rem] shrink-0 overflow-hidden rounded-md bg-neutral-900/10 ring-1 ring-black/10">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      </span>
+                    ) : null}
+                    <span className="min-w-0 truncate">
+                      {i + 1}. {labelPat}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {active ? (
               <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-neutral-900">{active.titulo ?? "Lote"}</h2>
+                <h2 className="text-xl font-bold text-neutral-900">
+                  {active.inventario
+                    ? [active.inventario.marca, active.inventario.modelo, active.inventario.patente]
+                        .filter(Boolean)
+                        .join(" · ") || (active.titulo ?? "Lote")
+                    : active.titulo ?? "Lote"}
+                </h2>
                 {active.inventario ? (
                   <div className="mt-3 grid gap-2 text-sm text-neutral-600 sm:grid-cols-2">
                     <p>
@@ -237,6 +259,9 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
                     ) : null}
                   </div>
                 ) : null}
+                <InventarioMediaGallery
+                  inventario={(active.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null}
+                />
                 <div className="mt-4 flex flex-wrap gap-4 text-sm">
                   <span className="rounded-lg bg-[#e8f4fc] px-3 py-1 font-semibold text-[#1a2c4e]">
                     Precio base {formatClp(active.precio_base)}

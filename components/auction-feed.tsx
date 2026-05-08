@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { classifyRemateForFeed, countdownLabelFromEndsAt, type RemateFeedSlice } from "@/lib/portal-remate-feed";
+import { fetchRemateThumbnailMap } from "@/lib/remate-cover-thumbnails";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 import { catalogoHref } from "@/lib/site-config";
@@ -145,6 +146,40 @@ export function AuctionFeed() {
   const liveRows = bundle.kind === "live" ? bundle.rows : [];
   const liveError = bundle.kind === "live" ? bundle.err : null;
   const [, setTick] = useState(0);
+  const [thumbMap, setThumbMap] = useState<Record<string, string | null>>({});
+
+  const liveIdsKey =
+    bundle.kind === "live" ? [...bundle.rows].map((r) => r.id).sort().join(",") : "";
+
+  useEffect(() => {
+    if (bundle.kind !== "live") {
+      setThumbMap({});
+      return;
+    }
+    const ids = bundle.rows.map((r) => r.id);
+    if (!ids.length) {
+      setThumbMap({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function thumbs() {
+      const sb = createClient();
+      if (!sb) return;
+      try {
+        const m = await fetchRemateThumbnailMap(sb, ids);
+        if (!cancelled) setThumbMap(m);
+      } catch {
+        if (!cancelled) setThumbMap({});
+      }
+    }
+
+    void thumbs();
+    return () => {
+      cancelled = true;
+    };
+  }, [bundle.kind, liveIdsKey]);
 
   useEffect(() => {
     if (useDemo || bundle.kind === "loading") return;
@@ -317,18 +352,33 @@ export function AuctionFeed() {
             {slicedLive.map((r) => {
               const slice = classifyRemateForFeed(r);
               const cd = slice !== "cerrada" ? countdownLabelFromEndsAt(r.ends_at) : null;
+              const thumbCover = thumbMap[r.id];
+
               return (
                 <article
                   key={r.id}
                   className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-1 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)]"
                 >
                   <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-neutral-100 via-neutral-200 to-sky-100/40">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-500 backdrop-blur-sm">
-                        Vista listado
-                      </span>
-                    </div>
+                    {thumbCover ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={thumbCover}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(51,199,227,0.25),transparent_55%)]" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="rounded-full bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-500 backdrop-blur-sm">
+                            Sin foto en primer lote
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" aria-hidden />
                     <div className="absolute left-3 top-3">{badgeForSlice(slice, r.estado)}</div>
                   </div>
                   <div className="flex flex-1 flex-col p-5">
