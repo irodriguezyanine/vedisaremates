@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Session } from "@supabase/supabase-js";
 
+import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { formatClp } from "@/lib/format-clp";
-import { preferredThumbnailUrl } from "@/lib/inventario-media";
 import type { InventarioRow, PortalOfertaRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -21,13 +21,14 @@ type Props = {
 
 export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props) {
   const [remate, setRemate] = useState(initialRemate);
-  const [lotes, setLotes] = useState<Lote[]>(initialLotes);
+  const [lotes] = useState<Lote[]>(initialLotes);
   const [activeId, setActiveId] = useState<string | null>(initialLotes[0]?.id ?? null);
   const [offersByLote, setOffersByLote] = useState<Record<string, PortalOfertaRow[]>>({});
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
 
@@ -53,8 +54,15 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   );
 
   useEffect(() => {
-    void loadOffers(lotes.map((l) => l.id));
+    queueMicrotask(() => {
+      void loadOffers(lotes.map((l) => l.id));
+    });
   }, [lotes, loadOffers]);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, []);
 
   useEffect(() => {
     const sb = createClient();
@@ -104,14 +112,10 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
     };
   }, [lotes, remate.id]);
 
-  const topOffer = (loteId: string) => {
-    const list = offersByLote[loteId] ?? [];
-    return list.length ? list[0]!.monto : null;
-  };
-
   const minNext = useMemo(() => {
     if (!active) return 0;
-    const max = topOffer(active.id);
+    const list = offersByLote[active.id] ?? [];
+    const max = list.length ? list[0]!.monto : null;
     if (max === null) return Number(active.precio_base) || 0;
     return max + Number(active.incremento_minimo);
   }, [active, offersByLote]);
@@ -163,36 +167,43 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
   }
 
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
-  const countdown = remate.ends_at ? new Date(remate.ends_at).getTime() - Date.now() : 0;
+  const countdown = remate.ends_at ? new Date(remate.ends_at).getTime() - nowTick : 0;
 
   const canBid =
     viewerId &&
     remate.estado === "en_curso" &&
     countdown > 0 &&
-    (!remate.starts_at || new Date(remate.starts_at).getTime() <= Date.now());
+    (!remate.starts_at || new Date(remate.starts_at).getTime() <= nowTick);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:py-10">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
           <Link href="/subastas" className="text-sm font-semibold text-[#009ade] hover:underline">
             ← Sala de remates
           </Link>
-          <h1 className="mt-2 text-3xl font-black text-neutral-900">{remate.titulo}</h1>
-          <p className="mt-2 max-w-xl text-neutral-600">{remate.descripcion ?? " "} </p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-neutral-900 sm:text-4xl">{remate.titulo}</h1>
+          {remate.descripcion?.trim() ? (
+            <p className="mt-2 max-w-2xl text-pretty text-neutral-600">{remate.descripcion}</p>
+          ) : null}
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm shadow-sm">
-          <p className="text-xs uppercase text-neutral-500">Estado del remate</p>
-          <p className="mt-1 font-bold text-neutral-900">{remate.estado.replaceAll("_", " ")}</p>
-          <p className={`mt-1 text-xs ${countdown <= 0 ? "text-red-600" : "text-emerald-700"}`}>
+        <div className="w-full shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-sm shadow-sm sm:max-w-sm">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</p>
+          <p className="mt-2 text-lg font-bold capitalize text-neutral-900">{remate.estado.replaceAll("_", " ")}</p>
+          <p className={`mt-2 text-xs font-medium ${countdown <= 0 ? "text-red-600" : "text-emerald-700"}`}>
             {countdown <= 0
               ? "Este remate ya cerró según la fecha configurada."
               : `Cierra ${new Date(remate.ends_at).toLocaleString("es-CL")}`}
           </p>
           {viewerId ? (
-            <p className="mt-3 text-[11px] text-neutral-500">Conectado como {sessionEmail}</p>
+            <p className="mt-4 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+              Conectado como <span className="font-medium text-neutral-700">{sessionEmail}</span>
+            </p>
           ) : (
-            <Link href={`/ingreso?redirect=/subastas/${remate.id}`} className="mt-2 inline-block font-semibold text-[#009ade]">
+            <Link
+              href={`/ingreso?redirect=/subastas/${remate.id}`}
+              className="mt-3 inline-block rounded-lg bg-[#009ade]/10 px-3 py-2 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15"
+            >
               Iniciá sesión para ofertar
             </Link>
           )}
@@ -202,138 +213,135 @@ export function AuctionLiveRoom({ initialRemate, initialLotes, viewerId }: Props
       {lotes.length === 0 ? (
         <p className="text-neutral-600">Este remate aún no tiene lotes publicados.</p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_minmax(0,320px)]">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold text-neutral-700">Seleccioná un lote</p>
-            <div className="flex flex-wrap gap-2">
-              {lotes.map((l, i) => {
-                const inv = (l.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null;
-                const thumb = inv ? preferredThumbnailUrl(inv) : null;
-                const labelPat = (l.inventario?.patente ?? l.titulo ?? "Lote").slice(0, 28);
+        <div className="space-y-6">
+          <AuctionLotesCarousel lotes={lotes} activeId={activeId} onSelect={setActiveId} />
 
-                return (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => setActiveId(l.id)}
-                    className={`flex max-w-[min(100%,17rem)] items-center gap-2 rounded-full border px-3 py-1.5 text-left text-sm font-semibold transition-colors ${
-                      l.id === activeId
-                        ? "border-transparent bg-[#1a2c4e] text-white"
-                        : "border-neutral-300 bg-white text-neutral-700 hover:border-[#33C7E3]"
-                    }`}
-                  >
-                    {thumb ? (
-                      <span className="relative h-10 w-[3.75rem] shrink-0 overflow-hidden rounded-md bg-neutral-900/10 ring-1 ring-black/10">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      </span>
-                    ) : null}
-                    <span className="min-w-0 truncate">
-                      {i + 1}. {labelPat}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          {active ? (
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:gap-10">
+              <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-md">
+                <header className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/95 to-white px-5 py-5 sm:px-6 sm:py-6">
+                  <h2 className="text-pretty text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">
+                    {active.inventario
+                      ? [active.inventario.marca, active.inventario.modelo, active.inventario.patente]
+                          .filter(Boolean)
+                          .join(" · ") || (active.titulo ?? "Detalle del lote")
+                      : (active.titulo ?? "Detalle del lote")}
+                  </h2>
+                  {active.inventario ? (
+                    <dl className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-2">
+                      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80">
+                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Patente</dt>
+                        <dd className="mt-0.5 font-semibold text-neutral-900">{active.inventario.patente ?? "—"}</dd>
+                      </div>
+                      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80">
+                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Marca / modelo</dt>
+                        <dd className="mt-0.5 font-semibold text-neutral-900">
+                          {[active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") || "—"}
+                        </dd>
+                      </div>
+                      {active.inventario.ano ? (
+                        <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-neutral-200/80 sm:col-span-2 sm:max-w-xs">
+                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Año</dt>
+                          <dd className="mt-0.5 font-semibold text-neutral-900">{String(active.inventario.ano)}</dd>
+                        </div>
+                      ) : null}
+                      {active.inventario.descripcion ? (
+                        <div className="sm:col-span-2">
+                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Descripción</dt>
+                          <dd className="mt-1 leading-relaxed text-neutral-700">
+                            {String(active.inventario.descripcion).slice(0, 600)}
+                            {String(active.inventario.descripcion).length > 600 ? "…" : ""}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  ) : (
+                    <p className="mt-3 text-sm text-neutral-500">Lote sin ficha Tasaciones enlazada.</p>
+                  )}
+                </header>
 
-            {active ? (
-              <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-neutral-900">
-                  {active.inventario
-                    ? [active.inventario.marca, active.inventario.modelo, active.inventario.patente]
-                        .filter(Boolean)
-                        .join(" · ") || (active.titulo ?? "Lote")
-                    : active.titulo ?? "Lote"}
-                </h2>
-                {active.inventario ? (
-                  <div className="mt-3 grid gap-2 text-sm text-neutral-600 sm:grid-cols-2">
-                    <p>
-                      <span className="font-semibold text-neutral-800">Patente:</span> {active.inventario.patente ?? "—"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-neutral-800">Marca / modelo:</span>{" "}
-                      {[active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") || "—"}
-                    </p>
-                    {active.inventario.descripcion ? (
-                      <p className="sm:col-span-2">{String(active.inventario.descripcion).slice(0, 400)}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <InventarioMediaGallery
-                  inventario={(active.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null}
-                />
-                <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                  <span className="rounded-lg bg-[#e8f4fc] px-3 py-1 font-semibold text-[#1a2c4e]">
+                <div className="border-b border-neutral-100 bg-neutral-50/40 px-4 py-6 sm:px-6">
+                  <InventarioMediaGallery
+                    inventario={(active.inventario ?? null) as (InventarioRow & Record<string, unknown>) | null}
+                    presentation="showcase"
+                  />
+                  {!active.inventario ? (
+                    <p className="text-center text-sm text-neutral-500">No hay fotos ni visor 360° para mostrar.</p>
+                  ) : null}
+                </div>
+
+                <footer className="flex flex-wrap gap-3 px-5 py-4 sm:px-6">
+                  <span className="inline-flex rounded-xl bg-[#e8f4fc] px-4 py-2 text-sm font-bold text-[#1a2c4e]">
                     Precio base {formatClp(active.precio_base)}
                   </span>
-                  <span className="rounded-lg bg-neutral-100 px-3 py-1 font-semibold text-neutral-800">
-                    Puja mínima siguiente {formatClp(minNext)}
+                  <span className="inline-flex rounded-xl bg-neutral-100 px-4 py-2 text-sm font-bold text-neutral-800">
+                    Siguiente oferta mín. {formatClp(minNext)}
                   </span>
-                </div>
+                </footer>
               </article>
-            ) : null}
-          </div>
 
-          <aside className="space-y-4">
-            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
-              {!canBid ? (
-                <p className="mt-2 text-sm text-neutral-600">
-                  {remate.estado !== "en_curso"
-                    ? "Cuando el remate esté en curso podrás ofertar."
-                    : countdown <= 0
-                      ? "El remate ya cerró según la fecha de fin."
-                      : "Esperando la hora de inicio."}
-                </p>
-              ) : (
-                <>
-                  <label className="mt-3 block text-sm text-neutral-600">
-                    Monto (CLP)
-                    <input
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      inputMode="numeric"
-                      className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                      placeholder={String(Math.ceil(minNext))}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void placeBid()}
-                    className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
-                  >
-                    {busy ? "Enviando…" : "Confirmar oferta"}
-                  </button>
-                </>
-              )}
-              {msg ? <p className="mt-3 text-sm text-neutral-700">{msg}</p> : null}
-            </div>
+              <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+                <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
+                  {!canBid ? (
+                    <p className="mt-2 text-sm text-neutral-600">
+                      {remate.estado !== "en_curso"
+                        ? "Cuando el remate esté en curso podrás ofertar."
+                        : countdown <= 0
+                          ? "El remate ya cerró según la fecha de fin."
+                          : "Esperando la hora de inicio."}
+                    </p>
+                  ) : (
+                    <>
+                      <label className="mt-3 block text-sm text-neutral-600">
+                        Monto (CLP)
+                        <input
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          inputMode="numeric"
+                          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                          placeholder={String(Math.ceil(minNext))}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void placeBid()}
+                        className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
+                      >
+                        {busy ? "Enviando…" : "Confirmar oferta"}
+                      </button>
+                    </>
+                  )}
+                  {msg ? <p className="mt-3 text-sm text-neutral-700">{msg}</p> : null}
+                </div>
 
-            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
-              <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
-                {listForActive.length === 0 ? (
-                  <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
-                ) : (
-                  listForActive.map((o) => (
-                    <li
-                      key={o.id}
-                      className={`flex justify-between gap-2 rounded-lg border border-neutral-100 px-2 py-1 ${
-                        viewerId && o.user_id === viewerId ? "bg-[#fff9e6] border-[#FFC600]/40" : ""
-                      }`}
-                    >
-                      <span className="text-neutral-500">{new Date(o.created_at).toLocaleTimeString("es-CL")}</span>
-                      <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
-                      <span className="text-[10px] text-neutral-400">
-                        {o.user_id === viewerId ? "vos" : "participante"}
-                      </span>
-                    </li>
-                  ))
-                )}
-              </ul>
+                <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
+                  <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
+                    {listForActive.length === 0 ? (
+                      <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
+                    ) : (
+                      listForActive.map((o) => (
+                        <li
+                          key={o.id}
+                          className={`flex justify-between gap-2 rounded-lg border border-neutral-100 px-2 py-1 ${
+                            viewerId && o.user_id === viewerId ? "bg-[#fff9e6] border-[#FFC600]/40" : ""
+                          }`}
+                        >
+                          <span className="text-neutral-500">{new Date(o.created_at).toLocaleTimeString("es-CL")}</span>
+                          <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
+                          <span className="text-[10px] text-neutral-400">
+                            {o.user_id === viewerId ? "vos" : "participante"}
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+              </aside>
             </div>
-          </aside>
+          ) : null}
         </div>
       )}
     </div>

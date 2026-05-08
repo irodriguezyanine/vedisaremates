@@ -12,9 +12,11 @@ import {
 
 type Props = {
   inventario: (InventarioRow & Record<string, unknown>) | null;
+  /** `showcase`: ficha tipo portal de autos — 360° destacado + fotos en bloque único tipo listado profesional */
+  presentation?: "standard" | "showcase";
 };
 
-export function InventarioMediaGallery({ inventario }: Props) {
+export function InventarioMediaGallery({ inventario, presentation = "standard" }: Props) {
   const [photoIndex, setPhotoIndex] = useState(0);
 
   const { statics, glo3d } = useMemo(() => {
@@ -38,19 +40,131 @@ export function InventarioMediaGallery({ inventario }: Props) {
     .filter(Boolean)
     .join(" ");
 
-  const hostname = mainStill ? (() => {
-    try {
-      return new URL(mainStill).hostname.toLowerCase();
-    } catch {
-      return "";
-    }
-  })() : "";
+  const hostname = mainStill
+    ? (() => {
+        try {
+          return new URL(mainStill).hostname.toLowerCase();
+        } catch {
+          return "";
+        }
+      })()
+    : "";
 
   const useOptimizer =
     !!mainStill &&
     (/\bcloudinary\b/i.test(mainStill) ||
       hostname.endsWith("supabase.co") ||
       hostname.includes("cloudinary"));
+
+  const glo3Primary = glo3d[0];
+  /** Ficha profesional / remate público */
+  if (presentation === "showcase") {
+    return (
+      <div className="space-y-6">
+        {glo3Primary ? (
+          <section aria-label="Visor interactivo 360°">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold tracking-tight text-neutral-900">
+                Vista 360° · recorrido interactivo
+              </h3>
+              <span className="hidden text-xs text-neutral-400 sm:inline">Girá el vehículo con el dedo o el mouse</span>
+            </div>
+            <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-black shadow-inner">
+              <iframe
+                title={`360° — ${label || "vehículo"}`}
+                src={glo3Primary}
+                className="h-[min(60vh,560px)] w-full min-h-[280px]"
+                allow="fullscreen; gyroscope"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+              />
+            </div>
+            {glo3d.length > 1 ? (
+              <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                {glo3d.slice(1).map((src, j) => (
+                  <li key={src}>
+                    <a
+                      href={src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-[#009ade] underline underline-offset-2 hover:text-[#007bb5]"
+                    >
+                      Abrir visor {j + 2} en nueva pestaña
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+
+        {statics.length ? (
+          <section aria-label="Galería de fotografías">
+            <h3 className="text-sm font-bold tracking-tight text-neutral-900">Galería de fotografías</h3>
+            <div className="mt-3 space-y-3">
+              <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 shadow-sm">
+                {mainStill ? (
+                  useOptimizer ? (
+                    <Image
+                      src={mainStill}
+                      alt={label ? `${label}` : "Imagen del vehículo"}
+                      fill
+                      className="object-cover object-center"
+                      sizes="(max-width: 768px) 100vw, 960px"
+                      priority={photoIndex === 0}
+                    />
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={mainStill}
+                      alt={label ? `${label}` : "Imagen del vehículo"}
+                      className="h-full w-full object-cover object-center"
+                      loading={photoIndex === 0 ? "eager" : "lazy"}
+                      decoding="async"
+                    />
+                  )
+                ) : null}
+              </div>
+
+              {statics.length > 1 ? (
+                <div
+                  className="flex gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-neutral-300"
+                  style={{ scrollbarWidth: "thin" }}
+                >
+                  {statics.map((src, idx) => (
+                    <button
+                      key={src}
+                      type="button"
+                      onClick={() => setPhotoIndex(idx)}
+                      aria-label={`Foto ${idx + 1} de ${statics.length}`}
+                      className={`relative h-16 w-[5.25rem] shrink-0 overflow-hidden rounded-lg border-2 md:h-[4.75rem] md:w-28 ${
+                        idx === photoIndex ? "border-[#009ade] ring-2 ring-[#009ade]/25" : "border-transparent ring-1 ring-neutral-200"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {!statics.length && glo3d.length ? (
+          <p className="text-sm text-neutral-500">
+            Solo hay vista 360° para este ítem. Si cargás también URLs de fotos planas en el inventario verás aquí una
+            galería tipo aviso destacado.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  /* ─── standard (original) ─── */
+
+  const mainContainClass = "object-contain";
 
   return (
     <div className="mt-5 space-y-5 border-t border-neutral-100 pt-5">
@@ -86,7 +200,7 @@ export function InventarioMediaGallery({ inventario }: Props) {
                     src={mainStill}
                     alt={label ? `Imagen principal — ${label}` : "Imagen del lote"}
                     fill
-                    className="object-contain"
+                    className={mainContainClass}
                     sizes="(max-width: 768px) 100vw, 720px"
                     priority={photoIndex === 0}
                   />
@@ -95,7 +209,7 @@ export function InventarioMediaGallery({ inventario }: Props) {
                   <img
                     src={mainStill}
                     alt={label ? `Imagen principal — ${label}` : "Imagen del lote"}
-                    className="h-full w-full object-contain"
+                    className={`h-full w-full ${mainContainClass}`}
                     loading={photoIndex === 0 ? "eager" : "lazy"}
                     decoding="async"
                   />
