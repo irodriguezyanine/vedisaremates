@@ -753,15 +753,13 @@ export function UsuariosPanel() {
           </div>
         </div>
         <div className="overflow-x-auto border-t border-white/10">
-          <table className="min-w-[760px] w-full border-collapse text-left text-sm">
+          <table className="min-w-[640px] w-full border-collapse text-left text-sm">
             <thead className="text-neutral-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Nombre</th>
                 <th className="px-4 py-2 font-medium">Rol</th>
                 <th className="px-4 py-2 font-medium">Alta</th>
-                <th className="px-4 py-2 font-medium">Clave inicial</th>
-                <th className="px-4 py-2 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -778,33 +776,11 @@ export function UsuariosPanel() {
                     <span className="rounded bg-white/10 px-2 py-0.5 text-xs">{formatRoleLabel(u.rol)}</span>
                   </td>
                   <td className="px-4 py-2 text-neutral-500">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-CL") : "—"}</td>
-                  <td className="px-4 py-2">
-                    {u.must_change_password ? (
-                      <span className="rounded bg-amber-400/20 px-2 py-0.5 text-xs font-semibold text-amber-300">Debe cambiar</span>
-                    ) : (
-                      <span className="rounded bg-emerald-400/20 px-2 py-0.5 text-xs font-semibold text-emerald-300">Actualizada</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-[#33C7E3] hover:underline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPwModal({
-                          userId: u.id,
-                          email: u.email ?? "",
-                        });
-                      }}
-                    >
-                      Cambiar clave
-                    </button>
-                  </td>
                 </tr>
               ))}
               {!paginatedRows.length ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-neutral-500">
                     No hay usuarios para mostrar con los filtros actuales.
                   </td>
                 </tr>
