@@ -11,6 +11,7 @@ const links = [
   { href: "/admin/usuarios", label: "Usuarios" },
   { href: "/admin/inventario", label: "Inventario" },
   { href: "/admin/remates", label: "Remates y lotes" },
+  { href: "/admin/ofertas", label: "Ofertas en vivo" },
   { href: "/admin/personalizar", label: "Personalizar" },
 ];
 

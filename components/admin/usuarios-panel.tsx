@@ -27,6 +27,7 @@ type EditUserForm = {
   telefono: string;
   rol: string;
   mustChangePassword: boolean;
+  garantiaAprobada: boolean;
   password: string;
 };
 
@@ -311,6 +312,7 @@ export function UsuariosPanel() {
       telefono: "",
       rol: normalizeRoleInput(row.rol ?? "usuario"),
       mustChangePassword: Boolean(row.must_change_password),
+      garantiaAprobada: Boolean(row.garantia_aprobada),
       password: "",
     };
     setEditModal(baseForm);
@@ -335,6 +337,7 @@ export function UsuariosPanel() {
               telefono?: string | null;
               rol?: string | null;
               must_change_password?: boolean | null;
+              garantia_aprobada?: boolean | null;
             };
           }
         | null;
@@ -351,6 +354,7 @@ export function UsuariosPanel() {
           telefono: (res.user?.telefono ?? "").trim(),
           rol: normalizeRoleInput(res.user?.rol ?? curr.rol ?? "usuario"),
           mustChangePassword: Boolean(res.user?.must_change_password),
+          garantiaAprobada: Boolean(res.user?.garantia_aprobada),
         };
       });
     } catch {
@@ -375,6 +379,7 @@ export function UsuariosPanel() {
         p_direccion: editModal.direccion.trim(),
         p_telefono: editModal.telefono.trim(),
         p_must_change_password: editModal.mustChangePassword,
+        p_garantia_aprobada: editModal.garantiaAprobada,
       };
       const roleCandidates = buildRoleCandidates(editModal.rol);
       let updateOk = false;
@@ -1083,6 +1088,15 @@ export function UsuariosPanel() {
                     className="h-4 w-4 rounded border-white/20 bg-black/25"
                   />
                   Forzar cambio de contraseña en próximo inicio de sesión
+                </label>
+                <label className="flex items-center gap-2 text-sm text-neutral-300 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={editModal.garantiaAprobada}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, garantiaAprobada: e.target.checked } : curr))}
+                    className="h-4 w-4 rounded border-white/20 bg-black/25"
+                  />
+                  Garantía validada (habilita pujas en remates)
                 </label>
               </div>
 

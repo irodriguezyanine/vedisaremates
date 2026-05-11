@@ -8,7 +8,13 @@ import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carous
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
 import { formatClp } from "@/lib/format-clp";
-import type { InventarioRow, PortalOfertaRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
+import type {
+  InventarioRow,
+  PortalOfertaRow,
+  PortalRemateLoteRow,
+  PortalRemateRow,
+  PortalRematesConfigRow,
+} from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 
 type Lote = PortalRemateLoteRow & { inventario: InventarioRow | null };
@@ -51,8 +57,12 @@ export function AuctionLiveRoom({
   const [offersByLote, setOffersByLote] = useState<Record<string, PortalOfertaRow[]>>({});
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyProxy, setBusyProxy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [tick, setTick] = useState<number | null>(null);
+  const [proxyMax, setProxyMax] = useState("");
+  const [cfg, setCfg] = useState<PortalRematesConfigRow | null>(null);
+  const [viewerRole, setViewerRole] = useState<string>("");
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
 
@@ -97,6 +107,20 @@ export function AuctionLiveRoom({
   }, []);
 
   useEffect(() => {
+    if (!viewerId) return;
+    const sb = createClient();
+    if (!sb) return;
+    void sb
+      .from("profiles")
+      .select("rol")
+      .eq("id", viewerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setViewerRole(String(data?.rol ?? "").toLowerCase());
+      });
+  }, [viewerId]);
+
+  useEffect(() => {
     const sb = createClient();
     const ids = lotes.map((l) => l.id);
     if (!sb || !ids.length) return;
@@ -119,15 +143,21 @@ export function AuctionLiveRoom({
       )
       .subscribe();
 
+    const refreshRemateAndCfg = () =>
+      Promise.all([
+        sb
+          .from("portal_remates")
+          .select("*")
+          .eq("id", remate.id)
+          .single(),
+        sb.from("portal_remates_config").select("*").eq("id", 1).maybeSingle(),
+      ]).then(([remRes, cfgRes]) => {
+        if (remRes.data) setRemate(remRes.data as PortalRemateRow);
+        if (cfgRes.data) setCfg(cfgRes.data as PortalRematesConfigRow);
+      });
+    void refreshRemateAndCfg();
     const poll = window.setInterval(() => {
-      void sb
-        .from("portal_remates")
-        .select("*")
-        .eq("id", remate.id)
-        .single()
-        .then(({ data }: { data: PortalRemateRow | null }) => {
-          if (data) setRemate(data);
-        });
+      void refreshRemateAndCfg();
     }, 15000);
 
     return () => {
@@ -149,6 +179,10 @@ export function AuctionLiveRoom({
       setMsg("Iniciá sesión para ofertar.");
       return;
     }
+    if (["pausado", "adjudicado", "vendido", "anulado"].includes(String(active.estado ?? ""))) {
+      setMsg("Este lote no está habilitado para recibir ofertas.");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     const monto = Number(amount.replace(/\./g, "").replace(",", "."));
@@ -163,9 +197,25 @@ export function AuctionLiveRoom({
       setBusy(false);
       return;
     }
+    const hiConfirmFactor = Math.max(1, Number(cfg?.high_bid_confirm_multiplier ?? 3));
+    if (monto >= minNext * hiConfirmFactor) {
+      const ok = window.confirm(
+        `Tu oferta ${formatClp(monto)} es alta respecto del mínimo (${formatClp(minNext)}). ¿Confirmas enviarla?`,
+      );
+      if (!ok) {
+        setBusy(false);
+        return;
+      }
+    }
+    const clientMeta = {
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      language: typeof navigator !== "undefined" ? navigator.language : "",
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
     const { data, error } = await sb.rpc("portal_place_bid", {
       p_lote_id: active.id,
       p_monto: monto,
+      p_client_meta: clientMeta,
     });
     if (error) {
       setMsg(error.message);
@@ -199,17 +249,68 @@ export function AuctionLiveRoom({
     setBusy(false);
   }
 
+  async function setProxyBid() {
+    if (!active || !viewerId) {
+      setMsg("Iniciá sesión para configurar puja automática.");
+      return;
+    }
+    const monto = Number(proxyMax.replace(/\./g, "").replace(",", "."));
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setMsg("Tope automático inválido.");
+      return;
+    }
+    setBusyProxy(true);
+    setMsg(null);
+    const sb = createClient();
+    if (!sb) {
+      setMsg("Servicio no disponible.");
+      setBusyProxy(false);
+      return;
+    }
+    const { data, error } = await sb.rpc("portal_set_proxy_bid", {
+      p_lote_id: active.id,
+      p_max_monto: monto,
+    });
+    if (error) {
+      setMsg(error.message);
+      setBusyProxy(false);
+      return;
+    }
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (!res?.ok) {
+      setMsg(res?.error ?? "No se pudo guardar la puja automática.");
+      setBusyProxy(false);
+      return;
+    }
+    setProxyMax("");
+    setMsg("Puja automática activada.");
+    setBusyProxy(false);
+  }
+
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
   const countdownLive =
     tick != null && remate.ends_at ? new Date(remate.ends_at).getTime() - tick : null;
-
+  const started =
+    tick != null &&
+    (!remate.starts_at || new Date(remate.starts_at).getTime() <= tick);
+  const remateAbierto = remate.estado === "en_curso" || remate.estado === "publicado";
   const canBid =
     viewerId &&
-    remate.estado === "en_curso" &&
+    remateAbierto &&
     tick != null &&
     countdownLive !== null &&
     countdownLive > 0 &&
-    (!remate.starts_at || new Date(remate.starts_at).getTime() <= tick);
+    started;
+  const lotCanBid = !!active && !["pausado", "adjudicado", "vendido", "anulado"].includes(String(active?.estado ?? ""));
+  const canBidNow = canBid && lotCanBid;
+  const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
+  const isAdminViewer = viewerRole === "admin";
+
+  function setQuickBid(multiplier: number) {
+    const safeMult = Math.max(1, Math.round(multiplier));
+    const next = minNext + Number(active?.incremento_minimo ?? 0) * (safeMult - 1);
+    setAmount(String(Math.max(minNext, next)));
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:py-10">
@@ -338,10 +439,12 @@ export function AuctionLiveRoom({
 
                   <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                     <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
-                    {!canBid ? (
+                    {!canBidNow ? (
                       <p className="mt-2 text-sm text-neutral-600">
-                        {remate.estado !== "en_curso"
-                          ? "Cuando el remate esté en curso podrás ofertar."
+                        {!remateAbierto
+                          ? "Este remate aún no está habilitado para ofertar."
+                          : !lotCanBid
+                            ? "Este lote está pausado/cerrado y no recibe ofertas."
                           : countdownLive !== null && countdownLive <= 0
                             ? "El remate ya cerró según la fecha de fin."
                             : tick === null
@@ -354,6 +457,11 @@ export function AuctionLiveRoom({
                       </p>
                     ) : (
                       <>
+                        {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
+                          <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                            Últimos minutos: una nueva oferta puede extender el cierre automáticamente.
+                          </p>
+                        ) : null}
                         <label className="mt-3 block text-sm text-neutral-600">
                           Monto
                           <input
@@ -364,6 +472,29 @@ export function AuctionLiveRoom({
                             placeholder={String(Math.ceil(minNext))}
                           />
                         </label>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setQuickBid(1)}
+                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                          >
+                            Oferta mínima ({formatClp(minNext)})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQuickBid(2)}
+                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                          >
+                            + 1 incremento
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQuickBid(3)}
+                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                          >
+                            + 2 incrementos
+                          </button>
+                        </div>
                         <button
                           type="button"
                           disabled={busy}
@@ -372,6 +503,26 @@ export function AuctionLiveRoom({
                         >
                           {busy ? "Enviando…" : "Confirmar oferta"}
                         </button>
+                        <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                          <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
+                          <div className="mt-2 flex gap-2">
+                            <input
+                              value={proxyMax}
+                              onChange={(e) => setProxyMax(e.target.value)}
+                              inputMode="numeric"
+                              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                              placeholder="Ej: 25000000"
+                            />
+                            <button
+                              type="button"
+                              disabled={busyProxy}
+                              onClick={() => void setProxyBid()}
+                              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                            >
+                              {busyProxy ? "Guardando…" : "Activar"}
+                            </button>
+                          </div>
+                        </div>
                       </>
                     )}
                   {msg ? <p className="mt-3 text-sm text-neutral-700">{msg}</p> : null}
@@ -393,7 +544,7 @@ export function AuctionLiveRoom({
                           <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
                           <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
                           <span className="text-[10px] text-neutral-400">
-                            {o.user_id === viewerId ? "vos" : "participante"}
+                            {isAdminViewer ? `#${String(o.user_id).slice(0, 8)}` : "oferta"}
                           </span>
                         </li>
                       ))

@@ -15,6 +15,27 @@ ALTER TABLE public.profiles
 ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE public.profiles
 ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS garantia_aprobada BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS garantia_aprobada_at TIMESTAMPTZ;
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS garantia_aprobada_by UUID REFERENCES auth.users (id) ON DELETE SET NULL;
+
+CREATE OR REPLACE FUNCTION public.auth_user_es_admin_o_sac()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND lower(coalesce(p.rol, '')) IN ('admin', 'sac')
+  );
+$$;
 
 CREATE OR REPLACE FUNCTION public.portal_marcar_cambio_clave_por_email(
   p_email TEXT,
@@ -28,7 +49,7 @@ AS $$
 DECLARE
   v_uid UUID;
 BEGIN
-  IF NOT public.auth_user_es_admin() THEN
+  IF NOT public.auth_user_es_admin_o_sac() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
   END IF;
 
@@ -147,7 +168,7 @@ DECLARE
   v_ref_table TEXT;
   v_ref_col TEXT;
 BEGIN
-  IF NOT public.auth_user_es_admin() THEN
+  IF NOT public.auth_user_es_admin_o_sac() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
   END IF;
 
@@ -244,7 +265,8 @@ BEGIN
     'direccion', p.direccion,
     'telefono', p.telefono,
     'rol', p.rol,
-    'must_change_password', p.must_change_password
+    'must_change_password', p.must_change_password,
+    'garantia_aprobada', p.garantia_aprobada
   )
     INTO v_user
   FROM public.profiles p
@@ -262,6 +284,7 @@ $$;
 REVOKE ALL ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) TO authenticated;
 
+DROP FUNCTION IF EXISTS public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.portal_admin_update_usuario(
   p_user_id UUID,
   p_email TEXT,
@@ -271,7 +294,8 @@ CREATE OR REPLACE FUNCTION public.portal_admin_update_usuario(
   p_direccion TEXT,
   p_telefono TEXT,
   p_rol TEXT,
-  p_must_change_password BOOLEAN DEFAULT NULL
+  p_must_change_password BOOLEAN DEFAULT NULL,
+  p_garantia_aprobada BOOLEAN DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -285,7 +309,7 @@ DECLARE
   v_ref_table TEXT;
   v_ref_col TEXT;
 BEGIN
-  IF NOT public.auth_user_es_admin() THEN
+  IF NOT public.auth_user_es_admin_o_sac() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
   END IF;
 
@@ -346,7 +370,18 @@ BEGIN
     direccion = NULLIF(trim(p_direccion), ''),
     telefono = NULLIF(trim(p_telefono), ''),
     rol = v_rol,
-    must_change_password = COALESCE(p_must_change_password, must_change_password)
+    must_change_password = COALESCE(p_must_change_password, must_change_password),
+    garantia_aprobada = COALESCE(p_garantia_aprobada, garantia_aprobada),
+    garantia_aprobada_at = CASE
+      WHEN p_garantia_aprobada IS NULL THEN garantia_aprobada_at
+      WHEN p_garantia_aprobada = true THEN timezone('utc'::text, now())
+      ELSE NULL
+    END,
+    garantia_aprobada_by = CASE
+      WHEN p_garantia_aprobada IS NULL THEN garantia_aprobada_by
+      WHEN p_garantia_aprobada = true THEN auth.uid()
+      ELSE NULL
+    END
   WHERE id = p_user_id;
 
   IF NOT FOUND THEN
@@ -357,8 +392,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) TO authenticated;
+REVOKE ALL ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.portal_listar_mis_ofertas()
 RETURNS TABLE (
@@ -377,12 +412,22 @@ SECURITY DEFINER
 STABLE
 SET search_path = public
 AS $$
-  WITH ganador_por_lote AS (
+  WITH cfg AS (
+    SELECT COALESCE(tie_breaker_mode, 'earliest') AS tie_breaker_mode
+    FROM public.portal_remates_config
+    WHERE id = 1
+  ),
+  ganador_por_lote AS (
     SELECT DISTINCT ON (o.lote_id)
       o.lote_id,
       o.user_id AS winner_user_id
     FROM public.portal_ofertas o
-    ORDER BY o.lote_id, o.monto DESC, o.created_at ASC
+    CROSS JOIN cfg
+    ORDER BY
+      o.lote_id,
+      o.monto DESC,
+      CASE WHEN cfg.tie_breaker_mode = 'latest' THEN o.created_at END DESC,
+      CASE WHEN cfg.tie_breaker_mode <> 'latest' THEN o.created_at END ASC
   )
   SELECT
     o.id,
@@ -416,4 +461,4 @@ COMMENT ON FUNCTION public.portal_update_mi_perfil(TEXT, TEXT, TEXT, TEXT, TEXT)
 COMMENT ON FUNCTION public.portal_update_mi_foto(TEXT) IS 'Usuario autenticado: guarda o limpia la URL de su foto de perfil.';
 COMMENT ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) IS 'Admin: fuerza rol en profiles para un usuario existente identificado por email.';
 COMMENT ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) IS 'Admin: obtiene datos completos de un usuario para edición.';
-COMMENT ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) IS 'Admin: actualiza email (auth.users) y perfil/rol de un usuario.';
+COMMENT ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) IS 'Admin/SAC: actualiza email (auth.users), perfil/rol y estado de garantía de un usuario.';

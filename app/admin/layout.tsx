@@ -24,7 +24,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: profile } = await supabase.from("profiles").select("rol, nombre").eq("id", user.id).maybeSingle();
 
-  if ((profile?.rol ?? "").toLowerCase() !== "admin") {
+  const rol = (profile?.rol ?? "").toLowerCase();
+  if (!["admin", "sac"].includes(rol)) {
     redirect("/subastas");
   }
 

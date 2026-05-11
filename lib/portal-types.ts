@@ -6,6 +6,7 @@ export type ListaUsuarioRow = {
   rol: string | null;
   created_at: string | null;
   must_change_password?: boolean | null;
+  garantia_aprobada?: boolean | null;
 };
 
 export type PortalRemateRow = {
@@ -20,6 +21,18 @@ export type PortalRemateRow = {
   created_by: string | null;
 };
 
+export type PortalRematesConfigRow = {
+  id: number;
+  anti_sniping_enabled: boolean;
+  anti_sniping_window_seconds: number;
+  anti_sniping_extend_seconds: number;
+  high_bid_confirm_multiplier: number;
+  max_bids_per_minute: number;
+  suspicious_raise_multiplier: number;
+  last_minutes_notice_seconds: number;
+  tie_breaker_mode: "earliest" | "latest";
+};
+
 export type PortalRemateLoteRow = {
   id: string;
   created_at: string;
@@ -30,7 +43,8 @@ export type PortalRemateLoteRow = {
   descripcion: string | null;
   precio_base: number;
   incremento_minimo: number;
-  estado: "pendiente" | "activo" | "vendido" | "anulado";
+  estado: "pendiente" | "activo" | "pausado" | "adjudicado" | "vendido" | "anulado";
+  precio_reserva?: number | null;
 };
 
 export type PortalOfertaRow = {

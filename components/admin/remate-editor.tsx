@@ -20,6 +20,9 @@ type OfertaAdminRow = {
   cliente_nombre: string;
   cliente_usuario: string;
   cliente_email: string;
+  es_auto?: boolean;
+  sospechosa?: boolean;
+  motivo_sospecha?: string | null;
 };
 
 const PAGE_SIZE = 20;
@@ -35,6 +38,8 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   const [saving, setSaving] = useState(false);
   const [ofertas, setOfertas] = useState<OfertaAdminRow[]>([]);
   const [loadingOfertas, setLoadingOfertas] = useState(false);
+  const [savingLoteId, setSavingLoteId] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<Array<{ created_at: string; event_type: string; detalle: Record<string, unknown> | null }>>([]);
 
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [modalPage, setModalPage] = useState(1);
@@ -82,6 +87,13 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       return;
     }
     setOfertas(((ofertasData ?? []) as OfertaAdminRow[]) ?? []);
+    const { data: tlData } = await sb
+      .from("portal_lote_eventos")
+      .select("created_at, event_type, detalle")
+      .eq("remate_id", remateId)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    setTimeline(((tlData ?? []) as Array<{ created_at: string; event_type: string; detalle: Record<string, unknown> | null }>) ?? []);
   }, [remateId]);
 
   useEffect(() => {
@@ -237,6 +249,25 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     void load();
   }
 
+  async function updateLoteMeta(loteId: string, patch: Partial<PortalRemateLoteRow>) {
+    const sb = createClient();
+    if (!sb) {
+      setErr("Servicio de datos no disponible.");
+      return;
+    }
+    setSavingLoteId(loteId);
+    const payload: Record<string, unknown> = {};
+    if (patch.estado !== undefined) payload.estado = patch.estado;
+    if (patch.precio_reserva !== undefined) payload.precio_reserva = patch.precio_reserva;
+    const { error } = await sb.from("portal_remate_lotes").update(payload).eq("id", loteId);
+    setSavingLoteId(null);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    await load();
+  }
+
   function toggleSelect(row: Inv) {
     setSelectedInvById((prev) => {
       const next = new Map(prev);
@@ -387,19 +418,68 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       </section>
 
       <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">
+        <h2 className="text-lg font-bold text-white">Timeline legal del remate</h2>
+        <p className="mt-1 text-xs text-neutral-400">Publicación, cambios de estado, eventos de reserva y pujas registradas.</p>
+        <ul className="mt-3 max-h-72 space-y-2 overflow-auto text-xs">
+          {timeline.map((ev, i) => (
+            <li key={`${ev.created_at}-${i}`} className="rounded border border-white/10 bg-black/20 px-3 py-2 text-neutral-300">
+              <p className="font-semibold text-neutral-100">{ev.event_type}</p>
+              <p className="text-neutral-500">{new Date(ev.created_at).toLocaleString("es-CL")}</p>
+              <p className="mt-1 break-all text-neutral-400">{ev.detalle ? JSON.stringify(ev.detalle) : "—"}</p>
+            </li>
+          ))}
+          {!timeline.length ? <li className="text-neutral-500">Sin eventos registrados todavía.</li> : null}
+        </ul>
+      </section>
+
+      <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">
         <h2 className="text-lg font-bold text-white">Lotes ({lotes.length})</h2>
         <ul className="mt-4 space-y-3">
           {lotes.map((l) => (
             <li key={l.id} className="flex flex-col gap-2 rounded border border-white/10 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold text-white">{l.titulo ?? "Lote"}</p>
                 <p className="text-xs text-neutral-500">
-                  Base {formatClp(l.precio_base)} · incremento mín. {formatClp(l.incremento_minimo)}
+                  Base {formatClp(l.precio_base)} · incremento mín. {formatClp(l.incremento_minimo)} · reserva{" "}
+                  {l.precio_reserva != null ? formatClp(l.precio_reserva) : "sin definir"}
                 </p>
               </div>
-              <button type="button" className="text-xs text-red-300 hover:underline sm:shrink-0" onClick={() => void removeLote(l.id)}>
-                Quitar lote
-              </button>
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                <select
+                  value={l.estado}
+                  onChange={(e) =>
+                    void updateLoteMeta(l.id, {
+                      estado: e.target.value as PortalRemateLoteRow["estado"],
+                    })
+                  }
+                  className="rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
+                  disabled={savingLoteId === l.id}
+                >
+                  <option value="pendiente">pendiente</option>
+                  <option value="activo">activo</option>
+                  <option value="pausado">pausado</option>
+                  <option value="adjudicado">adjudicado</option>
+                  <option value="vendido">vendido</option>
+                  <option value="anulado">anulado</option>
+                </select>
+                <input
+                  type="number"
+                  defaultValue={l.precio_reserva ?? ""}
+                  placeholder="Reserva"
+                  onBlur={(e) => {
+                    const raw = e.target.value.trim();
+                    const value = raw === "" ? null : Number(raw);
+                    if (raw !== "" && !Number.isFinite(value)) return;
+                    if (Number(l.precio_reserva ?? -1) === Number(value ?? -1)) return;
+                    void updateLoteMeta(l.id, { precio_reserva: value as number | null });
+                  }}
+                  className="w-28 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
+                  disabled={savingLoteId === l.id}
+                />
+                <button type="button" className="text-xs text-red-300 hover:underline" onClick={() => void removeLote(l.id)}>
+                  Quitar lote
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -430,17 +510,21 @@ export function RemateEditor({ remateId }: { remateId: string }) {
                   <th className="px-3 py-2 font-semibold">Email</th>
                   <th className="px-3 py-2 font-semibold">Lote</th>
                   <th className="px-3 py-2 font-semibold">Oferta</th>
+                  <th className="px-3 py-2 font-semibold">Tipo</th>
+                  <th className="px-3 py-2 font-semibold">Alerta</th>
                   <th className="px-3 py-2 font-semibold">Fecha</th>
                 </tr>
               </thead>
               <tbody>
                 {ofertas.map((o) => (
-                  <tr key={o.oferta_id} className="border-t border-white/10 text-neutral-200">
+                  <tr key={o.oferta_id} className={`border-t border-white/10 text-neutral-200 ${o.sospechosa ? "bg-amber-900/20" : ""}`}>
                     <td className="px-3 py-2">{o.cliente_nombre || "Sin nombre"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{o.cliente_usuario || "—"}</td>
                     <td className="px-3 py-2">{o.cliente_email || "—"}</td>
                     <td className="px-3 py-2">{o.lote_titulo || "Lote"}</td>
                     <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(o.monto)}</td>
+                    <td className="px-3 py-2">{o.es_auto ? "Auto" : "Manual"}</td>
+                    <td className="px-3 py-2">{o.sospechosa ? (o.motivo_sospecha ?? "Revisar") : "—"}</td>
                     <td className="px-3 py-2 text-neutral-400">{new Date(o.fecha).toLocaleString("es-CL")}</td>
                   </tr>
                 ))}

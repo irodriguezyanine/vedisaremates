@@ -34,6 +34,11 @@ const DEFAULT_REMATE_CFG = {
   anti_sniping_enabled: true,
   anti_sniping_window_seconds: 120,
   anti_sniping_extend_seconds: 120,
+  high_bid_confirm_multiplier: 3,
+  max_bids_per_minute: 25,
+  suspicious_raise_multiplier: 5,
+  last_minutes_notice_seconds: 300,
+  tie_breaker_mode: "earliest",
 };
 
 function stripExcludedBannerOverrides(raw: Record<string, PortalFichaFieldOverride>): Record<string, PortalFichaFieldOverride> {
@@ -146,6 +151,7 @@ export function PersonalizarPanel() {
   const [remateCfgSaving, setRemateCfgSaving] = useState(false);
   const [remateCfgOk, setRemateCfgOk] = useState<string | null>(null);
   const [remateCfgErr, setRemateCfgErr] = useState<string | null>(null);
+  const [incrementRules, setIncrementRules] = useState<Array<{ id?: string; min_monto: number; incremento: number; enabled: boolean }>>([]);
   const [customKeyInput, setCustomKeyInput] = useState("");
   const [customLabelDraft, setCustomLabelDraft] = useState("");
 
@@ -164,14 +170,21 @@ export function PersonalizarPanel() {
       setLoading(false);
       return;
     }
-    const [heroRes, fichaRes, remateCfgRes] = await Promise.all([
+    const [heroRes, fichaRes, remateCfgRes, incRulesRes] = await Promise.all([
       sb.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle(),
       sb.from("portal_inventario_ficha_config").select("config").eq("id", 1).maybeSingle(),
       sb
         .from("portal_remates_config")
-        .select("anti_sniping_enabled, anti_sniping_window_seconds, anti_sniping_extend_seconds")
+        .select(
+          "anti_sniping_enabled, anti_sniping_window_seconds, anti_sniping_extend_seconds, high_bid_confirm_multiplier, max_bids_per_minute, suspicious_raise_multiplier, last_minutes_notice_seconds, tie_breaker_mode",
+        )
         .eq("id", 1)
         .maybeSingle(),
+      sb
+        .from("portal_bid_increment_rules")
+        .select("id, min_monto, incremento, enabled")
+        .is("remate_id", null)
+        .order("min_monto", { ascending: true }),
     ]);
     if (heroRes.error) {
       setErr(heroRes.error.message);
@@ -209,8 +222,25 @@ export function PersonalizarPanel() {
           remateCfgRes.data?.anti_sniping_window_seconds ?? DEFAULT_REMATE_CFG.anti_sniping_window_seconds,
         anti_sniping_extend_seconds:
           remateCfgRes.data?.anti_sniping_extend_seconds ?? DEFAULT_REMATE_CFG.anti_sniping_extend_seconds,
+        high_bid_confirm_multiplier:
+          remateCfgRes.data?.high_bid_confirm_multiplier ?? DEFAULT_REMATE_CFG.high_bid_confirm_multiplier,
+        max_bids_per_minute:
+          remateCfgRes.data?.max_bids_per_minute ?? DEFAULT_REMATE_CFG.max_bids_per_minute,
+        suspicious_raise_multiplier:
+          remateCfgRes.data?.suspicious_raise_multiplier ?? DEFAULT_REMATE_CFG.suspicious_raise_multiplier,
+        last_minutes_notice_seconds:
+          remateCfgRes.data?.last_minutes_notice_seconds ?? DEFAULT_REMATE_CFG.last_minutes_notice_seconds,
+        tie_breaker_mode:
+          remateCfgRes.data?.tie_breaker_mode ?? DEFAULT_REMATE_CFG.tie_breaker_mode,
       });
       setRemateCfgErr(null);
+    }
+    if (incRulesRes.error) {
+      setRemateCfgErr(incRulesRes.error.message);
+      setIncrementRules([]);
+    } else {
+      const rows = ((incRulesRes.data ?? []) as Array<{ id: string; min_monto: number; incremento: number; enabled: boolean }>) ?? [];
+      setIncrementRules(rows);
     }
 
     if (heroRes.error) {
@@ -369,12 +399,36 @@ export function PersonalizarPanel() {
       anti_sniping_enabled: remateCfg.anti_sniping_enabled,
       anti_sniping_window_seconds: Math.max(0, Math.round(remateCfg.anti_sniping_window_seconds)),
       anti_sniping_extend_seconds: Math.max(0, Math.round(remateCfg.anti_sniping_extend_seconds)),
+      high_bid_confirm_multiplier: Math.max(1, Number(remateCfg.high_bid_confirm_multiplier || 1)),
+      max_bids_per_minute: Math.max(1, Math.round(remateCfg.max_bids_per_minute || 1)),
+      suspicious_raise_multiplier: Math.max(1, Number(remateCfg.suspicious_raise_multiplier || 1)),
+      last_minutes_notice_seconds: Math.max(0, Math.round(remateCfg.last_minutes_notice_seconds || 0)),
+      tie_breaker_mode: remateCfg.tie_breaker_mode === "latest" ? "latest" : "earliest",
     };
-    const { error } = await sb.from("portal_remates_config").upsert(payload, { onConflict: "id" });
-    if (error) {
-      setRemateCfgErr(error.message);
+    const [{ error }, { error: delError }] = await Promise.all([
+      sb.from("portal_remates_config").upsert(payload, { onConflict: "id" }),
+      sb.from("portal_bid_increment_rules").delete().is("remate_id", null),
+    ]);
+    if (error || delError) {
+      setRemateCfgErr(error?.message || delError?.message || "No se pudo guardar configuración.");
       setRemateCfgSaving(false);
       return;
+    }
+    const cleanRules = incrementRules
+      .map((r) => ({
+        remate_id: null as string | null,
+        min_monto: Math.max(0, Number(r.min_monto || 0)),
+        incremento: Math.max(1, Number(r.incremento || 1)),
+        enabled: r.enabled !== false,
+      }))
+      .sort((a, b) => a.min_monto - b.min_monto);
+    if (cleanRules.length > 0) {
+      const { error: insError } = await sb.from("portal_bid_increment_rules").insert(cleanRules);
+      if (insError) {
+        setRemateCfgErr(insError.message);
+        setRemateCfgSaving(false);
+        return;
+      }
     }
     setRemateCfgOk("Configuración de remates guardada.");
     setRemateCfgSaving(false);
@@ -1298,6 +1352,145 @@ export function PersonalizarPanel() {
                 />
                 <p className="mt-1 text-[11px] text-neutral-500">Para “2 minutos”, usa 120.</p>
               </label>
+              <label className="text-sm">
+                <span className="text-neutral-400">Confirmación oferta alta (x mínimo)</span>
+                <input
+                  type="number"
+                  min={1}
+                  step="0.1"
+                  value={remateCfg.high_bid_confirm_multiplier}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, high_bid_confirm_multiplier: Number(e.target.value || 1) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-neutral-400">Máx pujas por minuto por usuario</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={remateCfg.max_bids_per_minute}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, max_bids_per_minute: Number(e.target.value || 1) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-neutral-400">Multiplicador alerta salto sospechoso</span>
+                <input
+                  type="number"
+                  min={1}
+                  step="0.1"
+                  value={remateCfg.suspicious_raise_multiplier}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, suspicious_raise_multiplier: Number(e.target.value || 1) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-neutral-400">Aviso últimos minutos (segundos)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={remateCfg.last_minutes_notice_seconds}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, last_minutes_notice_seconds: Number(e.target.value || 0) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <span className="text-neutral-400">Regla de desempate</span>
+                <select
+                  value={remateCfg.tie_breaker_mode}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, tie_breaker_mode: e.target.value as "earliest" | "latest" }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                >
+                  <option value="earliest">Gana la oferta más temprana</option>
+                  <option value="latest">Gana la oferta más reciente</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">Incrementos por tramos de precio (global)</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIncrementRules((prev) => [...prev, { min_monto: 0, incremento: 50000, enabled: true }]);
+                    setRemateCfgOk(null);
+                  }}
+                  className="rounded border border-white/20 px-2 py-1 text-xs text-neutral-200 hover:bg-white/5"
+                >
+                  + tramo
+                </button>
+              </div>
+              <div className="space-y-2">
+                {incrementRules.map((r, ix) => (
+                  <div key={`${r.id ?? "new"}-${ix}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+                    <input
+                      type="number"
+                      min={0}
+                      value={r.min_monto}
+                      onChange={(e) => {
+                        const v = Number(e.target.value || 0);
+                        setIncrementRules((prev) => prev.map((row, i) => (i === ix ? { ...row, min_monto: v } : row)));
+                        setRemateCfgOk(null);
+                      }}
+                      className="rounded border border-white/15 bg-black/35 px-2 py-1.5 text-sm text-white"
+                      placeholder="Desde monto"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={r.incremento}
+                      onChange={(e) => {
+                        const v = Number(e.target.value || 1);
+                        setIncrementRules((prev) => prev.map((row, i) => (i === ix ? { ...row, incremento: v } : row)));
+                        setRemateCfgOk(null);
+                      }}
+                      className="rounded border border-white/15 bg-black/35 px-2 py-1.5 text-sm text-white"
+                      placeholder="Incremento"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-neutral-300">
+                      <input
+                        type="checkbox"
+                        checked={r.enabled}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setIncrementRules((prev) => prev.map((row, i) => (i === ix ? { ...row, enabled: v } : row)));
+                          setRemateCfgOk(null);
+                        }}
+                      />
+                      Activo
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIncrementRules((prev) => prev.filter((_, i) => i !== ix));
+                        setRemateCfgOk(null);
+                      }}
+                      className="rounded border border-red-400/30 px-2 py-1 text-xs text-red-200 hover:bg-red-900/20"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+                {!incrementRules.length ? (
+                  <p className="text-xs text-neutral-500">Si no hay tramos, se usa el incremento mínimo del lote.</p>
+                ) : null}
+              </div>
             </div>
 
             <button
