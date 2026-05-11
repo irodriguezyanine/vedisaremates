@@ -353,7 +353,6 @@ export function AuctionLiveRoom({
   const lotCanBid = !!active && !["pausado", "adjudicado", "vendido", "anulado"].includes(String(active?.estado ?? ""));
   const canBidNow = canBid && lotCanBid;
   const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
-  const isAdminViewer = viewerRole === "admin";
   const bidMsg = msg ? formatBidMessage(msg) : null;
 
   function setQuickBid(multiplier: number) {
@@ -605,9 +604,7 @@ export function AuctionLiveRoom({
                         >
                           <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
                           <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
-                          <span className="text-[10px] text-neutral-400">
-                            {isAdminViewer ? `#${String(o.user_id).slice(0, 8)}` : "oferta"}
-                          </span>
+                          <span className="text-[10px] text-neutral-400">oferta</span>
                         </li>
                       ))
                     )}

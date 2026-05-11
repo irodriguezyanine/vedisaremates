@@ -26,6 +26,15 @@ export function OfertasPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [filterRemate, setFilterRemate] = useState("");
+  const [filterLote, setFilterLote] = useState("");
+  const [filterCliente, setFilterCliente] = useState("");
+  const [filterUsuario, setFilterUsuario] = useState("");
+  const [filterEmail, setFilterEmail] = useState("");
+  const [filterTipo, setFilterTipo] = useState<"all" | "auto" | "manual">("all");
+  const [filterAlerta, setFilterAlerta] = useState<"all" | "si" | "no">("all");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [kpis, setKpis] = useState<{
     remates_activos: number;
     lotes_activos: number;
@@ -69,14 +78,46 @@ export function OfertasPanel() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      [r.remate_titulo, r.lote_titulo, r.cliente_nombre, r.cliente_usuario, r.cliente_email]
+    const remateQ = filterRemate.trim().toLowerCase();
+    const loteQ = filterLote.trim().toLowerCase();
+    const clienteQ = filterCliente.trim().toLowerCase();
+    const usuarioQ = filterUsuario.trim().toLowerCase();
+    const emailQ = filterEmail.trim().toLowerCase();
+    const desdeTs = desde ? new Date(`${desde}T00:00:00`).getTime() : null;
+    const hastaTs = hasta ? new Date(`${hasta}T23:59:59`).getTime() : null;
+
+    return rows.filter((r) => {
+      const allText = [r.remate_titulo, r.lote_titulo, r.cliente_nombre, r.cliente_usuario, r.cliente_email, r.motivo_sospecha ?? ""]
         .join(" | ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [rows, search]);
+        .toLowerCase();
+      if (q && !allText.includes(q)) return false;
+      if (remateQ && !r.remate_titulo.toLowerCase().includes(remateQ)) return false;
+      if (loteQ && !r.lote_titulo.toLowerCase().includes(loteQ)) return false;
+      if (clienteQ && !r.cliente_nombre.toLowerCase().includes(clienteQ)) return false;
+      if (usuarioQ && !r.cliente_usuario.toLowerCase().includes(usuarioQ)) return false;
+      if (emailQ && !r.cliente_email.toLowerCase().includes(emailQ)) return false;
+      if (filterTipo === "auto" && !r.es_auto) return false;
+      if (filterTipo === "manual" && r.es_auto) return false;
+      if (filterAlerta === "si" && !r.sospechosa) return false;
+      if (filterAlerta === "no" && r.sospechosa) return false;
+      const t = new Date(r.fecha).getTime();
+      if (desdeTs != null && t < desdeTs) return false;
+      if (hastaTs != null && t > hastaTs) return false;
+      return true;
+    });
+  }, [
+    rows,
+    search,
+    filterRemate,
+    filterLote,
+    filterCliente,
+    filterUsuario,
+    filterEmail,
+    filterTipo,
+    filterAlerta,
+    desde,
+    hasta,
+  ]);
 
   function exportCsv() {
     const lines = [
@@ -189,6 +230,28 @@ export function OfertasPanel() {
           placeholder="Remate, lote, cliente, usuario o email…"
         />
       </label>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <input value={filterRemate} onChange={(e) => setFilterRemate(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Remate" />
+        <input value={filterLote} onChange={(e) => setFilterLote(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Lote" />
+        <input value={filterCliente} onChange={(e) => setFilterCliente(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Cliente" />
+        <input value={filterUsuario} onChange={(e) => setFilterUsuario(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Usuario" />
+        <input value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Email" />
+        <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value as typeof filterTipo)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
+          <option value="all">Tipo: todos</option>
+          <option value="manual">Tipo: manual</option>
+          <option value="auto">Tipo: auto</option>
+        </select>
+        <select value={filterAlerta} onChange={(e) => setFilterAlerta(e.target.value as typeof filterAlerta)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
+          <option value="all">Alerta: todas</option>
+          <option value="si">Solo sospechosas</option>
+          <option value="no">Solo no sospechosas</option>
+        </select>
+        <div className="flex gap-2">
+          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
+          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
+        </div>
+      </div>
+      <p className="text-xs text-neutral-500">Resultados filtrados: {filtered.length}</p>
 
       <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#141c28]">
         <table className="min-w-[1100px] w-full border-collapse text-left text-sm">

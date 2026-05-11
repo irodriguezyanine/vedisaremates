@@ -793,6 +793,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.portal_admin_timeline_lote(UUID, INT) TO authenticated;
 
+DROP FUNCTION IF EXISTS public.portal_admin_feed_ofertas_global(INT);
 CREATE OR REPLACE FUNCTION public.portal_admin_feed_ofertas_global(p_limit INT DEFAULT 500)
 RETURNS TABLE (
   oferta_id UUID,
@@ -820,19 +821,19 @@ BEGIN
 
   RETURN QUERY
   SELECT
-    o.id,
-    o.created_at,
-    r.id,
-    r.titulo,
-    l.id,
-    COALESCE(NULLIF(trim(l.titulo), ''), 'Lote') AS lote_titulo,
-    o.monto,
-    COALESCE(NULLIF(trim(p.nombre), ''), 'Sin nombre') AS cliente_nombre,
-    LEFT(o.user_id::text, 8) AS cliente_usuario,
-    COALESCE(u.email, 'sin-email') AS cliente_email,
-    COALESCE(a.is_auto_bid, false) AS es_auto,
-    COALESCE(a.suspicious, false) AS sospechosa,
-    a.suspicious_reason AS motivo_sospecha
+    o.id::uuid AS oferta_id,
+    o.created_at::timestamptz AS fecha,
+    r.id::uuid AS remate_id,
+    r.titulo::text AS remate_titulo,
+    l.id::uuid AS lote_id,
+    COALESCE(NULLIF(trim(l.titulo), ''), 'Lote')::text AS lote_titulo,
+    o.monto::numeric AS monto,
+    COALESCE(NULLIF(trim(p.nombre), ''), 'Sin nombre')::text AS cliente_nombre,
+    LEFT(o.user_id::text, 8)::text AS cliente_usuario,
+    COALESCE(u.email, 'sin-email')::text AS cliente_email,
+    COALESCE(a.is_auto_bid, false)::boolean AS es_auto,
+    COALESCE(a.suspicious, false)::boolean AS sospechosa,
+    a.suspicious_reason::text AS motivo_sospecha
   FROM public.portal_ofertas o
   JOIN public.portal_remate_lotes l ON l.id = o.lote_id
   JOIN public.portal_remates r ON r.id = l.remate_id
