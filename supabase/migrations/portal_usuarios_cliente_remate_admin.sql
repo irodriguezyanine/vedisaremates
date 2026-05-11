@@ -407,48 +407,87 @@ RETURNS TABLE (
   remate_estado TEXT,
   resultado TEXT
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 SET search_path = public
 AS $$
-  WITH cfg AS (
-    SELECT COALESCE(tie_breaker_mode, 'earliest') AS tie_breaker_mode
-    FROM public.portal_remates_config
-    WHERE id = 1
-  ),
-  ganador_por_lote AS (
-    SELECT DISTINCT ON (o.lote_id)
-      o.lote_id,
-      o.user_id AS winner_user_id
+DECLARE
+  v_tie_mode TEXT := 'earliest';
+BEGIN
+  IF to_regclass('public.portal_remates_config') IS NOT NULL THEN
+    BEGIN
+      SELECT COALESCE(tie_breaker_mode, 'earliest')
+      INTO v_tie_mode
+      FROM public.portal_remates_config
+      WHERE id = 1
+      LIMIT 1;
+    EXCEPTION
+      WHEN undefined_table THEN
+        v_tie_mode := 'earliest';
+    END;
+  END IF;
+
+  IF v_tie_mode = 'latest' THEN
+    RETURN QUERY
+    WITH ganador_por_lote AS (
+      SELECT DISTINCT ON (o.lote_id)
+        o.lote_id,
+        o.user_id AS winner_user_id
+      FROM public.portal_ofertas o
+      ORDER BY o.lote_id, o.monto DESC, o.created_at DESC
+    )
+    SELECT
+      o.id,
+      o.created_at,
+      o.monto,
+      l.id,
+      COALESCE(NULLIF(trim(l.titulo), ''), 'Lote'),
+      r.id,
+      r.titulo,
+      r.estado,
+      CASE
+        WHEN r.estado <> 'cerrado' THEN 'pendiente'
+        WHEN g.winner_user_id = auth.uid() THEN 'ganado'
+        ELSE 'no_ganado'
+      END AS resultado
     FROM public.portal_ofertas o
-    CROSS JOIN cfg
-    ORDER BY
-      o.lote_id,
-      o.monto DESC,
-      CASE WHEN cfg.tie_breaker_mode = 'latest' THEN o.created_at END DESC,
-      CASE WHEN cfg.tie_breaker_mode <> 'latest' THEN o.created_at END ASC
-  )
-  SELECT
-    o.id,
-    o.created_at,
-    o.monto,
-    l.id,
-    COALESCE(NULLIF(trim(l.titulo), ''), 'Lote'),
-    r.id,
-    r.titulo,
-    r.estado,
-    CASE
-      WHEN r.estado <> 'cerrado' THEN 'pendiente'
-      WHEN g.winner_user_id = auth.uid() THEN 'ganado'
-      ELSE 'no_ganado'
-    END AS resultado
-  FROM public.portal_ofertas o
-  JOIN public.portal_remate_lotes l ON l.id = o.lote_id
-  JOIN public.portal_remates r ON r.id = l.remate_id
-  LEFT JOIN ganador_por_lote g ON g.lote_id = l.id
-  WHERE o.user_id = auth.uid()
-  ORDER BY o.created_at DESC;
+    JOIN public.portal_remate_lotes l ON l.id = o.lote_id
+    JOIN public.portal_remates r ON r.id = l.remate_id
+    LEFT JOIN ganador_por_lote g ON g.lote_id = l.id
+    WHERE o.user_id = auth.uid()
+    ORDER BY o.created_at DESC;
+  ELSE
+    RETURN QUERY
+    WITH ganador_por_lote AS (
+      SELECT DISTINCT ON (o.lote_id)
+        o.lote_id,
+        o.user_id AS winner_user_id
+      FROM public.portal_ofertas o
+      ORDER BY o.lote_id, o.monto DESC, o.created_at ASC
+    )
+    SELECT
+      o.id,
+      o.created_at,
+      o.monto,
+      l.id,
+      COALESCE(NULLIF(trim(l.titulo), ''), 'Lote'),
+      r.id,
+      r.titulo,
+      r.estado,
+      CASE
+        WHEN r.estado <> 'cerrado' THEN 'pendiente'
+        WHEN g.winner_user_id = auth.uid() THEN 'ganado'
+        ELSE 'no_ganado'
+      END AS resultado
+    FROM public.portal_ofertas o
+    JOIN public.portal_remate_lotes l ON l.id = o.lote_id
+    JOIN public.portal_remates r ON r.id = l.remate_id
+    LEFT JOIN ganador_por_lote g ON g.lote_id = l.id
+    WHERE o.user_id = auth.uid()
+    ORDER BY o.created_at DESC;
+  END IF;
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.portal_listar_mis_ofertas() FROM PUBLIC;

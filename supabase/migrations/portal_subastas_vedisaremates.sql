@@ -676,6 +676,17 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.portal_place_bid(UUID, NUMERIC, JSONB) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.portal_place_bid(p_lote_id UUID, p_monto NUMERIC)
+RETURNS JSONB
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.portal_place_bid(p_lote_id, p_monto, '{}'::jsonb);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.portal_place_bid(UUID, NUMERIC) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.portal_admin_listar_ofertas_remate(
   p_remate_id UUID,
   p_limit INT DEFAULT 1000
@@ -836,7 +847,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.portal_admin_feed_ofertas_global(INT) TO authenticated;
 
 COMMENT ON TABLE public.portal_remates IS 'Remates/subastas del portal vedisaremates (comparte auth con Tasaciones)';
-COMMENT ON FUNCTION public.portal_place_bid(UUID, NUMERIC) IS 'Registra oferta con bloqueo de fila; cliente autenticado';
+COMMENT ON FUNCTION public.portal_place_bid(UUID, NUMERIC, JSONB) IS 'Registra oferta con bloqueo de fila; cliente autenticado';
+COMMENT ON FUNCTION public.portal_place_bid(UUID, NUMERIC) IS 'Compatibilidad: reenvía a portal_place_bid(UUID, NUMERIC, JSONB).';
 COMMENT ON TABLE public.portal_remates_config IS 'Configuración global de dinámica de ofertas (anti-sniping, extensión de cierre).';
 COMMENT ON FUNCTION public.portal_admin_listar_ofertas_remate(UUID, INT) IS 'Admin: lista ofertas de un remate con nombre, usuario corto, email, monto y fecha.';
 
