@@ -29,6 +29,55 @@ function formatClTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-CL", TZ_CHILE);
 }
 
+type BidMsgTone = "success" | "error" | "info";
+
+function formatBidMessage(raw: string): { text: string; tone: BidMsgTone } {
+  const value = String(raw ?? "").trim();
+  if (!value) return { text: "", tone: "info" };
+
+  const map: Record<string, string> = {
+    ya_eres_mejor_postor: "Ya eres el mejor postor en este lote.",
+    garantia_no_habilitada: "Tu garantía aún no está habilitada para ofertar.",
+    limite_frecuencia_pujas: "Superaste el límite de frecuencia de pujas por minuto.",
+    lote_no_habilitado: "Este lote no está habilitado para recibir ofertas.",
+    monto_invalido: "El monto ingresado no es válido.",
+    remate_no_esta_en_curso: "El remate no está habilitado para ofertar.",
+    remate_ya_finalizo: "Este remate ya finalizó.",
+    remate_aun_no_inicia: "El remate aún no inicia.",
+    debes_iniciar_sesion: "Debes iniciar sesión para ofertar.",
+    remate_no_disponible: "El remate no está disponible en este momento.",
+    lote_no_existe: "El lote seleccionado no existe.",
+  };
+
+  let text = value;
+  for (const [code, label] of Object.entries(map)) {
+    if (value === code || value.startsWith(`${code} `)) {
+      text = value.replace(code, label);
+      break;
+    }
+  }
+
+  if (text === value && text.includes("_")) {
+    text = text.replaceAll("_", " ");
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  const lower = text.toLowerCase();
+  const tone: BidMsgTone =
+    lower.includes("registrada") || lower.includes("activada")
+      ? "success"
+      : lower.includes("no ") ||
+          lower.includes("error") ||
+          lower.includes("invál") ||
+          lower.includes("inval") ||
+          lower.includes("límite") ||
+          lower.includes("limite")
+        ? "error"
+        : "info";
+
+  return { text, tone };
+}
+
 type Props = {
   initialRemate: PortalRemateRow;
   initialLotes: Lote[];
@@ -305,6 +354,7 @@ export function AuctionLiveRoom({
   const canBidNow = canBid && lotCanBid;
   const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
   const isAdminViewer = viewerRole === "admin";
+  const bidMsg = msg ? formatBidMessage(msg) : null;
 
   function setQuickBid(multiplier: number) {
     const safeMult = Math.max(1, Math.round(multiplier));
@@ -525,7 +575,19 @@ export function AuctionLiveRoom({
                         </div>
                       </>
                     )}
-                  {msg ? <p className="mt-3 text-sm text-neutral-700">{msg}</p> : null}
+                  {bidMsg ? (
+                    <div
+                      className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                        bidMsg.tone === "success"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : bidMsg.tone === "error"
+                            ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : "border-sky-200 bg-sky-50 text-sky-700"
+                      }`}
+                    >
+                      {bidMsg.text}
+                    </div>
+                  ) : null}
                   </div>
 
                   <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
