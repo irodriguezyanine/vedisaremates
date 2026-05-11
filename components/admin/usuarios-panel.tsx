@@ -167,6 +167,10 @@ export function UsuariosPanel() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [forceChangeOnCreate, setForceChangeOnCreate] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkRole, setBulkRole] = useState("cliente-remate");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   const [importOpen, setImportOpen] = useState(false);
   const [importFileName, setImportFileName] = useState("");
@@ -485,9 +489,31 @@ export function UsuariosPanel() {
     });
   }, [globalSearch, tabRows]);
 
+  const filteredIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+  const selectedCount = useMemo(() => {
+    let count = 0;
+    for (const id of filteredIds) {
+      if (selectedIds.has(id)) count += 1;
+    }
+    return count;
+  }, [filteredIds, selectedIds]);
+  const allFilteredSelected = filteredIds.length > 0 && selectedCount === filteredIds.length;
+
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, globalSearch]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (activeTab !== "cliente_remate") return new Set();
+      const allowed = new Set(tabRows.map((u) => u.id));
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (allowed.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [activeTab, tabRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / USERS_PER_PAGE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -630,6 +656,160 @@ export function UsuariosPanel() {
     }
   }
 
+  function toggleSelectRow(userId: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered(checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        for (const id of filteredIds) next.add(id);
+      } else {
+        for (const id of filteredIds) next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  async function fetchDetalleUsuario(
+    userId: string,
+    sb: ReturnType<typeof createClient>,
+  ): Promise<{
+    email: string;
+    nombre: string;
+    apellido: string;
+    rut: string;
+    direccion: string;
+    telefono: string;
+    rol: string;
+    mustChangePassword: boolean;
+    garantiaAprobada: boolean;
+  } | null> {
+    if (!sb) return null;
+    const { data, error } = await sb.rpc("portal_admin_get_usuario_detalle", {
+      p_user_id: userId,
+    });
+    if (error) return null;
+    const res = data as
+      | {
+          ok?: boolean;
+          user?: {
+            email?: string | null;
+            nombre?: string | null;
+            apellido?: string | null;
+            rut?: string | null;
+            direccion?: string | null;
+            telefono?: string | null;
+            rol?: string | null;
+            must_change_password?: boolean | null;
+            garantia_aprobada?: boolean | null;
+          };
+        }
+      | null;
+    if (!res?.ok || !res.user) return null;
+    return {
+      email: String(res.user.email ?? "").trim().toLowerCase(),
+      nombre: String(res.user.nombre ?? "").trim(),
+      apellido: String(res.user.apellido ?? "").trim(),
+      rut: String(res.user.rut ?? "").trim(),
+      direccion: String(res.user.direccion ?? "").trim(),
+      telefono: String(res.user.telefono ?? "").trim(),
+      rol: normalizeRoleInput(res.user.rol ?? "usuario"),
+      mustChangePassword: Boolean(res.user.must_change_password),
+      garantiaAprobada: Boolean(res.user.garantia_aprobada),
+    };
+  }
+
+  async function bulkUpdateSelected(patch: { garantiaAprobada?: boolean; rol?: string }) {
+    if (!selectedIds.size || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    setLoadErr(null);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("Servicio no disponible");
+      let updated = 0;
+      let failed = 0;
+      for (const userId of selectedIds) {
+        const detalle = await fetchDetalleUsuario(userId, supabase);
+        if (!detalle) {
+          failed += 1;
+          continue;
+        }
+        const candidates = buildRoleCandidates(patch.rol ?? detalle.rol);
+        let ok = false;
+        for (const candidate of candidates) {
+          const { data, error } = await supabase.rpc("portal_admin_update_usuario", {
+            p_user_id: userId,
+            p_email: detalle.email,
+            p_nombre: detalle.nombre,
+            p_apellido: detalle.apellido,
+            p_rut: detalle.rut,
+            p_direccion: detalle.direccion,
+            p_telefono: detalle.telefono,
+            p_rol: candidate,
+            p_must_change_password: detalle.mustChangePassword,
+            p_garantia_aprobada:
+              patch.garantiaAprobada != null ? patch.garantiaAprobada : detalle.garantiaAprobada,
+          });
+          const res = data as { ok?: boolean; error?: string } | null;
+          if (!error && res?.ok !== false) {
+            ok = true;
+            break;
+          }
+        }
+        if (ok) updated += 1;
+        else failed += 1;
+      }
+      setBulkMsg(`Acción masiva finalizada. Actualizados: ${updated}. Fallidos: ${failed}.`);
+      if (updated > 0) {
+        setSelectedIds(new Set());
+        await load();
+      }
+    } catch (e: unknown) {
+      setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkDeleteSelected() {
+    if (!selectedIds.size || bulkBusy) return;
+    if (!window.confirm(`¿Eliminar ${selectedIds.size} usuarios seleccionados? Esta acción no se puede deshacer.`)) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    setLoadErr(null);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("Servicio no disponible");
+      let deleted = 0;
+      let failed = 0;
+      for (const userId of selectedIds) {
+        const { data, error } = await supabase.rpc("portal_admin_delete_usuario", {
+          p_user_id: userId,
+        });
+        const res = data as { ok?: boolean } | null;
+        if (!error && res?.ok) deleted += 1;
+        else failed += 1;
+      }
+      setBulkMsg(`Eliminación masiva finalizada. Eliminados: ${deleted}. Fallidos: ${failed}.`);
+      if (deleted > 0) {
+        setSelectedIds(new Set());
+        await load();
+      }
+    } catch (e: unknown) {
+      setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const missingDeploy = !isSupabaseConfigured();
 
   if (missingDeploy) {
@@ -712,14 +892,78 @@ export function UsuariosPanel() {
               />
             </label>
           </div>
+          {activeTab === "cliente_remate" ? (
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 text-xs text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={(e) => toggleSelectAllFiltered(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-black/25"
+                  />
+                  Seleccionar todos los filtrados ({filteredRows.length})
+                </label>
+                <span className="text-xs text-neutral-500">Seleccionados: {selectedCount}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={bulkBusy || selectedCount === 0}
+                  onClick={() => void bulkUpdateSelected({ garantiaAprobada: true })}
+                  className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-40"
+                >
+                  Habilitar garantía
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkBusy || selectedCount === 0}
+                  onClick={() => void bulkUpdateSelected({ garantiaAprobada: false })}
+                  className="rounded-lg border border-amber-400/30 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-40"
+                >
+                  Deshabilitar garantía
+                </button>
+                <select
+                  value={bulkRole}
+                  onChange={(e) => setBulkRole(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/25 px-3 py-1.5 text-xs text-white"
+                >
+                  {ADMIN_CREATABLE_ROLES.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={bulkBusy || selectedCount === 0}
+                  onClick={() => void bulkUpdateSelected({ rol: bulkRole })}
+                  className="rounded-lg border border-sky-400/30 px-3 py-1.5 text-xs font-semibold text-sky-200 disabled:opacity-40"
+                >
+                  Cambiar rol masivo
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkBusy || selectedCount === 0}
+                  onClick={() => void bulkDeleteSelected()}
+                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-200 disabled:opacity-40"
+                >
+                  Eliminar seleccionados
+                </button>
+              </div>
+              {bulkMsg ? <p className="mt-2 text-xs text-neutral-400">{bulkMsg}</p> : null}
+            </div>
+          ) : null}
         </div>
         <div className="overflow-x-auto border-t border-white/10">
           <table className="min-w-[640px] w-full border-collapse text-left text-sm">
             <thead className="text-neutral-500">
               <tr>
+                {activeTab === "cliente_remate" ? <th className="px-4 py-2 font-medium">Sel.</th> : null}
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Nombre</th>
                 <th className="px-4 py-2 font-medium">Rol</th>
+                {activeTab === "cliente_remate" ? <th className="px-4 py-2 font-medium">Garantia</th> : null}
                 <th className="px-4 py-2 font-medium">Alta</th>
               </tr>
             </thead>
@@ -731,17 +975,40 @@ export function UsuariosPanel() {
                   onClick={() => void abrirEditorUsuario(u)}
                   title="Haz click para editar usuario"
                 >
+                  {activeTab === "cliente_remate" ? (
+                    <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(u.id)}
+                        onChange={(e) => toggleSelectRow(u.id, e.target.checked)}
+                        className="h-4 w-4 rounded border-white/20 bg-black/25"
+                      />
+                    </td>
+                  ) : null}
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2">{u.nombre}</td>
                   <td className="px-4 py-2">
                     <span className="rounded bg-white/10 px-2 py-0.5 text-xs">{formatRoleLabel(u.rol)}</span>
                   </td>
+                  {activeTab === "cliente_remate" ? (
+                    <td className="px-4 py-2">
+                      {u.garantia_aprobada ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
+                          <span aria-hidden>✔</span> Habilitada
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-500/10 px-2 py-0.5 text-xs text-red-200">
+                          <span aria-hidden>✖</span> No habilitada
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="px-4 py-2 text-neutral-500">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-CL") : "—"}</td>
                 </tr>
               ))}
               {!paginatedRows.length ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={activeTab === "cliente_remate" ? 6 : 4} className="px-4 py-6 text-center text-neutral-500">
                     No hay usuarios para mostrar con los filtros actuales.
                   </td>
                 </tr>

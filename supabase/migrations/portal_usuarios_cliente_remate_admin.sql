@@ -395,6 +395,36 @@ $$;
 REVOKE ALL ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.portal_admin_delete_usuario(
+  p_user_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.auth_user_es_admin_o_sac() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
+  END IF;
+
+  DELETE FROM auth.users
+  WHERE id = p_user_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'usuario_no_encontrado');
+  END IF;
+
+  RETURN jsonb_build_object('ok', true);
+EXCEPTION
+  WHEN foreign_key_violation THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'usuario_con_referencias');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.portal_admin_delete_usuario(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.portal_admin_delete_usuario(UUID) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.portal_listar_mis_ofertas()
 RETURNS TABLE (
   oferta_id UUID,
@@ -501,3 +531,4 @@ COMMENT ON FUNCTION public.portal_update_mi_foto(TEXT) IS 'Usuario autenticado: 
 COMMENT ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) IS 'Admin: fuerza rol en profiles para un usuario existente identificado por email.';
 COMMENT ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) IS 'Admin: obtiene datos completos de un usuario para edición.';
 COMMENT ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN) IS 'Admin/SAC: actualiza email (auth.users), perfil/rol y estado de garantía de un usuario.';
+COMMENT ON FUNCTION public.portal_admin_delete_usuario(UUID) IS 'Admin/SAC: elimina un usuario (auth.users) y su perfil relacionado.';
