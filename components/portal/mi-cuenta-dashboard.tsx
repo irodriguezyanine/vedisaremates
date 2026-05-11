@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 
 import type { PortalMisOfertaRow } from "@/lib/portal-types";
 import { formatClp } from "@/lib/format-clp";
 import { formatRoleLabel } from "@/lib/role-labels";
+import { uploadImageToCloudinary } from "@/lib/cloudinary-upload";
 import { createClient } from "@/lib/supabase/client";
 
 const REMATE_ESTADO: Record<string, string> = {
@@ -19,26 +21,146 @@ function formatRemateEstado(s: string) {
   return REMATE_ESTADO[s] ?? s.replace(/_/g, " ");
 }
 
+function cleanRut(input: string): string {
+  return input.replace(/\./g, "").replace(/-/g, "").toUpperCase().trim();
+}
+
+function formatRut(input: string): string {
+  const cleaned = cleanRut(input);
+  if (cleaned.length <= 1) return cleaned;
+  const body = cleaned.slice(0, -1);
+  const dv = cleaned.slice(-1);
+  const bodyWithDots = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${bodyWithDots}-${dv}`;
+}
+
+function isValidRut(input: string): boolean {
+  const cleaned = cleanRut(input);
+  if (!/^\d{7,8}[0-9K]$/.test(cleaned)) return false;
+  const body = cleaned.slice(0, -1);
+  const dv = cleaned.slice(-1);
+  let sum = 0;
+  let mul = 2;
+  for (let i = body.length - 1; i >= 0; i -= 1) {
+    sum += Number(body[i]) * mul;
+    mul = mul === 7 ? 2 : mul + 1;
+  }
+  const mod = 11 - (sum % 11);
+  const expected = mod === 11 ? "0" : mod === 10 ? "K" : String(mod);
+  return dv === expected;
+}
+
+function passwordStrengthLabel(password: string): { label: string; color: string; width: string } {
+  if (!password) return { label: "Sin definir", color: "bg-neutral-300", width: "w-0" };
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[a-z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  if (score <= 2) return { label: "Baja", color: "bg-rose-500", width: "w-1/4" };
+  if (score === 3) return { label: "Media", color: "bg-amber-500", width: "w-2/4" };
+  if (score === 4) return { label: "Buena", color: "bg-sky-500", width: "w-3/4" };
+  return { label: "Alta", color: "bg-emerald-500", width: "w-full" };
+}
+
+type ToastState = {
+  type: "success" | "error";
+  text: string;
+} | null;
+
 type Props = {
   email: string;
   initialNombre: string | null;
+  initialApellido: string | null;
+  initialRut: string | null;
+  initialDireccion: string | null;
+  initialTelefono: string | null;
+  initialAvatarUrl: string | null;
   initialRol: string | null;
   mustChangePassword: boolean;
 };
 
-export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChangePassword }: Props) {
+export function MiCuentaDashboard({
+  email,
+  initialNombre,
+  initialApellido,
+  initialRut,
+  initialDireccion,
+  initialTelefono,
+  initialAvatarUrl,
+  initialRol,
+  mustChangePassword,
+}: Props) {
   const [nombre, setNombre] = useState(initialNombre ?? "");
-  const [savingNombre, setSavingNombre] = useState(false);
-  const [nombreMsg, setNombreMsg] = useState<string | null>(null);
+  const [apellido, setApellido] = useState(initialApellido ?? "");
+  const [rut, setRut] = useState(initialRut ?? "");
+  const [direccion, setDireccion] = useState(initialDireccion ?? "");
+  const [telefono, setTelefono] = useState(initialTelefono ?? "");
+  const [savingPerfil, setSavingPerfil] = useState(false);
+  const [perfilMsg, setPerfilMsg] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState(email);
+  const [accountPw1, setAccountPw1] = useState("");
+  const [accountPw2, setAccountPw2] = useState("");
+  const [savingSeguridad, setSavingSeguridad] = useState(false);
+  const [seguridadMsg, setSeguridadMsg] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl ?? "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [ofertas, setOfertas] = useState<PortalMisOfertaRow[] | null>(null);
   const [ofertasErr, setOfertasErr] = useState<string | null>(null);
   const [forcePwOpen, setForcePwOpen] = useState(mustChangePassword);
-  const [pw1, setPw1] = useState("");
-  const [pw2, setPw2] = useState("");
+  const [firstLoginPw1, setFirstLoginPw1] = useState("");
+  const [firstLoginPw2, setFirstLoginPw2] = useState("");
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [savingPw, setSavingPw] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
 
   const isClienteRemate = (initialRol ?? "").toLowerCase() === "cliente_remate";
+  const rutIsValid = rut.trim().length === 0 ? true : isValidRut(rut);
+  const mainPasswordStrength = passwordStrengthLabel(accountPw1);
+  const firstLoginPasswordStrength = passwordStrengthLabel(firstLoginPw1);
+  const avatarSource = `${nombre} ${apellido}`.trim() || email;
+  const avatarInitials = avatarSource
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? "")
+    .join("");
+
+  async function guardarFotoPerfil(url: string) {
+    const sb = createClient();
+    if (!sb) {
+      setToast({ type: "error", text: "Servicio temporalmente no disponible." });
+      return;
+    }
+    const { data, error } = await sb.rpc("portal_update_mi_foto", { p_avatar_url: url });
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (error || res?.ok === false) {
+      setToast({ type: "error", text: "No se pudo guardar la foto de perfil." });
+      return;
+    }
+    setToast({ type: "success", text: url ? "Foto de perfil actualizada." : "Foto de perfil eliminada." });
+  }
+
+  async function onSelectAvatar(file: File | null) {
+    if (!file || uploadingAvatar) return;
+    setUploadingAvatar(true);
+    const up = await uploadImageToCloudinary(file, { folder: "vedisa/profile-photos" });
+    if ("error" in up) {
+      setToast({ type: "error", text: up.error });
+      setUploadingAvatar(false);
+      return;
+    }
+    setAvatarUrl(up.secureUrl);
+    await guardarFotoPerfil(up.secureUrl);
+    setUploadingAvatar(false);
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(id);
+  }, [toast]);
 
   const cargarOfertas = useCallback(async () => {
     setOfertasErr(null);
@@ -63,59 +185,151 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
     void cargarOfertas();
   }, [cargarOfertas]);
 
-  async function guardarNombre(ev: React.FormEvent) {
+  async function guardarPerfil(ev: FormEvent) {
     ev.preventDefault();
-    setSavingNombre(true);
-    setNombreMsg(null);
+    setSavingPerfil(true);
+    setPerfilMsg(null);
     const sb = createClient();
     if (!sb) {
-      setNombreMsg("Servicio temporalmente no disponible.");
-      setSavingNombre(false);
+      setPerfilMsg("Servicio temporalmente no disponible.");
+      setToast({ type: "error", text: "Servicio temporalmente no disponible." });
+      setSavingPerfil(false);
       return;
     }
-    const { data, error } = await sb.rpc("portal_update_mi_nombre", { p_nombre: nombre.trim() });
+    if (!rutIsValid) {
+      setPerfilMsg("El RUT ingresado no es válido.");
+      setToast({ type: "error", text: "Revisa el formato/validez del RUT." });
+      setSavingPerfil(false);
+      return;
+    }
+    const { data, error } = await sb.rpc("portal_update_mi_perfil", {
+      p_nombre: nombre.trim(),
+      p_apellido: apellido.trim(),
+      p_rut: rut.trim(),
+      p_direccion: direccion.trim(),
+      p_telefono: telefono.trim(),
+    });
     const res = data as { ok?: boolean; error?: string } | null;
     if (error || res?.ok === false) {
-      setNombreMsg("No pudimos guardar tus datos por ahora. Contactá soporte Vedisa.");
-      setSavingNombre(false);
+      setPerfilMsg("No pudimos guardar tus datos por ahora. Contactá soporte Vedisa.");
+      setToast({ type: "error", text: "No pudimos guardar tu perfil." });
+      setSavingPerfil(false);
       return;
     }
-    setNombreMsg("Datos guardados.");
-    setSavingNombre(false);
+    setPerfilMsg("Perfil actualizado.");
+    setToast({ type: "success", text: "Perfil actualizado correctamente." });
+    setSavingPerfil(false);
   }
 
-  async function guardarNuevaClave(ev: React.FormEvent) {
+  async function guardarSeguridad(ev: FormEvent) {
     ev.preventDefault();
-    setPwMsg(null);
-    if (pw1.length < 6) {
-      setPwMsg("La contraseña debe tener al menos 6 caracteres.");
+    setSeguridadMsg(null);
+    const sb = createClient();
+    if (!sb) {
+      setSeguridadMsg("Servicio temporalmente no disponible.");
+      setToast({ type: "error", text: "Servicio temporalmente no disponible." });
       return;
     }
-    if (pw1 !== pw2) {
+
+    const emailChanged = accountEmail.trim().toLowerCase() !== email.trim().toLowerCase();
+    const passFilled = accountPw1.length > 0 || accountPw2.length > 0;
+
+    if (!emailChanged && !passFilled) {
+      setSeguridadMsg("No hay cambios para guardar.");
+      setToast({ type: "error", text: "No hay cambios en seguridad para guardar." });
+      return;
+    }
+
+    if (passFilled) {
+      if (accountPw1.length < 6) {
+        setSeguridadMsg("La nueva contraseña debe tener al menos 6 caracteres.");
+        setToast({ type: "error", text: "La nueva contraseña es muy corta." });
+        return;
+      }
+      if (accountPw1 !== accountPw2) {
+        setSeguridadMsg("Las contraseñas no coinciden.");
+        setToast({ type: "error", text: "Las contraseñas no coinciden." });
+        return;
+      }
+    }
+
+    setSavingSeguridad(true);
+    if (emailChanged) {
+      const { error: emailError } = await sb.auth.updateUser({ email: accountEmail.trim().toLowerCase() });
+      if (emailError) {
+        setSeguridadMsg("No se pudo actualizar el correo. Revisa si ya existe o inténtalo más tarde.");
+        setToast({ type: "error", text: "No se pudo actualizar el correo." });
+        setSavingSeguridad(false);
+        return;
+      }
+    }
+    if (passFilled) {
+      const { error: passError } = await sb.auth.updateUser({ password: accountPw1 });
+      if (passError) {
+        setSeguridadMsg("No se pudo actualizar la contraseña.");
+        setToast({ type: "error", text: "No se pudo actualizar la contraseña." });
+        setSavingSeguridad(false);
+        return;
+      }
+      const { error: flagErr } = await sb.rpc("portal_mi_cuenta_marcar_clave_actualizada");
+      if (flagErr) {
+        setSeguridadMsg("La contraseña cambió, pero no pudimos cerrar la bandera de primer acceso.");
+        setToast({ type: "error", text: "Contraseña cambiada, pero hubo un error de sincronización." });
+        setSavingSeguridad(false);
+        return;
+      }
+      setForcePwOpen(false);
+    }
+    setAccountPw1("");
+    setAccountPw2("");
+    setSeguridadMsg(emailChanged ? "Seguridad actualizada. Revisa tu correo para confirmar el cambio de email." : "Contraseña actualizada.");
+    setToast({
+      type: "success",
+      text: emailChanged
+        ? "Seguridad actualizada. Revisa tu correo para confirmar el nuevo email."
+        : "Contraseña actualizada correctamente.",
+    });
+    setSavingSeguridad(false);
+  }
+
+  async function guardarClavePrimerIngreso(ev: FormEvent) {
+    ev.preventDefault();
+    setPwMsg(null);
+    if (firstLoginPw1.length < 6) {
+      setPwMsg("La contraseña debe tener al menos 6 caracteres.");
+      setToast({ type: "error", text: "La contraseña debe tener al menos 6 caracteres." });
+      return;
+    }
+    if (firstLoginPw1 !== firstLoginPw2) {
       setPwMsg("Las contraseñas no coinciden.");
+      setToast({ type: "error", text: "Las contraseñas no coinciden." });
       return;
     }
     setSavingPw(true);
     const sb = createClient();
     if (!sb) {
       setPwMsg("Servicio temporalmente no disponible.");
+      setToast({ type: "error", text: "Servicio temporalmente no disponible." });
       setSavingPw(false);
       return;
     }
-    const { error } = await sb.auth.updateUser({ password: pw1 });
+    const { error } = await sb.auth.updateUser({ password: firstLoginPw1 });
     if (error) {
       setPwMsg("No pudimos actualizar la contraseña. Intenta nuevamente.");
+      setToast({ type: "error", text: "No pudimos actualizar la contraseña." });
       setSavingPw(false);
       return;
     }
     const { error: flagErr } = await sb.rpc("portal_mi_cuenta_marcar_clave_actualizada");
     if (flagErr) {
       setPwMsg("La contraseña se actualizó, pero no pudimos cerrar la alerta. Recarga la página.");
+      setToast({ type: "error", text: "Contraseña cambiada, pero hubo un error al cerrar la alerta." });
       setSavingPw(false);
       return;
     }
     setForcePwOpen(false);
     setPwMsg(null);
+    setToast({ type: "success", text: "Contraseña actualizada. Ya puedes usar tu cuenta normalmente." });
     setSavingPw(false);
   }
 
@@ -156,10 +370,23 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
               </h1>
               <p className={`mt-3 max-w-xl text-sm leading-relaxed ${isClienteRemate ? "text-white/80" : "text-neutral-600"}`}>
                 {isClienteRemate
-                  ? "Gestioná tu perfil público y seguí todas las ofertas que hagas en la sala en línea."
-                  : "Actualizá tu nombre visible y revisá tu actividad en los remates."}
+                  ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
+                  : "Administra tus datos de cuenta, seguridad y actividad de remates."}
               </p>
               <div className="mt-6 flex flex-wrap gap-3 text-sm">
+                <span className="relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/15 text-base font-black text-white">
+                  {avatarUrl ? (
+                    <Image
+                      src={avatarUrl}
+                      alt="Foto de perfil"
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    avatarInitials || "VR"
+                  )}
+                </span>
                 <span className={`rounded-xl px-3 py-1.5 font-semibold ${isClienteRemate ? "bg-white/10 text-white" : "bg-neutral-100 text-neutral-800"}`}>
                   {email}
                 </span>
@@ -188,28 +415,167 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
             </div>
           </section>
 
-          <aside className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-neutral-900">Perfil público</h2>
-            <p className="mt-1 text-sm text-neutral-600">Este nombre pueden verlo los operadores cuando revisan las ofertas.</p>
-            <form onSubmit={(e) => void guardarNombre(e)} className="mt-5 space-y-4">
-              <label className="block text-sm font-medium text-neutral-800">
-                Nombre o razón visible
-                <input
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
-                  placeholder="Ej. Ignacio Rodríguez"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={savingNombre}
-                className="w-full rounded-xl bg-[#1a2c4e] py-3 text-sm font-bold text-white transition hover:bg-[#243a62] disabled:opacity-60"
-              >
-                {savingNombre ? "Guardando…" : "Guardar cambios"}
-              </button>
-              {nombreMsg ? <p className="text-sm text-emerald-700">{nombreMsg}</p> : null}
-            </form>
+          <aside className="space-y-6">
+            <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-neutral-900">Datos personales</h2>
+              <p className="mt-1 text-sm text-neutral-600">Actualiza tu perfil completo para operar con información vigente.</p>
+              <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-sm font-semibold text-neutral-800">Foto de perfil</p>
+                <div className="mt-3 flex flex-wrap items-center gap-4">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-full border border-neutral-200 bg-white">
+                    {avatarUrl ? (
+                      <Image
+                        src={avatarUrl}
+                        alt="Foto de perfil actual"
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-lg font-black text-neutral-500">
+                        {avatarInitials || "VR"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="mi-cuenta-avatar"
+                      className="hidden"
+                      onChange={(e) => void onSelectAvatar(e.target.files?.[0] ?? null)}
+                    />
+                    <label
+                      htmlFor="mi-cuenta-avatar"
+                      className="cursor-pointer rounded-lg border border-[#33C7E3]/45 bg-[#33C7E3]/10 px-3 py-2 text-xs font-bold text-[#1a2c4e] hover:bg-[#33C7E3]/20"
+                    >
+                      {uploadingAvatar ? "Subiendo..." : "Subir foto"}
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!avatarUrl || uploadingAvatar}
+                      onClick={() => {
+                        setAvatarUrl("");
+                        void guardarFotoPerfil("");
+                      }}
+                      className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <form onSubmit={(e) => void guardarPerfil(e)} className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-neutral-800">
+                  Nombre
+                  <input
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                    placeholder="Nombre"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-neutral-800">
+                  Apellido
+                  <input
+                    value={apellido}
+                    onChange={(e) => setApellido(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                    placeholder="Apellido"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-neutral-800">
+                  RUT
+                  <input
+                    value={rut}
+                    onChange={(e) => setRut(formatRut(e.target.value))}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                    placeholder="12.345.678-9"
+                  />
+                  {!rutIsValid ? <span className="mt-1 block text-xs text-rose-600">RUT inválido.</span> : null}
+                </label>
+                <label className="block text-sm font-medium text-neutral-800">
+                  Teléfono
+                  <input
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                    placeholder="+56 9 ..."
+                  />
+                </label>
+                <label className="block text-sm font-medium text-neutral-800 sm:col-span-2">
+                  Dirección
+                  <input
+                    value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                    placeholder="Dirección completa"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={savingPerfil}
+                  className="sm:col-span-2 w-full rounded-xl bg-[#1a2c4e] py-3 text-sm font-bold text-white transition hover:bg-[#243a62] disabled:opacity-60"
+                >
+                  {savingPerfil ? "Guardando..." : "Guardar datos personales"}
+                </button>
+                {perfilMsg ? <p className="sm:col-span-2 text-sm text-emerald-700">{perfilMsg}</p> : null}
+              </form>
+            </section>
+
+            <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-neutral-900">Seguridad y acceso</h2>
+              <p className="mt-1 text-sm text-neutral-600">Edita correo de acceso y define una nueva contraseña segura.</p>
+              <form onSubmit={(e) => void guardarSeguridad(e)} className="mt-5 space-y-4">
+                <label className="block text-sm font-medium text-neutral-800">
+                  Correo
+                  <input
+                    type="email"
+                    value={accountEmail}
+                    onChange={(e) => setAccountEmail(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                  />
+                </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-neutral-800">
+                    Nueva contraseña
+                    <input
+                      type="password"
+                      minLength={6}
+                      value={accountPw1}
+                      onChange={(e) => setAccountPw1(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    <div className="mt-2">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                        <div className={`h-full ${mainPasswordStrength.color} ${mainPasswordStrength.width}`} />
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-500">Fortaleza: {mainPasswordStrength.label}</p>
+                    </div>
+                  </label>
+                  <label className="block text-sm font-medium text-neutral-800">
+                    Repetir contraseña
+                    <input
+                      type="password"
+                      minLength={6}
+                      value={accountPw2}
+                      onChange={(e) => setAccountPw2(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/25"
+                      placeholder="Repite la contraseña"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  disabled={savingSeguridad}
+                  className="w-full rounded-xl bg-[#0f1f2c] py-3 text-sm font-bold text-white transition hover:bg-[#1a2c4e] disabled:opacity-60"
+                >
+                  {savingSeguridad ? "Guardando..." : "Guardar seguridad"}
+                </button>
+                {seguridadMsg ? <p className="text-sm text-emerald-700">{seguridadMsg}</p> : null}
+              </form>
+            </section>
           </aside>
         </div>
 
@@ -278,17 +644,23 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
             <p className="mt-2 text-sm text-neutral-300">
               Por seguridad, en tu primer ingreso debes cambiar la contraseña inicial para seguir usando tu cuenta.
             </p>
-            <form onSubmit={(e) => void guardarNuevaClave(e)} className="mt-4 space-y-4">
+            <form onSubmit={(e) => void guardarClavePrimerIngreso(e)} className="mt-4 space-y-4">
               <label className="block text-sm text-neutral-200">
                 Nueva contraseña
                 <input
                   required
                   minLength={6}
                   type="password"
-                  value={pw1}
-                  onChange={(e) => setPw1(e.target.value)}
+                  value={firstLoginPw1}
+                  onChange={(e) => setFirstLoginPw1(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
                 />
+                <div className="mt-2">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full ${firstLoginPasswordStrength.color} ${firstLoginPasswordStrength.width}`} />
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-300">Fortaleza: {firstLoginPasswordStrength.label}</p>
+                </div>
               </label>
               <label className="block text-sm text-neutral-200">
                 Confirmar contraseña
@@ -296,8 +668,8 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
                   required
                   minLength={6}
                   type="password"
-                  value={pw2}
-                  onChange={(e) => setPw2(e.target.value)}
+                  value={firstLoginPw2}
+                  onChange={(e) => setFirstLoginPw2(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
                 />
               </label>
@@ -310,6 +682,19 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChange
                 {savingPw ? "Guardando..." : "Guardar nueva contraseña"}
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+      {toast ? (
+        <div className="fixed right-4 top-4 z-[60]">
+          <div
+            className={`min-w-[280px] max-w-[360px] rounded-xl border px-4 py-3 text-sm shadow-lg ${
+              toast.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-rose-200 bg-rose-50 text-rose-900"
+            }`}
+          >
+            {toast.text}
           </div>
         </div>
       ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ListaUsuarioRow } from "@/lib/portal-types";
 import { ADMIN_CREATABLE_ROLES, formatRoleLabel } from "@/lib/role-labels";
@@ -126,7 +126,7 @@ export function UsuariosPanel() {
     void load();
   }, [load]);
 
-  async function crearUsuario(ev: React.FormEvent<HTMLFormElement>) {
+  async function crearUsuario(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     setCreating(true);
     setLoadErr(null);
@@ -202,7 +202,7 @@ export function UsuariosPanel() {
     }
   }
 
-  async function actualizarPass(ev: React.FormEvent<HTMLFormElement>) {
+  async function actualizarPass(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     if (!pwModal) return;
     const fd = new FormData(ev.currentTarget);
@@ -283,7 +283,7 @@ export function UsuariosPanel() {
     URL.revokeObjectURL(url);
   }
 
-  async function onSelectCsvFile(ev: React.ChangeEvent<HTMLInputElement>) {
+  async function onSelectCsvFile(ev: ChangeEvent<HTMLInputElement>) {
     const f = ev.target.files?.[0];
     if (!f) return;
     const txt = await f.text();

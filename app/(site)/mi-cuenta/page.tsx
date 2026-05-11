@@ -29,7 +29,7 @@ export default async function MiCuentaPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("nombre, rol, must_change_password")
+    .select("nombre, apellido, rut, direccion, telefono, avatar_url, rol, must_change_password")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -37,6 +37,11 @@ export default async function MiCuentaPage() {
     <MiCuentaDashboard
       email={user.email ?? ""}
       initialNombre={profile?.nombre ?? null}
+      initialApellido={profile?.apellido ?? null}
+      initialRut={profile?.rut ?? null}
+      initialDireccion={profile?.direccion ?? null}
+      initialTelefono={profile?.telefono ?? null}
+      initialAvatarUrl={profile?.avatar_url ?? null}
       initialRol={profile?.rol ?? null}
       mustChangePassword={Boolean(profile?.must_change_password)}
     />

@@ -9,6 +9,10 @@ export type CloudinaryConfig = {
   configured: boolean;
 };
 
+type UploadImageOptions = {
+  folder?: string;
+};
+
 export function getPublicCloudinaryConfig(): CloudinaryConfig {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -19,7 +23,10 @@ export function getPublicCloudinaryConfig(): CloudinaryConfig {
   };
 }
 
-export async function uploadImageToCloudinary(file: File): Promise<{ secureUrl: string } | { error: string }> {
+export async function uploadImageToCloudinary(
+  file: File,
+  options?: UploadImageOptions,
+): Promise<{ secureUrl: string } | { error: string }> {
   const { cloudName, uploadPreset, configured } = getPublicCloudinaryConfig();
   if (!configured || !cloudName || !uploadPreset) {
     return { error: "Cloudinary no está configurado en el proyecto (cloud name y upload preset públicos)." };
@@ -27,7 +34,7 @@ export async function uploadImageToCloudinary(file: File): Promise<{ secureUrl: 
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", uploadPreset);
-  formData.append("folder", "vedisa/home-hero");
+  formData.append("folder", options?.folder?.trim() || "vedisa/home-hero");
 
   try {
     const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
