@@ -5,6 +5,7 @@ export type ListaUsuarioRow = {
   nombre: string | null;
   rol: string | null;
   created_at: string | null;
+  must_change_password?: boolean | null;
 };
 
 export type PortalRemateRow = {
@@ -50,6 +51,7 @@ export type PortalMisOfertaRow = {
   remate_id: string;
   remate_titulo: string;
   remate_estado: string;
+  resultado: "ganado" | "no_ganado" | "pendiente";
 };
 
 /** Inventario Tasaciones Vedisa: columnas comunes; el resto llega como Record */

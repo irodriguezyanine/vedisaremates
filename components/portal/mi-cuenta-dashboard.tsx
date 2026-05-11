@@ -23,14 +23,20 @@ type Props = {
   email: string;
   initialNombre: string | null;
   initialRol: string | null;
+  mustChangePassword: boolean;
 };
 
-export function MiCuentaDashboard({ email, initialNombre, initialRol }: Props) {
+export function MiCuentaDashboard({ email, initialNombre, initialRol, mustChangePassword }: Props) {
   const [nombre, setNombre] = useState(initialNombre ?? "");
   const [savingNombre, setSavingNombre] = useState(false);
   const [nombreMsg, setNombreMsg] = useState<string | null>(null);
   const [ofertas, setOfertas] = useState<PortalMisOfertaRow[] | null>(null);
   const [ofertasErr, setOfertasErr] = useState<string | null>(null);
+  const [forcePwOpen, setForcePwOpen] = useState(mustChangePassword);
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [savingPw, setSavingPw] = useState(false);
 
   const isClienteRemate = (initialRol ?? "").toLowerCase() === "cliente_remate";
 
@@ -76,6 +82,51 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol }: Props) {
     }
     setNombreMsg("Datos guardados.");
     setSavingNombre(false);
+  }
+
+  async function guardarNuevaClave(ev: React.FormEvent) {
+    ev.preventDefault();
+    setPwMsg(null);
+    if (pw1.length < 6) {
+      setPwMsg("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (pw1 !== pw2) {
+      setPwMsg("Las contraseñas no coinciden.");
+      return;
+    }
+    setSavingPw(true);
+    const sb = createClient();
+    if (!sb) {
+      setPwMsg("Servicio temporalmente no disponible.");
+      setSavingPw(false);
+      return;
+    }
+    const { error } = await sb.auth.updateUser({ password: pw1 });
+    if (error) {
+      setPwMsg("No pudimos actualizar la contraseña. Intenta nuevamente.");
+      setSavingPw(false);
+      return;
+    }
+    const { error: flagErr } = await sb.rpc("portal_mi_cuenta_marcar_clave_actualizada");
+    if (flagErr) {
+      setPwMsg("La contraseña se actualizó, pero no pudimos cerrar la alerta. Recarga la página.");
+      setSavingPw(false);
+      return;
+    }
+    setForcePwOpen(false);
+    setPwMsg(null);
+    setSavingPw(false);
+  }
+
+  function renderResultado(resultado: PortalMisOfertaRow["resultado"]) {
+    if (resultado === "ganado") {
+      return <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Ganado</span>;
+    }
+    if (resultado === "no_ganado") {
+      return <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">No ganado</span>;
+    }
+    return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Pendiente</span>;
   }
 
   return (
@@ -188,6 +239,7 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol }: Props) {
                     <th className="px-4 py-3">Lote</th>
                     <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Monto</th>
+                    <th className="px-4 py-3">Resultado</th>
                     <th className="px-6 py-3 sm:px-8" />
                   </tr>
                 </thead>
@@ -205,6 +257,7 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol }: Props) {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums text-neutral-900">{formatClp(o.monto)}</td>
+                      <td className="px-4 py-4">{renderResultado(o.resultado)}</td>
                       <td className="px-6 py-4 sm:px-8">
                         <Link href={`/subastas/${o.remate_id}`} className="text-xs font-bold text-[#009ade] hover:underline">
                           Ver sala →
@@ -218,6 +271,48 @@ export function MiCuentaDashboard({ email, initialNombre, initialRol }: Props) {
           ) : null}
         </section>
       </div>
+      {forcePwOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#141c28] p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-white">Actualiza tu contraseña</h2>
+            <p className="mt-2 text-sm text-neutral-300">
+              Por seguridad, en tu primer ingreso debes cambiar la contraseña inicial para seguir usando tu cuenta.
+            </p>
+            <form onSubmit={(e) => void guardarNuevaClave(e)} className="mt-4 space-y-4">
+              <label className="block text-sm text-neutral-200">
+                Nueva contraseña
+                <input
+                  required
+                  minLength={6}
+                  type="password"
+                  value={pw1}
+                  onChange={(e) => setPw1(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                />
+              </label>
+              <label className="block text-sm text-neutral-200">
+                Confirmar contraseña
+                <input
+                  required
+                  minLength={6}
+                  type="password"
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                />
+              </label>
+              {pwMsg ? <p className="text-sm text-amber-300">{pwMsg}</p> : null}
+              <button
+                type="submit"
+                disabled={savingPw}
+                className="w-full rounded-lg bg-[#33C7E3] px-4 py-2 text-sm font-bold text-[#0f1f2c] disabled:opacity-60"
+              >
+                {savingPw ? "Guardando..." : "Guardar nueva contraseña"}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

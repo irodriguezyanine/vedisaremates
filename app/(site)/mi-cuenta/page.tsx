@@ -27,9 +27,18 @@ export default async function MiCuentaPage() {
     redirect(`/ingreso?redirect=${encodeURIComponent("/mi-cuenta")}`);
   }
 
-  const { data: profile } = await supabase.from("profiles").select("nombre, rol").eq("id", user.id).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nombre, rol, must_change_password")
+    .eq("id", user.id)
+    .maybeSingle();
 
   return (
-    <MiCuentaDashboard email={user.email ?? ""} initialNombre={profile?.nombre ?? null} initialRol={profile?.rol ?? null} />
+    <MiCuentaDashboard
+      email={user.email ?? ""}
+      initialNombre={profile?.nombre ?? null}
+      initialRol={profile?.rol ?? null}
+      mustChangePassword={Boolean(profile?.must_change_password)}
+    />
   );
 }

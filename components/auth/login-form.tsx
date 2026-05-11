@@ -31,6 +31,21 @@ export function LoginForm() {
         setError(signErr.message);
         return;
       }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("must_change_password")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.must_change_password) {
+          router.refresh();
+          router.push("/mi-cuenta");
+          return;
+        }
+      }
       router.refresh();
       router.push(redirect.startsWith("/") ? redirect : "/subastas");
     } finally {

@@ -4,7 +4,10 @@ const MAP: Record<string, string> = {
   admin: "Administrador",
   usuario: "Usuario",
   cliente_remate: "Cliente–Remate",
-  Cliente_empresa: "Cliente empresa",
+  cliente_empresa: "Cliente empresa",
+  transportista: "Transportista",
+  bodega: "Bodega",
+  sac: "SAC",
 };
 
 export function formatRoleLabel(rol: string | null | undefined): string {
@@ -16,5 +19,10 @@ export function formatRoleLabel(rol: string | null | undefined): string {
 
 export const ADMIN_CREATABLE_ROLES = [
   { value: "cliente_remate" as const, label: "Cliente–Remate (oferta en remates)" },
+  { value: "cliente_empresa" as const, label: "Cliente empresa" },
+  { value: "transportista" as const, label: "Transportista" },
+  { value: "bodega" as const, label: "Bodega" },
+  { value: "sac" as const, label: "SAC" },
+  { value: "admin" as const, label: "Administrador" },
   { value: "usuario" as const, label: "Usuario estándar" },
 ];
