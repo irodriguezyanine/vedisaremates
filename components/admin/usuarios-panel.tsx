@@ -9,7 +9,6 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type TabKey = "staff" | "cliente_remate";
-type FilterColumn = "email" | "nombre" | "rol" | "created_at";
 
 type ImportRow = {
   nombre: string;
@@ -33,13 +32,6 @@ type EditUserForm = {
 
 const USERS_PER_PAGE = 20;
 const IMPORT_CONCURRENCY = 12;
-
-const FILTER_COLUMN_LABEL: Record<FilterColumn, string> = {
-  email: "Email",
-  nombre: "Nombre",
-  rol: "Rol",
-  created_at: "Fecha alta",
-};
 
 function friendlyCreateError(raw: string): string {
   const s = raw.toLowerCase();
@@ -91,14 +83,6 @@ function buildRoleCandidates(rol: string | null | undefined): string[] {
 function isClienteRemate(rol: string | null | undefined): boolean {
   const value = normalize(rol);
   return value === "cliente_remate" || value === "cliente-remate" || value === "cliente remate";
-}
-
-function rowColumnValue(u: ListaUsuarioRow, col: FilterColumn): string {
-  if (col === "email") return u.email ?? "";
-  if (col === "nombre") return u.nombre ?? "";
-  if (col === "rol") return formatRoleLabel(u.rol);
-  if (!u.created_at) return "";
-  return new Date(u.created_at).toLocaleDateString("es-CL");
 }
 
 function csvSafe(text: string): string {
@@ -181,8 +165,6 @@ export function UsuariosPanel() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("staff");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [filterColumn, setFilterColumn] = useState<FilterColumn>("email");
-  const [columnSearch, setColumnSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [forceChangeOnCreate, setForceChangeOnCreate] = useState(true);
 
@@ -489,7 +471,6 @@ export function UsuariosPanel() {
 
   const filteredRows = useMemo(() => {
     const g = normalize(globalSearch);
-    const c = normalize(columnSearch);
     return tabRows.filter((u) => {
       const allCols = [
         u.email ?? "",
@@ -500,15 +481,13 @@ export function UsuariosPanel() {
         .join(" | ")
         .toLowerCase();
       const globalOk = !g || normalize(allCols).includes(g);
-      const colValue = normalize(rowColumnValue(u, filterColumn));
-      const colOk = !c || colValue.includes(c);
-      return globalOk && colOk;
+      return globalOk;
     });
-  }, [columnSearch, filterColumn, globalSearch, tabRows]);
+  }, [globalSearch, tabRows]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, globalSearch, filterColumn, columnSearch]);
+  }, [activeTab, globalSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / USERS_PER_PAGE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -723,35 +702,12 @@ export function UsuariosPanel() {
             </button>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <label className="text-sm md:col-span-2">
+            <label className="text-sm md:col-span-3">
               <span className="block text-neutral-400">Buscador en cualquier columna</span>
               <input
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 placeholder="Buscar por email, nombre, rol o fecha..."
-                className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="block text-neutral-400">Filtrar columna</span>
-              <select
-                value={filterColumn}
-                onChange={(e) => setFilterColumn(e.target.value as FilterColumn)}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
-              >
-                {Object.entries(FILTER_COLUMN_LABEL).map(([k, lbl]) => (
-                  <option key={k} value={k}>
-                    {lbl}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm md:col-span-3">
-              <span className="block text-neutral-400">Texto para columna seleccionada</span>
-              <input
-                value={columnSearch}
-                onChange={(e) => setColumnSearch(e.target.value)}
-                placeholder={`Filtrar por ${FILTER_COLUMN_LABEL[filterColumn].toLowerCase()}...`}
                 className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
               />
             </label>
