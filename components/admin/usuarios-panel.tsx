@@ -831,16 +831,28 @@ export function UsuariosPanel() {
           <button
             type="button"
             onClick={exportFilteredCsv}
-            className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-neutral-200 hover:bg-white/5"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 text-neutral-200 transition hover:bg-white/5"
+            aria-label="Descargar lista filtrada"
+            title="Descargar lista filtrada"
           >
-            Descargar lista filtrada
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M12 3v10" strokeLinecap="round" />
+              <path d="m7 10 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 19h16" strokeLinecap="round" />
+            </svg>
           </button>
           <button
             type="button"
             onClick={() => setImportOpen(true)}
-            className="rounded-lg border border-[#33C7E3]/40 px-3 py-2 text-sm font-semibold text-[#33C7E3] hover:bg-[#33C7E3]/10"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#33C7E3]/40 text-[#33C7E3] transition hover:bg-[#33C7E3]/10"
+            aria-label="Importar CSV"
+            title="Importar CSV"
           >
-            Importar CSV
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M12 21V11" strokeLinecap="round" />
+              <path d="m17 14-5-5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 5h16" strokeLinecap="round" />
+            </svg>
           </button>
           <button
             type="button"

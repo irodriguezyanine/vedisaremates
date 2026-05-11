@@ -448,8 +448,6 @@ export function AuctionLiveRoom({
         <p className="text-neutral-600">Este remate aún no tiene lotes publicados.</p>
       ) : (
         <div className="space-y-5 sm:space-y-6">
-          <AuctionLotesCarousel compact lotes={lotes} activeId={activeId} onSelect={setActiveId} />
-
           {active ? (
             <>
               <div className="space-y-1 border-b border-neutral-100 pb-4">
@@ -650,6 +648,8 @@ export function AuctionLiveRoom({
                 </div>
               </aside>
             </div>
+
+              <AuctionLotesCarousel compact lotes={lotes} activeId={activeId} onSelect={setActiveId} />
             </>
           ) : null}
         </div>
