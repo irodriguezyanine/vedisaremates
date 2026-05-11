@@ -141,14 +141,14 @@ SET search_path = public
 AS $$
 DECLARE
   v_uid UUID;
-  v_rol TEXT := lower(trim(p_rol));
+  v_rol TEXT := replace(lower(trim(p_rol)), '_', '-');
   v_rows INTEGER := 0;
 BEGIN
   IF NOT public.auth_user_es_admin() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
   END IF;
 
-  IF v_rol NOT IN ('cliente_remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
+  IF v_rol NOT IN ('cliente-remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
     RETURN jsonb_build_object('ok', false, 'error', 'rol_invalido');
   END IF;
 
@@ -249,7 +249,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_email TEXT := lower(trim(COALESCE(p_email, '')));
-  v_rol TEXT := lower(trim(COALESCE(p_rol, '')));
+  v_rol TEXT := replace(lower(trim(COALESCE(p_rol, ''))), '_', '-');
 BEGIN
   IF NOT public.auth_user_es_admin() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
@@ -259,7 +259,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'email_invalido');
   END IF;
 
-  IF v_rol NOT IN ('cliente_remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
+  IF v_rol NOT IN ('cliente-remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
     RETURN jsonb_build_object('ok', false, 'error', 'rol_invalido');
   END IF;
 

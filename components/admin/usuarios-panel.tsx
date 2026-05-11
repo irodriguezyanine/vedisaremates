@@ -69,8 +69,16 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+function normalizeRoleInput(rol: string | null | undefined): string {
+  const value = normalize(rol);
+  if (!value) return "usuario";
+  if (value === "cliente_remate") return "cliente-remate";
+  return value;
+}
+
 function isClienteRemate(rol: string | null | undefined): boolean {
-  return normalize(rol) === "cliente_remate";
+  const value = normalize(rol);
+  return value === "cliente_remate" || value === "cliente-remate";
 }
 
 function rowColumnValue(u: ListaUsuarioRow, col: FilterColumn): string {
@@ -156,7 +164,7 @@ export function UsuariosPanel() {
   const [importOpen, setImportOpen] = useState(false);
   const [importFileName, setImportFileName] = useState("");
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
-  const [importRole, setImportRole] = useState("cliente_remate");
+  const [importRole, setImportRole] = useState("cliente-remate");
   const [importing, setImporting] = useState(false);
   const [importPassword, setImportPassword] = useState("Vedisa");
   const [importResult, setImportResult] = useState<{
@@ -200,7 +208,7 @@ export function UsuariosPanel() {
     const telefono = String(fd.get("telefono") ?? "").trim();
     const direccion = String(fd.get("direccion") ?? "").trim();
     const empresa = String(fd.get("empresa") ?? "").trim();
-    const rol = String(fd.get("rol") ?? "cliente_remate").trim() || "cliente_remate";
+    const rol = normalizeRoleInput(String(fd.get("rol") ?? "cliente-remate"));
 
     if (password !== password2) {
       setLoadErr("Las contraseñas no coinciden.");
@@ -277,7 +285,7 @@ export function UsuariosPanel() {
       rut: "",
       direccion: "",
       telefono: "",
-      rol: row.rol ?? "usuario",
+      rol: normalizeRoleInput(row.rol ?? "usuario"),
       mustChangePassword: Boolean(row.must_change_password),
       password: "",
     };
@@ -317,7 +325,7 @@ export function UsuariosPanel() {
           rut: (res.user?.rut ?? "").trim(),
           direccion: (res.user?.direccion ?? "").trim(),
           telefono: (res.user?.telefono ?? "").trim(),
-          rol: (res.user?.rol ?? curr.rol ?? "usuario").trim() || "usuario",
+          rol: normalizeRoleInput(res.user?.rol ?? curr.rol ?? "usuario"),
           mustChangePassword: Boolean(res.user?.must_change_password),
         };
       });
@@ -342,7 +350,7 @@ export function UsuariosPanel() {
         p_rut: editModal.rut.trim(),
         p_direccion: editModal.direccion.trim(),
         p_telefono: editModal.telefono.trim(),
-        p_rol: editModal.rol,
+        p_rol: normalizeRoleInput(editModal.rol),
         p_must_change_password: editModal.mustChangePassword,
       };
       const { data, error } = await supabase.rpc("portal_admin_update_usuario", payload);
@@ -848,7 +856,7 @@ export function UsuariosPanel() {
                 </label>
                 <label className="text-sm sm:col-span-2">
                   <span className="block text-neutral-400">Tipo de usuario</span>
-                  <select name="rol" required defaultValue="cliente_remate" className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white">
+                  <select name="rol" required defaultValue="cliente-remate" className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white">
                     {ADMIN_CREATABLE_ROLES.map((r) => (
                       <option key={r.value} value={r.value}>
                         {r.label}
