@@ -142,6 +142,7 @@ AS $$
 DECLARE
   v_uid UUID;
   v_rol TEXT := lower(trim(p_rol));
+  v_rows INTEGER := 0;
 BEGIN
   IF NOT public.auth_user_es_admin() THEN
     RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
@@ -164,6 +165,11 @@ BEGIN
   UPDATE public.profiles
   SET rol = v_rol
   WHERE id = v_uid;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+
+  IF v_rows = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'perfil_no_encontrado');
+  END IF;
 
   RETURN jsonb_build_object('ok', true);
 END;

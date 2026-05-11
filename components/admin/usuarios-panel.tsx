@@ -44,6 +44,12 @@ function normalize(v: unknown): string {
     .trim();
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function isClienteRemate(rol: string | null | undefined): boolean {
   return normalize(rol) === "cliente_remate";
 }
@@ -87,14 +93,30 @@ async function markPasswordChangeRequired(email: string, sb = createClient()) {
 
 async function forceRoleByEmail(email: string, rol: string, sb = createClient()): Promise<void> {
   if (!sb) throw new Error("Servicio no disponible");
-  const { data, error } = await sb.rpc("portal_admin_set_user_role_by_email", {
-    p_email: email,
-    p_rol: rol,
-  });
-  const res = data as { ok?: boolean; error?: string } | null;
-  if (error || res?.ok === false) {
-    throw new Error("No se pudo asignar el rol solicitado al usuario.");
+  let lastError = "No se pudo asignar el rol solicitado al usuario.";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data, error } = await sb.rpc("portal_admin_set_user_role_by_email", {
+      p_email: email,
+      p_rol: rol,
+    });
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (!error && res?.ok !== false) return;
+
+    const errCode = normalize(res?.error ?? error?.message ?? "");
+    if (errCode.includes("sin_permiso")) lastError = "Tu sesión no tiene permisos de administrador para asignar roles.";
+    else if (errCode.includes("rol_invalido")) lastError = "El rol seleccionado no es válido.";
+    else if (errCode.includes("perfil_no_encontrado") || errCode.includes("usuario_no_encontrado")) {
+      lastError = "El perfil todavía no está listo para asignar rol. Reintentando...";
+      await sleep(300 * (attempt + 1));
+      continue;
+    } else {
+      lastError = "No se pudo asignar el rol solicitado al usuario.";
+    }
+    if (attempt < 4) {
+      await sleep(250 * (attempt + 1));
+    }
   }
+  throw new Error(lastError);
 }
 
 export function UsuariosPanel() {
@@ -644,6 +666,7 @@ export function UsuariosPanel() {
                 Cerrar
               </button>
             </div>
+            {loadErr ? <p className="mx-5 mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 sm:mx-6">{loadErr}</p> : null}
             <form onSubmit={(e) => void crearUsuario(e)} className="flex min-h-0 flex-1 flex-col">
               <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 sm:grid-cols-2 sm:px-6">
                 <label className="text-sm">
@@ -722,6 +745,7 @@ export function UsuariosPanel() {
                 Cerrar
               </button>
             </div>
+            {loadErr ? <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{loadErr}</p> : null}
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="text-sm sm:col-span-2">
