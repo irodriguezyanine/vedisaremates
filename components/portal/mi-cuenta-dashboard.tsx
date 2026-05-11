@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 import type { PortalMisOfertaRow } from "@/lib/portal-types";
 import { formatClp } from "@/lib/format-clp";
-import { formatRoleLabel } from "@/lib/role-labels";
 import { uploadImageToCloudinary } from "@/lib/cloudinary-upload";
 import { createClient } from "@/lib/supabase/client";
 
@@ -114,6 +113,9 @@ export function MiCuentaDashboard({
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [savingPw, setSavingPw] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isClienteRemate = ["cliente_remate", "cliente-remate", "cliente remate"].includes((initialRol ?? "").toLowerCase());
   const rutIsValid = rut.trim().length === 0 ? true : isValidRut(rut);
@@ -155,6 +157,18 @@ export function MiCuentaDashboard({
     await guardarFotoPerfil(up.secureUrl);
     setUploadingAvatar(false);
   }
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    function onClickOutside(ev: MouseEvent) {
+      const target = ev.target as Node | null;
+      if (!target) return;
+      if (avatarMenuRef.current?.contains(target)) return;
+      setAvatarMenuOpen(false);
+    }
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [avatarMenuOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -357,7 +371,7 @@ export function MiCuentaDashboard({
         </Link>
 
         <section
-          className={`mt-6 relative overflow-hidden rounded-3xl border p-8 shadow-sm ${
+          className={`mt-6 relative overflow-hidden rounded-3xl border p-6 sm:p-7 shadow-sm ${
             isClienteRemate
               ? "border-[#33C7E3]/35 bg-gradient-to-br from-[#1a2c4e] via-[#1e3a52] to-[#0f1f2c] text-white"
               : "border-neutral-200 bg-white text-neutral-900"
@@ -366,55 +380,90 @@ export function MiCuentaDashboard({
           {isClienteRemate ? (
             <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#33C7E3]/20 blur-3xl" aria-hidden />
           ) : null}
-          <div className="relative">
-            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isClienteRemate ? "text-[#33C7E3]" : "text-[#009ade]"}`}>
-              Tu espacio
-            </p>
-            <h1 className={`mt-2 text-3xl font-black ${isClienteRemate ? "text-white" : "text-neutral-900"}`}>
-              {isClienteRemate ? "Cliente remate" : "Mi cuenta"}
-            </h1>
-            <p className={`mt-3 max-w-2xl text-sm leading-relaxed ${isClienteRemate ? "text-white/80" : "text-neutral-600"}`}>
-              {isClienteRemate
-                ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
-                : "Administra tus datos de cuenta, seguridad y actividad de remates."}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3 text-sm">
-              <span className="relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/15 text-base font-black text-white">
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isClienteRemate ? "text-[#33C7E3]" : "text-[#009ade]"}`}>
+                Tu espacio
+              </p>
+              <h1 className={`mt-2 text-3xl font-black ${isClienteRemate ? "text-white" : "text-neutral-900"}`}>
+                {isClienteRemate ? "Cliente remate" : "Mi cuenta"}
+              </h1>
+              <p className={`mt-3 max-w-2xl text-sm leading-relaxed ${isClienteRemate ? "text-white/80" : "text-neutral-600"}`}>
+                {isClienteRemate
+                  ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
+                  : "Administra tus datos de cuenta, seguridad y actividad de remates."}
+              </p>
+              {!isClienteRemate && (initialRol ?? "").toLowerCase() === "admin" ? (
+                <div className="mt-6">
+                  <Link
+                    href="/admin"
+                    className="inline-flex items-center justify-center rounded-xl border border-neutral-300 px-5 py-3 text-sm font-bold text-neutral-900 hover:bg-neutral-50"
+                  >
+                    Panel administración
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+            <div className="relative shrink-0" ref={avatarMenuRef}>
+              <button
+                type="button"
+                onClick={() => setAvatarMenuOpen((v) => !v)}
+                className={`relative inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border text-base font-black ${
+                  isClienteRemate
+                    ? "border-white/30 bg-white/10 text-white hover:bg-white/20"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                }`}
+                title="Opciones de foto de perfil"
+              >
                 {avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt="Foto de perfil"
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
+                  <Image src={avatarUrl} alt="Foto de perfil" fill sizes="64px" className="object-cover" />
                 ) : (
                   avatarInitials || "VR"
                 )}
-              </span>
-              <span className={`rounded-xl px-3 py-1.5 font-semibold ${isClienteRemate ? "bg-white/10 text-white" : "bg-neutral-100 text-neutral-800"}`}>
-                {email}
-              </span>
-              <span className={`rounded-xl px-3 py-1.5 ${isClienteRemate ? "bg-[#FFC600]/20 text-[#FFC600]" : "bg-[#e8f4fc] text-[#1a2c4e]"}`}>
-                {formatRoleLabel(initialRol)}
-              </span>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/subastas"
-                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] px-5 py-3 text-sm font-bold text-[#0f1f2c] shadow-md hover:brightness-105"
-              >
-                Ir a sala de remates
-              </Link>
-              {(initialRol ?? "").toLowerCase() === "admin" ? (
-                <Link
-                  href="/admin"
-                  className={`inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-bold ${
-                    isClienteRemate ? "border-white/30 text-white hover:bg-white/10" : "border-neutral-300 text-neutral-900 hover:bg-neutral-50"
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void onSelectAvatar(e.target.files?.[0] ?? null)}
+              />
+              {avatarMenuOpen ? (
+                <div
+                  className={`absolute right-0 z-20 mt-2 w-52 rounded-xl border shadow-lg ${
+                    isClienteRemate
+                      ? "border-white/20 bg-[#0f1f2c] text-white"
+                      : "border-neutral-200 bg-white text-neutral-900"
                   }`}
                 >
-                  Panel administración
-                </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      avatarInputRef.current?.click();
+                      setAvatarMenuOpen(false);
+                    }}
+                    className={`block w-full px-3 py-2 text-left text-sm ${
+                      isClienteRemate ? "hover:bg-white/10" : "hover:bg-neutral-50"
+                    }`}
+                  >
+                    {uploadingAvatar ? "Subiendo..." : avatarUrl ? "Cambiar foto" : "Subir foto"}
+                  </button>
+                  {avatarUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarUrl("");
+                        void guardarFotoPerfil("");
+                        setAvatarMenuOpen(false);
+                      }}
+                      className={`block w-full px-3 py-2 text-left text-sm ${
+                        isClienteRemate ? "text-rose-200 hover:bg-white/10" : "text-rose-600 hover:bg-neutral-50"
+                      }`}
+                    >
+                      Eliminar foto
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -452,52 +501,6 @@ export function MiCuentaDashboard({
             <section id="mi-cuenta-tu-espacio" className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-bold text-neutral-900">Tu espacio</h2>
               <p className="mt-1 text-sm text-neutral-600">Actualiza tu perfil completo para operar con información vigente.</p>
-              <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-                <p className="text-sm font-semibold text-neutral-800">Foto de perfil</p>
-                <div className="mt-3 flex flex-wrap items-center gap-4">
-                  <div className="relative h-20 w-20 overflow-hidden rounded-full border border-neutral-200 bg-white">
-                    {avatarUrl ? (
-                      <Image
-                        src={avatarUrl}
-                        alt="Foto de perfil actual"
-                        fill
-                        sizes="80px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-lg font-black text-neutral-500">
-                        {avatarInitials || "VR"}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      id="mi-cuenta-avatar"
-                      className="hidden"
-                      onChange={(e) => void onSelectAvatar(e.target.files?.[0] ?? null)}
-                    />
-                    <label
-                      htmlFor="mi-cuenta-avatar"
-                      className="cursor-pointer rounded-lg border border-[#33C7E3]/45 bg-[#33C7E3]/10 px-3 py-2 text-xs font-bold text-[#1a2c4e] hover:bg-[#33C7E3]/20"
-                    >
-                      {uploadingAvatar ? "Subiendo..." : "Subir foto"}
-                    </label>
-                    <button
-                      type="button"
-                      disabled={!avatarUrl || uploadingAvatar}
-                      onClick={() => {
-                        setAvatarUrl("");
-                        void guardarFotoPerfil("");
-                      }}
-                      className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
-                    >
-                      Quitar
-                    </button>
-                  </div>
-                </div>
-              </div>
               <form onSubmit={(e) => void guardarPerfil(e)} className="mt-5 grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium text-neutral-800">
                   Nombre
