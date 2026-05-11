@@ -35,6 +35,17 @@ export function OfertasPanel() {
   const [filterAlerta, setFilterAlerta] = useState<"all" | "si" | "no">("all");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [visibleCols, setVisibleCols] = useState({
+    fecha: true,
+    remateLote: true,
+    cliente: true,
+    usuario: true,
+    email: true,
+    oferta: true,
+    tipo: true,
+    alerta: true,
+  });
   const [kpis, setKpis] = useState<{
     remates_activos: number;
     lotes_activos: number;
@@ -119,6 +130,25 @@ export function OfertasPanel() {
     hasta,
   ]);
 
+  const activeFilterCount = useMemo(() => {
+    return [
+      search,
+      filterRemate,
+      filterLote,
+      filterCliente,
+      filterUsuario,
+      filterEmail,
+      filterTipo !== "all" ? "1" : "",
+      filterAlerta !== "all" ? "1" : "",
+      desde,
+      hasta,
+    ].filter((v) => String(v).trim().length > 0).length;
+  }, [search, filterRemate, filterLote, filterCliente, filterUsuario, filterEmail, filterTipo, filterAlerta, desde, hasta]);
+
+  function toggleColumn(col: keyof typeof visibleCols, checked: boolean) {
+    setVisibleCols((prev) => ({ ...prev, [col]: checked }));
+  }
+
   function exportCsv() {
     const lines = [
       "Fecha;Remate;Lote;Cliente;Usuario;Email;Monto;Auto;Sospechosa;Motivo",
@@ -200,6 +230,17 @@ export function OfertasPanel() {
           <button type="button" onClick={() => void load()} className="rounded border border-white/20 px-3 py-2 text-sm text-neutral-200 hover:bg-white/5">
             Actualizar
           </button>
+          <button
+            type="button"
+            onClick={() => setShowFilterPanel((v) => !v)}
+            className="inline-flex items-center gap-2 rounded border border-white/20 px-3 py-2 text-sm text-neutral-100 hover:bg-white/5"
+          >
+            <span aria-hidden>☰</span>
+            Filtros
+            {activeFilterCount > 0 ? (
+              <span className="rounded-full bg-[#33C7E3] px-2 py-0.5 text-xs font-bold text-[#0f1f2c]">{activeFilterCount}</span>
+            ) : null}
+          </button>
           <button type="button" onClick={exportCsv} className="rounded bg-[#33C7E3] px-3 py-2 text-sm font-bold text-[#0f1f2c]">
             Exportar acta CSV
           </button>
@@ -221,71 +262,93 @@ export function OfertasPanel() {
 
       {err ? <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p> : null}
 
-      <label className="block text-sm">
-        <span className="text-neutral-400">Buscar</span>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mt-1 w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-white"
-          placeholder="Remate, lote, cliente, usuario o email…"
-        />
-      </label>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <input value={filterRemate} onChange={(e) => setFilterRemate(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Remate" />
-        <input value={filterLote} onChange={(e) => setFilterLote(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Lote" />
-        <input value={filterCliente} onChange={(e) => setFilterCliente(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Cliente" />
-        <input value={filterUsuario} onChange={(e) => setFilterUsuario(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Usuario" />
-        <input value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Email" />
-        <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value as typeof filterTipo)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
-          <option value="all">Tipo: todos</option>
-          <option value="manual">Tipo: manual</option>
-          <option value="auto">Tipo: auto</option>
-        </select>
-        <select value={filterAlerta} onChange={(e) => setFilterAlerta(e.target.value as typeof filterAlerta)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
-          <option value="all">Alerta: todas</option>
-          <option value="si">Solo sospechosas</option>
-          <option value="no">Solo no sospechosas</option>
-        </select>
-        <div className="flex gap-2">
-          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
-          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
+      {showFilterPanel ? (
+        <div className="rounded-xl border border-white/10 bg-[#141c28] p-3">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-400">Checklist de filtros y tabla dinámica</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Buscar en cualquier columna" />
+            <input value={filterRemate} onChange={(e) => setFilterRemate(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Remate" />
+            <input value={filterLote} onChange={(e) => setFilterLote(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Lote" />
+            <input value={filterCliente} onChange={(e) => setFilterCliente(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Cliente" />
+            <input value={filterUsuario} onChange={(e) => setFilterUsuario(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Usuario" />
+            <input value={filterEmail} onChange={(e) => setFilterEmail(e.target.value)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" placeholder="Filtrar Email" />
+            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value as typeof filterTipo)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
+              <option value="all">Tipo: todos</option>
+              <option value="manual">Tipo: manual</option>
+              <option value="auto">Tipo: auto</option>
+            </select>
+            <select value={filterAlerta} onChange={(e) => setFilterAlerta(e.target.value as typeof filterAlerta)} className="rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white">
+              <option value="all">Alerta: todas</option>
+              <option value="si">Solo sospechosas</option>
+              <option value="no">Solo no sospechosas</option>
+            </select>
+            <div className="flex gap-2 sm:col-span-2">
+              <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
+              <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white" />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                ["fecha", "Fecha"],
+                ["remateLote", "Remate / Lote"],
+                ["cliente", "Cliente"],
+                ["usuario", "Usuario"],
+                ["email", "Email"],
+                ["oferta", "Oferta"],
+                ["tipo", "Tipo"],
+                ["alerta", "Alerta"],
+              ] as const
+            ).map(([k, label]) => (
+              <label key={k} className="inline-flex items-center gap-2 rounded border border-white/10 px-2 py-1 text-xs text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={visibleCols[k]}
+                  onChange={(e) => toggleColumn(k, e.target.checked)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       <p className="text-xs text-neutral-500">Resultados filtrados: {filtered.length}</p>
 
       <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#141c28]">
         <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
           <thead className="bg-black/20 text-neutral-400">
             <tr>
-              <th className="px-3 py-2 font-semibold">Fecha</th>
-              <th className="px-3 py-2 font-semibold">Remate / Lote</th>
-              <th className="px-3 py-2 font-semibold">Cliente</th>
-              <th className="px-3 py-2 font-semibold">Usuario</th>
-              <th className="px-3 py-2 font-semibold">Email</th>
-              <th className="px-3 py-2 font-semibold">Oferta</th>
-              <th className="px-3 py-2 font-semibold">Tipo</th>
-              <th className="px-3 py-2 font-semibold">Alerta</th>
+              {visibleCols.fecha ? <th className="px-3 py-2 font-semibold">Fecha</th> : null}
+              {visibleCols.remateLote ? <th className="px-3 py-2 font-semibold">Remate / Lote</th> : null}
+              {visibleCols.cliente ? <th className="px-3 py-2 font-semibold">Cliente</th> : null}
+              {visibleCols.usuario ? <th className="px-3 py-2 font-semibold">Usuario</th> : null}
+              {visibleCols.email ? <th className="px-3 py-2 font-semibold">Email</th> : null}
+              {visibleCols.oferta ? <th className="px-3 py-2 font-semibold">Oferta</th> : null}
+              {visibleCols.tipo ? <th className="px-3 py-2 font-semibold">Tipo</th> : null}
+              {visibleCols.alerta ? <th className="px-3 py-2 font-semibold">Alerta</th> : null}
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => (
               <tr key={r.oferta_id} className={`border-t border-white/10 ${r.sospechosa ? "bg-amber-900/20" : "text-neutral-200"}`}>
-                <td className="px-3 py-2">{new Date(r.fecha).toLocaleString("es-CL")}</td>
-                <td className="px-3 py-2">
-                  <p className="font-semibold">{r.remate_titulo}</p>
-                  <p className="text-xs text-neutral-400">{r.lote_titulo}</p>
-                </td>
-                <td className="px-3 py-2">{r.cliente_nombre}</td>
-                <td className="px-3 py-2 font-mono text-xs">{r.cliente_usuario}</td>
-                <td className="px-3 py-2">{r.cliente_email}</td>
-                <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(r.monto)}</td>
-                <td className="px-3 py-2">{r.es_auto ? "Auto" : "Manual"}</td>
-                <td className="px-3 py-2">{r.sospechosa ? (r.motivo_sospecha ?? "Revisar") : "—"}</td>
+                {visibleCols.fecha ? <td className="px-3 py-2">{new Date(r.fecha).toLocaleString("es-CL")}</td> : null}
+                {visibleCols.remateLote ? (
+                  <td className="px-3 py-2">
+                    <p className="font-semibold">{r.remate_titulo}</p>
+                    <p className="text-xs text-neutral-400">{r.lote_titulo}</p>
+                  </td>
+                ) : null}
+                {visibleCols.cliente ? <td className="px-3 py-2">{r.cliente_nombre}</td> : null}
+                {visibleCols.usuario ? <td className="px-3 py-2 font-mono text-xs">{r.cliente_usuario}</td> : null}
+                {visibleCols.email ? <td className="px-3 py-2">{r.cliente_email}</td> : null}
+                {visibleCols.oferta ? <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(r.monto)}</td> : null}
+                {visibleCols.tipo ? <td className="px-3 py-2">{r.es_auto ? "Auto" : "Manual"}</td> : null}
+                {visibleCols.alerta ? <td className="px-3 py-2">{r.sospechosa ? (r.motivo_sospecha ?? "Revisar") : "—"}</td> : null}
               </tr>
             ))}
             {!filtered.length ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-neutral-500">
+                <td colSpan={Object.values(visibleCols).filter(Boolean).length || 1} className="px-3 py-8 text-center text-neutral-500">
                   {loading ? "Cargando…" : "Sin ofertas para mostrar."}
                 </td>
               </tr>
