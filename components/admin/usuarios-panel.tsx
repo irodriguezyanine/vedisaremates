@@ -104,6 +104,7 @@ export function UsuariosPanel() {
   const [importResult, setImportResult] = useState<{
     created: number;
     failed: number;
+    skipped: number;
     errors: string[];
   } | null>(null);
 
@@ -145,6 +146,11 @@ export function UsuariosPanel() {
 
     if (password !== password2) {
       setLoadErr("Las contraseñas no coinciden.");
+      setCreating(false);
+      return;
+    }
+    if (existingEmailSet.has(normalize(email))) {
+      setLoadErr("Ese correo ya existe. No se creó ni modificó la cuenta existente.");
       setCreating(false);
       return;
     }
@@ -242,6 +248,14 @@ export function UsuariosPanel() {
   }, [users]);
 
   const tabRows = activeTab === "staff" ? usersByTab.staff : usersByTab.cliente;
+  const existingEmailSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) {
+      const email = normalize(u.email);
+      if (email) set.add(email);
+    }
+    return set;
+  }, [users]);
 
   const filteredRows = useMemo(() => {
     const g = normalize(globalSearch);
@@ -310,10 +324,27 @@ export function UsuariosPanel() {
 
       let created = 0;
       let failed = 0;
+      let skipped = 0;
       const errors: string[] = [];
+      const seenInFile = new Set<string>();
 
       for (let i = 0; i < importRows.length; i += 1) {
         const row = importRows[i];
+        const normalizedEmail = normalize(row.email);
+        if (!normalizedEmail) {
+          failed += 1;
+          errors.push(`Fila ${i + 2}: correo inválido.`);
+          continue;
+        }
+        if (seenInFile.has(normalizedEmail)) {
+          skipped += 1;
+          continue;
+        }
+        seenInFile.add(normalizedEmail);
+        if (existingEmailSet.has(normalizedEmail)) {
+          skipped += 1;
+          continue;
+        }
         const payload = {
           email: row.email,
           password: importPassword,
@@ -340,7 +371,7 @@ export function UsuariosPanel() {
         created += 1;
       }
 
-      setImportResult({ created, failed, errors: errors.slice(0, 25) });
+      setImportResult({ created, failed, skipped, errors: errors.slice(0, 25) });
       await load();
     } catch (e: unknown) {
       setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
@@ -640,13 +671,14 @@ export function UsuariosPanel() {
               <p className="mt-1">
                 Registros listos para importar: <strong className="text-[#33C7E3]">{importRows.length}</strong>
               </p>
-              <p className="mt-1 text-neutral-400">A cada usuario se le marcará cambio obligatorio de contraseña en su primer ingreso.</p>
+              <p className="mt-1 text-neutral-400">Correos existentes o repetidos en el archivo se omiten automáticamente (sin cambios de contraseña).</p>
             </div>
 
             {importResult ? (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 text-sm">
                 <p className="text-emerald-300">Creados: {importResult.created}</p>
                 <p className="text-amber-300">Con error: {importResult.failed}</p>
+                <p className="text-sky-300">Omitidos por duplicado/existentes: {importResult.skipped}</p>
                 {importResult.errors.length ? (
                   <div className="mt-2 max-h-28 overflow-auto text-xs text-neutral-400">
                     {importResult.errors.map((err) => (

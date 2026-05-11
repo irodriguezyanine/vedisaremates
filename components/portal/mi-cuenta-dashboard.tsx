@@ -343,6 +343,12 @@ export function MiCuentaDashboard({
     return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Pendiente</span>;
   }
 
+  function scrollToSection(sectionId: string) {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="min-h-[60vh] bg-gradient-to-b from-[#f0f9fc] via-white to-white">
       <div className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
@@ -350,74 +356,101 @@ export function MiCuentaDashboard({
           ← Inicio
         </Link>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_minmax(0,360px)]">
-          <section
-            className={`relative overflow-hidden rounded-3xl border p-8 shadow-sm ${
-              isClienteRemate
-                ? "border-[#33C7E3]/35 bg-gradient-to-br from-[#1a2c4e] via-[#1e3a52] to-[#0f1f2c] text-white"
-                : "border-neutral-200 bg-white text-neutral-900"
-            }`}
-          >
-            {isClienteRemate ? (
-              <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#33C7E3]/20 blur-3xl" aria-hidden />
-            ) : null}
-            <div className="relative">
-              <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isClienteRemate ? "text-[#33C7E3]" : "text-[#009ade]"}`}>
-                Tu espacio
-              </p>
-              <h1 className={`mt-2 text-3xl font-black ${isClienteRemate ? "text-white" : "text-neutral-900"}`}>
-                {isClienteRemate ? "Cliente remate" : "Mi cuenta"}
-              </h1>
-              <p className={`mt-3 max-w-xl text-sm leading-relaxed ${isClienteRemate ? "text-white/80" : "text-neutral-600"}`}>
-                {isClienteRemate
-                  ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
-                  : "Administra tus datos de cuenta, seguridad y actividad de remates."}
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                <span className="relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/15 text-base font-black text-white">
-                  {avatarUrl ? (
-                    <Image
-                      src={avatarUrl}
-                      alt="Foto de perfil"
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                    />
-                  ) : (
-                    avatarInitials || "VR"
-                  )}
-                </span>
-                <span className={`rounded-xl px-3 py-1.5 font-semibold ${isClienteRemate ? "bg-white/10 text-white" : "bg-neutral-100 text-neutral-800"}`}>
-                  {email}
-                </span>
-                <span className={`rounded-xl px-3 py-1.5 ${isClienteRemate ? "bg-[#FFC600]/20 text-[#FFC600]" : "bg-[#e8f4fc] text-[#1a2c4e]"}`}>
-                  {formatRoleLabel(initialRol)}
-                </span>
-              </div>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  href="/subastas"
-                  className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] px-5 py-3 text-sm font-bold text-[#0f1f2c] shadow-md hover:brightness-105"
-                >
-                  Ir a sala de remates
-                </Link>
-                {(initialRol ?? "").toLowerCase() === "admin" ? (
-                  <Link
-                    href="/admin"
-                    className={`inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-bold ${
-                      isClienteRemate ? "border-white/30 text-white hover:bg-white/10" : "border-neutral-300 text-neutral-900 hover:bg-neutral-50"
-                    }`}
-                  >
-                    Panel administración
-                  </Link>
-                ) : null}
-              </div>
+        <section
+          className={`mt-6 relative overflow-hidden rounded-3xl border p-8 shadow-sm ${
+            isClienteRemate
+              ? "border-[#33C7E3]/35 bg-gradient-to-br from-[#1a2c4e] via-[#1e3a52] to-[#0f1f2c] text-white"
+              : "border-neutral-200 bg-white text-neutral-900"
+          }`}
+        >
+          {isClienteRemate ? (
+            <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#33C7E3]/20 blur-3xl" aria-hidden />
+          ) : null}
+          <div className="relative">
+            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isClienteRemate ? "text-[#33C7E3]" : "text-[#009ade]"}`}>
+              Tu espacio
+            </p>
+            <h1 className={`mt-2 text-3xl font-black ${isClienteRemate ? "text-white" : "text-neutral-900"}`}>
+              {isClienteRemate ? "Cliente remate" : "Mi cuenta"}
+            </h1>
+            <p className={`mt-3 max-w-2xl text-sm leading-relaxed ${isClienteRemate ? "text-white/80" : "text-neutral-600"}`}>
+              {isClienteRemate
+                ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
+                : "Administra tus datos de cuenta, seguridad y actividad de remates."}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3 text-sm">
+              <span className="relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/15 text-base font-black text-white">
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt="Foto de perfil"
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                  />
+                ) : (
+                  avatarInitials || "VR"
+                )}
+              </span>
+              <span className={`rounded-xl px-3 py-1.5 font-semibold ${isClienteRemate ? "bg-white/10 text-white" : "bg-neutral-100 text-neutral-800"}`}>
+                {email}
+              </span>
+              <span className={`rounded-xl px-3 py-1.5 ${isClienteRemate ? "bg-[#FFC600]/20 text-[#FFC600]" : "bg-[#e8f4fc] text-[#1a2c4e]"}`}>
+                {formatRoleLabel(initialRol)}
+              </span>
             </div>
-          </section>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/subastas"
+                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] px-5 py-3 text-sm font-bold text-[#0f1f2c] shadow-md hover:brightness-105"
+              >
+                Ir a sala de remates
+              </Link>
+              {(initialRol ?? "").toLowerCase() === "admin" ? (
+                <Link
+                  href="/admin"
+                  className={`inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-bold ${
+                    isClienteRemate ? "border-white/30 text-white hover:bg-white/10" : "border-neutral-300 text-neutral-900 hover:bg-neutral-50"
+                  }`}
+                >
+                  Panel administración
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-neutral-900">Datos personales</h2>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm lg:sticky lg:top-20 lg:h-fit">
+            <p className="px-2 text-xs font-bold uppercase tracking-[0.18em] text-[#009ade]">Tu espacio</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => scrollToSection("mi-cuenta-tu-espacio")}
+                className="rounded-xl border border-neutral-200 px-3 py-2 text-left text-sm font-semibold text-neutral-700 hover:border-[#33C7E3] hover:text-[#1a2c4e]"
+              >
+                Datos personales
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection("mi-cuenta-seguridad")}
+                className="rounded-xl border border-neutral-200 px-3 py-2 text-left text-sm font-semibold text-neutral-700 hover:border-[#33C7E3] hover:text-[#1a2c4e]"
+              >
+                Seguridad y acceso
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSection("mi-cuenta-historial")}
+                className="rounded-xl border border-neutral-200 px-3 py-2 text-left text-sm font-semibold text-neutral-700 hover:border-[#33C7E3] hover:text-[#1a2c4e]"
+              >
+                Historial de ofertas
+              </button>
+            </div>
+          </aside>
+
+          <div className="space-y-6">
+            <section id="mi-cuenta-tu-espacio" className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-neutral-900">Tu espacio</h2>
               <p className="mt-1 text-sm text-neutral-600">Actualiza tu perfil completo para operar con información vigente.</p>
               <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                 <p className="text-sm font-semibold text-neutral-800">Foto de perfil</p>
@@ -523,7 +556,7 @@ export function MiCuentaDashboard({
               </form>
             </section>
 
-            <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <section id="mi-cuenta-seguridad" className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-bold text-neutral-900">Seguridad y acceso</h2>
               <p className="mt-1 text-sm text-neutral-600">Edita correo de acceso y define una nueva contraseña segura.</p>
               <form onSubmit={(e) => void guardarSeguridad(e)} className="mt-5 space-y-4">
@@ -576,10 +609,10 @@ export function MiCuentaDashboard({
                 {seguridadMsg ? <p className="text-sm text-emerald-700">{seguridadMsg}</p> : null}
               </form>
             </section>
-          </aside>
+          </div>
         </div>
 
-        <section className="mt-10 rounded-3xl border border-neutral-200 bg-white shadow-sm">
+        <section id="mi-cuenta-historial" className="mt-10 rounded-3xl border border-neutral-200 bg-white shadow-sm">
           <div className="border-b border-neutral-100 px-6 py-5 sm:px-8">
             <h2 className="text-xl font-bold text-neutral-900">Ofertas realizadas</h2>
             <p className="mt-1 text-sm text-neutral-600">
