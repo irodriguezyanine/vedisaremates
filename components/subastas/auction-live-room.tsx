@@ -29,6 +29,16 @@ function formatClTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-CL", TZ_CHILE);
 }
 
+function formatCountdown(ms: number | null): string {
+  if (ms == null) return "--:--:--";
+  if (ms <= 0) return "00:00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 type BidMsgTone = "success" | "error" | "info";
 
 function formatBidMessage(raw: string): { text: string; tone: BidMsgTone } {
@@ -339,6 +349,8 @@ export function AuctionLiveRoom({
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
   const countdownLive =
     tick != null && remate.ends_at ? new Date(remate.ends_at).getTime() - tick : null;
+  const countdownText = formatCountdown(countdownLive);
+  const isLastTenMinutes = countdownLive != null && countdownLive > 0 && countdownLive <= 10 * 60 * 1000;
   const started =
     tick != null &&
     (!remate.starts_at || new Date(remate.starts_at).getTime() <= tick);
@@ -393,6 +405,32 @@ export function AuctionLiveRoom({
                     ? formatClDateTime(remate.ends_at)
                     : "—"}
               </p>
+            </div>
+            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 xl:block" aria-hidden />
+            <div
+              className={`min-w-[11rem] rounded-xl border px-3 py-2 text-center xl:text-left ${
+                isLastTenMinutes
+                  ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)]"
+                  : "border-sky-200 bg-sky-50"
+              }`}
+            >
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider ${
+                  isLastTenMinutes ? "text-rose-700" : "text-sky-700"
+                }`}
+              >
+                Cuenta regresiva
+              </span>
+              <p
+                className={`mt-0.5 font-mono text-lg font-black tabular-nums ${
+                  isLastTenMinutes ? "text-rose-700" : "text-sky-800"
+                }`}
+              >
+                {countdownText}
+              </p>
+              {isLastTenMinutes ? (
+                <p className="text-[10px] font-semibold text-rose-700">Últimos 10 minutos</p>
+              ) : null}
             </div>
           </div>
           {!viewerId ? (
