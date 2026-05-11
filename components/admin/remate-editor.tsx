@@ -11,6 +11,16 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type Inv = InventarioRow & { id: string };
+type OfertaAdminRow = {
+  oferta_id: string;
+  fecha: string;
+  monto: number;
+  lote_id: string;
+  lote_titulo: string;
+  cliente_nombre: string;
+  cliente_usuario: string;
+  cliente_email: string;
+};
 
 const PAGE_SIZE = 20;
 
@@ -23,6 +33,8 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   const [lotes, setLotes] = useState<PortalRemateLoteRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [ofertas, setOfertas] = useState<OfertaAdminRow[]>([]);
+  const [loadingOfertas, setLoadingOfertas] = useState(false);
 
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [modalPage, setModalPage] = useState(1);
@@ -57,6 +69,19 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       return;
     }
     setLotes((l as PortalRemateLoteRow[]) ?? []);
+
+    setLoadingOfertas(true);
+    const { data: ofertasData, error: e3 } = await sb.rpc("portal_admin_listar_ofertas_remate", {
+      p_remate_id: remateId,
+      p_limit: 2000,
+    });
+    setLoadingOfertas(false);
+    if (e3) {
+      setErr(e3.message);
+      setOfertas([]);
+      return;
+    }
+    setOfertas(((ofertasData ?? []) as OfertaAdminRow[]) ?? []);
   }, [remateId]);
 
   useEffect(() => {
@@ -378,6 +403,51 @@ export function RemateEditor({ remateId }: { remateId: string }) {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-white">Ofertas realizadas ({ofertas.length})</h2>
+          <button
+            type="button"
+            className="rounded border border-white/20 px-3 py-1 text-xs text-neutral-200 hover:bg-white/5"
+            onClick={() => void load()}
+          >
+            Actualizar
+          </button>
+        </div>
+        {loadingOfertas ? <p className="mt-3 text-sm text-neutral-400">Cargando ofertas…</p> : null}
+        {!loadingOfertas && ofertas.length === 0 ? (
+          <p className="mt-3 text-sm text-neutral-500">Aún no hay ofertas registradas para este remate.</p>
+        ) : null}
+        {!loadingOfertas && ofertas.length > 0 ? (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">
+            <table className="min-w-[920px] w-full border-collapse text-left text-sm">
+              <thead className="bg-black/25 text-neutral-400">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Cliente</th>
+                  <th className="px-3 py-2 font-semibold">Usuario</th>
+                  <th className="px-3 py-2 font-semibold">Email</th>
+                  <th className="px-3 py-2 font-semibold">Lote</th>
+                  <th className="px-3 py-2 font-semibold">Oferta</th>
+                  <th className="px-3 py-2 font-semibold">Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ofertas.map((o) => (
+                  <tr key={o.oferta_id} className="border-t border-white/10 text-neutral-200">
+                    <td className="px-3 py-2">{o.cliente_nombre || "Sin nombre"}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{o.cliente_usuario || "—"}</td>
+                    <td className="px-3 py-2">{o.cliente_email || "—"}</td>
+                    <td className="px-3 py-2">{o.lote_titulo || "Lote"}</td>
+                    <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(o.monto)}</td>
+                    <td className="px-3 py-2 text-neutral-400">{new Date(o.fecha).toLocaleString("es-CL")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       {inventoryOpen ? (

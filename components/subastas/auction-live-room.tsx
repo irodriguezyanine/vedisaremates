@@ -172,7 +172,13 @@ export function AuctionLiveRoom({
       setBusy(false);
       return;
     }
-    const res = data as { ok?: boolean; error?: string; minimo_requerido?: number; precio_base?: number };
+    const res = data as {
+      ok?: boolean;
+      error?: string;
+      minimo_requerido?: number;
+      precio_base?: number;
+      ends_at_extendido?: string | null;
+    };
     if (!res?.ok) {
       const detail =
         res?.error === "monto_inferior_al_minimo_siguiente" && res.minimo_requerido != null
@@ -185,8 +191,11 @@ export function AuctionLiveRoom({
       return;
     }
     setAmount("");
+    if (res.ends_at_extendido) {
+      setRemate((prev) => ({ ...prev, ends_at: res.ends_at_extendido as string }));
+    }
     await loadOffers(lotes.map((l) => l.id));
-    setMsg("¡Oferta registrada!");
+    setMsg(res.ends_at_extendido ? "¡Oferta registrada! El cierre se extendió 2 minutos." : "¡Oferta registrada!");
     setBusy(false);
   }
 

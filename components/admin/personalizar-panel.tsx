@@ -30,6 +30,11 @@ const PORTAL_KEY_SET = new Set(PORTAL_BANNER_ADMIN_DEFS.map((d) => d.key));
 const INVENTORY_PRESET_KEY_SET = new Set(INV_FICHA_PRESETS.map((p) => p.sourceKeyHint));
 
 const PK_FINE = "\u001f";
+const DEFAULT_REMATE_CFG = {
+  anti_sniping_enabled: true,
+  anti_sniping_window_seconds: 120,
+  anti_sniping_extend_seconds: 120,
+};
 
 function stripExcludedBannerOverrides(raw: Record<string, PortalFichaFieldOverride>): Record<string, PortalFichaFieldOverride> {
   const out = { ...raw };
@@ -137,6 +142,10 @@ export function PersonalizarPanel() {
   const [fichaOk, setFichaOk] = useState<string | null>(null);
   const [fichaErr, setFichaErr] = useState<string | null>(null);
   const [fichaLoadErr, setFichaLoadErr] = useState<string | null>(null);
+  const [remateCfg, setRemateCfg] = useState({ ...DEFAULT_REMATE_CFG });
+  const [remateCfgSaving, setRemateCfgSaving] = useState(false);
+  const [remateCfgOk, setRemateCfgOk] = useState<string | null>(null);
+  const [remateCfgErr, setRemateCfgErr] = useState<string | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState("");
   const [customLabelDraft, setCustomLabelDraft] = useState("");
 
@@ -155,9 +164,14 @@ export function PersonalizarPanel() {
       setLoading(false);
       return;
     }
-    const [heroRes, fichaRes] = await Promise.all([
+    const [heroRes, fichaRes, remateCfgRes] = await Promise.all([
       sb.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle(),
       sb.from("portal_inventario_ficha_config").select("config").eq("id", 1).maybeSingle(),
+      sb
+        .from("portal_remates_config")
+        .select("anti_sniping_enabled, anti_sniping_window_seconds, anti_sniping_extend_seconds")
+        .eq("id", 1)
+        .maybeSingle(),
     ]);
     if (heroRes.error) {
       setErr(heroRes.error.message);
@@ -183,6 +197,20 @@ export function PersonalizarPanel() {
       setSectionOrderList(orderTitles.map((s) => s.trim()).filter(Boolean));
       setHiddenSections(cfg?.hiddenSectionTitles?.length ? [...cfg.hiddenSectionTitles] : []);
       setFichaLoadErr(null);
+    }
+
+    if (remateCfgRes.error) {
+      setRemateCfgErr(remateCfgRes.error.message);
+      setRemateCfg({ ...DEFAULT_REMATE_CFG });
+    } else {
+      setRemateCfg({
+        anti_sniping_enabled: remateCfgRes.data?.anti_sniping_enabled ?? DEFAULT_REMATE_CFG.anti_sniping_enabled,
+        anti_sniping_window_seconds:
+          remateCfgRes.data?.anti_sniping_window_seconds ?? DEFAULT_REMATE_CFG.anti_sniping_window_seconds,
+        anti_sniping_extend_seconds:
+          remateCfgRes.data?.anti_sniping_extend_seconds ?? DEFAULT_REMATE_CFG.anti_sniping_extend_seconds,
+      });
+      setRemateCfgErr(null);
     }
 
     if (heroRes.error) {
@@ -263,6 +291,10 @@ export function PersonalizarPanel() {
     fichaErr?.includes("portal_inventario_ficha_config") ||
     (fichaLoadErr &&
       (/permission denied/i.test(fichaLoadErr) || /does not exist/i.test(fichaLoadErr) || /relation/i.test(fichaLoadErr)));
+  const missingRemateCfgSql =
+    remateCfgErr?.includes("portal_remates_config") ||
+    (remateCfgErr &&
+      (/permission denied/i.test(remateCfgErr) || /does not exist/i.test(remateCfgErr) || /relation/i.test(remateCfgErr)));
 
   function setVisibilityMode(key: string, mode: "def" | "show" | "hide") {
     setFichaOk(null);
@@ -320,6 +352,32 @@ export function PersonalizarPanel() {
     }
     setFichaOk("Listo: la ficha pública ya quedó guardada como la configuraste.");
     setFichaSaving(false);
+  }
+
+  async function saveRemateConfig() {
+    setRemateCfgSaving(true);
+    setRemateCfgErr(null);
+    setRemateCfgOk(null);
+    const sb = createClient();
+    if (!sb) {
+      setRemateCfgErr("Servicio no disponible.");
+      setRemateCfgSaving(false);
+      return;
+    }
+    const payload = {
+      id: 1,
+      anti_sniping_enabled: remateCfg.anti_sniping_enabled,
+      anti_sniping_window_seconds: Math.max(0, Math.round(remateCfg.anti_sniping_window_seconds)),
+      anti_sniping_extend_seconds: Math.max(0, Math.round(remateCfg.anti_sniping_extend_seconds)),
+    };
+    const { error } = await sb.from("portal_remates_config").upsert(payload, { onConflict: "id" });
+    if (error) {
+      setRemateCfgErr(error.message);
+      setRemateCfgSaving(false);
+      return;
+    }
+    setRemateCfgOk("Configuración de remates guardada.");
+    setRemateCfgSaving(false);
   }
 
   function moveSection(ix: number, delta: number) {
@@ -1170,6 +1228,85 @@ export function PersonalizarPanel() {
               className="rounded-lg bg-[#33C7E3] px-6 py-2.5 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
             >
               {fichaSaving ? "Guardando…" : "Guardar estos cambios de la ficha"}
+            </button>
+          </div>
+
+          <hr className="border-white/10" />
+
+          <div className="space-y-4 rounded-xl border border-white/10 bg-[#141c28] p-5">
+            <div>
+              <h2 className="text-base font-bold uppercase tracking-wide text-[#84d8ec]">Configuración remates</h2>
+              <p className="mt-1 text-xs text-neutral-400">
+                Ajustes globales de la dinámica de pujas en vivo (estilo anti-sniping tipo Raiworks).
+              </p>
+            </div>
+            {remateCfgErr ? (
+              <p
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  missingRemateCfgSql ? "border-amber-500/50 bg-amber-950/30 text-amber-100" : "border-red-500/40 bg-red-950/20 text-red-200"
+                }`}
+              >
+                {remateCfgErr}
+                {missingRemateCfgSql ? (
+                  <span className="mt-2 block">
+                    Ejecuta la migración <strong className="font-semibold">supabase/migrations/portal_subastas_vedisaremates.sql</strong> actualizada.
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+            {remateCfgOk ? <p className="rounded-lg border border-emerald-500/35 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">{remateCfgOk}</p> : null}
+
+            <label className="flex items-center gap-2 text-sm text-neutral-200">
+              <input
+                type="checkbox"
+                checked={remateCfg.anti_sniping_enabled}
+                onChange={(e) => {
+                  setRemateCfg((prev) => ({ ...prev, anti_sniping_enabled: e.target.checked }));
+                  setRemateCfgOk(null);
+                }}
+                className="h-4 w-4 rounded border-white/30 bg-black/40"
+              />
+              Extensión automática al recibir ofertas cerca del cierre
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm">
+                <span className="text-neutral-400">Ventana final (segundos)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={remateCfg.anti_sniping_window_seconds}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, anti_sniping_window_seconds: Number(e.target.value || 0) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+                <p className="mt-1 text-[11px] text-neutral-500">Si una oferta entra dentro de esta ventana, se activa la extensión.</p>
+              </label>
+              <label className="text-sm">
+                <span className="text-neutral-400">Extensión por oferta (segundos)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={remateCfg.anti_sniping_extend_seconds}
+                  onChange={(e) => {
+                    setRemateCfg((prev) => ({ ...prev, anti_sniping_extend_seconds: Number(e.target.value || 0) }));
+                    setRemateCfgOk(null);
+                  }}
+                  className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
+                />
+                <p className="mt-1 text-[11px] text-neutral-500">Para “2 minutos”, usa 120.</p>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              disabled={remateCfgSaving}
+              onClick={() => void saveRemateConfig()}
+              className="rounded-lg bg-[#33C7E3] px-6 py-2.5 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
+            >
+              {remateCfgSaving ? "Guardando…" : "Guardar configuración remates"}
             </button>
           </div>
         </>

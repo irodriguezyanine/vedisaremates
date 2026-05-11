@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 import {
   FALLBACK_HERO_SLIDES,
@@ -11,7 +12,7 @@ import {
   type HeroSlide,
 } from "@/lib/hero-slides-shared";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/public-env";
+import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 function heroLinkHref(slide: HeroSlide): string {
   const href = slide.href.trim() || "/";
@@ -31,7 +32,26 @@ export function HeroCarousel() {
     async function load() {
       const sb = createClient();
       if (!sb) return;
-      const { data, error } = await sb.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle();
+      let { data, error } = await sb.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle();
+      if (error) {
+        // Fallback defensivo: algunos perfiles autenticados pueden quedar bloqueados por políticas heredadas.
+        // Reintentamos lectura pública (anon) para mantener el carrusel visible para todos.
+        const env = getPublicSupabaseEnv();
+        if (env) {
+          const sbAnon = createSupabaseClient(env.url, env.key, {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
+            },
+          });
+          const retry = await sbAnon.from("portal_home_hero").select("slides").eq("id", 1).maybeSingle();
+          if (!retry.error) {
+            data = retry.data;
+            error = null;
+          }
+        }
+      }
       if (cancelled) return;
       if (error) {
         setSlides([...FALLBACK_HERO_SLIDES]);
