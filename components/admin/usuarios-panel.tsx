@@ -77,6 +77,16 @@ function normalizeRoleInput(rol: string | null | undefined): string {
   return value;
 }
 
+function buildRoleCandidates(rol: string | null | undefined): string[] {
+  const base = normalizeRoleInput(rol);
+  const candidates = [base];
+  const normalized = normalize(base);
+  if (normalized.includes("clienteremate")) {
+    candidates.push("cliente-remate", "cliente_remate", "cliente remate", "cliente-remates", "cliente_remates", "cliente remates");
+  }
+  return Array.from(new Set(candidates.map((v) => v.trim()).filter(Boolean)));
+}
+
 function isClienteRemate(rol: string | null | undefined): boolean {
   const value = normalize(rol);
   return value === "cliente_remate" || value === "cliente-remate" || value === "cliente remate";
@@ -122,23 +132,36 @@ async function markPasswordChangeRequired(email: string, sb = createClient()) {
 async function forceRoleByEmail(email: string, rol: string, sb = createClient()): Promise<void> {
   if (!sb) throw new Error("Servicio no disponible");
   let lastError = "No se pudo asignar el rol solicitado al usuario.";
+  const candidates = buildRoleCandidates(rol);
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data, error } = await sb.rpc("portal_admin_set_user_role_by_email", {
-      p_email: email,
-      p_rol: rol,
-    });
-    const res = data as { ok?: boolean; error?: string } | null;
-    if (!error && res?.ok !== false) return;
+    let needsRetryByProfileState = false;
+    for (const candidate of candidates) {
+      const { data, error } = await sb.rpc("portal_admin_set_user_role_by_email", {
+        p_email: email,
+        p_rol: candidate,
+      });
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (!error && res?.ok !== false) return;
 
-    const errCode = normalize(res?.error ?? error?.message ?? "");
-    if (errCode.includes("sin_permiso")) lastError = "Tu sesión no tiene permisos de administrador para asignar roles.";
-    else if (errCode.includes("rol_invalido")) lastError = "El rol seleccionado no es válido.";
-    else if (errCode.includes("perfil_no_encontrado") || errCode.includes("usuario_no_encontrado")) {
-      lastError = "El perfil todavía no está listo para asignar rol. Reintentando...";
+      const errCode = normalize(res?.error ?? error?.message ?? "");
+      if (errCode.includes("sin_permiso")) {
+        lastError = "Tu sesión no tiene permisos de administrador para asignar roles.";
+        throw new Error(lastError);
+      }
+      if (errCode.includes("rol_invalido")) {
+        lastError = "El rol seleccionado no es válido.";
+        continue;
+      }
+      if (errCode.includes("perfil_no_encontrado") || errCode.includes("usuario_no_encontrado")) {
+        needsRetryByProfileState = true;
+        lastError = "El perfil todavía no está listo para asignar rol. Reintentando...";
+        continue;
+      }
+      lastError = "No se pudo asignar el rol solicitado al usuario.";
+    }
+    if (needsRetryByProfileState && attempt < 4) {
       await sleep(300 * (attempt + 1));
       continue;
-    } else {
-      lastError = "No se pudo asignar el rol solicitado al usuario.";
     }
     if (attempt < 4) {
       await sleep(250 * (attempt + 1));
@@ -351,14 +374,30 @@ export function UsuariosPanel() {
         p_rut: editModal.rut.trim(),
         p_direccion: editModal.direccion.trim(),
         p_telefono: editModal.telefono.trim(),
-        p_rol: normalizeRoleInput(editModal.rol),
         p_must_change_password: editModal.mustChangePassword,
       };
-      const { data, error } = await supabase.rpc("portal_admin_update_usuario", payload);
-      const res = data as { ok?: boolean; error?: string } | null;
-      if (error || res?.ok === false) {
-        const raw = res?.error || error?.message || "No se pudo actualizar el usuario";
-        throw new Error(friendlyCreateError(raw));
+      const roleCandidates = buildRoleCandidates(editModal.rol);
+      let updateOk = false;
+      let updateRawError = "No se pudo actualizar el usuario";
+      for (const candidate of roleCandidates) {
+        const { data, error } = await supabase.rpc("portal_admin_update_usuario", {
+          ...payload,
+          p_rol: candidate,
+        });
+        const res = data as { ok?: boolean; error?: string } | null;
+        if (!error && res?.ok !== false) {
+          updateOk = true;
+          break;
+        }
+        const errText = res?.error || error?.message || "No se pudo actualizar el usuario";
+        updateRawError = errText;
+        if (normalize(errText).includes("rol_invalido")) {
+          continue;
+        }
+        throw new Error(friendlyCreateError(errText));
+      }
+      if (!updateOk) {
+        throw new Error(friendlyCreateError(updateRawError));
       }
 
       const newPassword = editModal.password.trim();

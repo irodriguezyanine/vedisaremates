@@ -170,6 +170,8 @@ BEGIN
        FROM %2$s
       WHERE lower(replace(replace(replace(%1$I::text, ''_'', ''''), ''-'', ''''), '' '', '''')) =
             lower(replace(replace(replace($1::text, ''_'', ''''), ''-'', ''''), '' '', ''''))
+         OR regexp_replace(lower(replace(replace(replace(%1$I::text, ''_'', ''''), ''-'', ''''), '' '', '''')), ''s$'', '''') =
+            regexp_replace(lower(replace(replace(replace($1::text, ''_'', ''''), ''-'', ''''), '' '', '''')), ''s$'', '''')
       LIMIT 1',
     v_ref_col,
     v_ref_table
@@ -310,6 +312,8 @@ BEGIN
        FROM %2$s
       WHERE lower(replace(replace(replace(%1$I::text, ''_'', ''''), ''-'', ''''), '' '', '''')) =
             lower(replace(replace(replace($1::text, ''_'', ''''), ''-'', ''''), '' '', ''''))
+         OR regexp_replace(lower(replace(replace(replace(%1$I::text, ''_'', ''''), ''-'', ''''), '' '', '''')), ''s$'', '''') =
+            regexp_replace(lower(replace(replace(replace($1::text, ''_'', ''''), ''-'', ''''), '' '', '''')), ''s$'', '''')
       LIMIT 1',
     v_ref_col,
     v_ref_table
