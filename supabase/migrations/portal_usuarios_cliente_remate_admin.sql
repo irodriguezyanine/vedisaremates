@@ -130,6 +130,48 @@ $$;
 REVOKE ALL ON FUNCTION public.portal_update_mi_foto(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.portal_update_mi_foto(TEXT) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.portal_admin_set_user_role_by_email(
+  p_email TEXT,
+  p_rol TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid UUID;
+  v_rol TEXT := lower(trim(p_rol));
+BEGIN
+  IF NOT public.auth_user_es_admin() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
+  END IF;
+
+  IF v_rol NOT IN ('cliente_remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'rol_invalido');
+  END IF;
+
+  SELECT u.id
+    INTO v_uid
+  FROM auth.users u
+  WHERE lower(u.email) = lower(trim(p_email))
+  LIMIT 1;
+
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'usuario_no_encontrado');
+  END IF;
+
+  UPDATE public.profiles
+  SET rol = v_rol
+  WHERE id = v_uid;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.portal_listar_mis_ofertas()
 RETURNS TABLE (
   oferta_id UUID,
@@ -184,3 +226,4 @@ COMMENT ON FUNCTION public.portal_marcar_cambio_clave_por_email(TEXT, BOOLEAN) I
 COMMENT ON FUNCTION public.portal_mi_cuenta_marcar_clave_actualizada() IS 'Usuario autenticado: limpia flag de cambio de contraseña obligatorio.';
 COMMENT ON FUNCTION public.portal_update_mi_perfil(TEXT, TEXT, TEXT, TEXT, TEXT) IS 'Usuario autenticado: actualiza su perfil personal (nombre, apellido, rut, direccion, telefono).';
 COMMENT ON FUNCTION public.portal_update_mi_foto(TEXT) IS 'Usuario autenticado: guarda o limpia la URL de su foto de perfil.';
+COMMENT ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) IS 'Admin: fuerza rol en profiles para un usuario existente identificado por email.';

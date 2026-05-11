@@ -17,6 +17,9 @@ type ImportRow = {
   email: string;
 };
 
+const USERS_PER_PAGE = 20;
+const IMPORT_CONCURRENCY = 12;
+
 const FILTER_COLUMN_LABEL: Record<FilterColumn, string> = {
   email: "Email",
   nombre: "Nombre",
@@ -74,13 +77,24 @@ function parseCsvText(raw: string): ImportRow[] {
   return rows;
 }
 
-async function markPasswordChangeRequired(email: string) {
-  const sb = createClient();
+async function markPasswordChangeRequired(email: string, sb = createClient()) {
   if (!sb) return;
   await sb.rpc("portal_marcar_cambio_clave_por_email", {
     p_email: email,
     p_requerido: true,
   });
+}
+
+async function forceRoleByEmail(email: string, rol: string, sb = createClient()): Promise<void> {
+  if (!sb) throw new Error("Servicio no disponible");
+  const { data, error } = await sb.rpc("portal_admin_set_user_role_by_email", {
+    p_email: email,
+    p_rol: rol,
+  });
+  const res = data as { ok?: boolean; error?: string } | null;
+  if (error || res?.ok === false) {
+    throw new Error("No se pudo asignar el rol solicitado al usuario.");
+  }
 }
 
 export function UsuariosPanel() {
@@ -93,6 +107,7 @@ export function UsuariosPanel() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [filterColumn, setFilterColumn] = useState<FilterColumn>("email");
   const [columnSearch, setColumnSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [forceChangeOnCreate, setForceChangeOnCreate] = useState(true);
 
   const [importOpen, setImportOpen] = useState(false);
@@ -194,8 +209,9 @@ export function UsuariosPanel() {
       if (!res.ok || json.error) {
         throw new Error(friendlyCreateError(json.error || "No se pudo crear el usuario"));
       }
+      await forceRoleByEmail(email, rol, supabase);
       if (forceChangeOnCreate) {
-        await markPasswordChangeRequired(email);
+        await markPasswordChangeRequired(email, supabase);
       }
       ev.currentTarget.reset();
       setForceChangeOnCreate(true);
@@ -276,6 +292,17 @@ export function UsuariosPanel() {
     });
   }, [columnSearch, filterColumn, globalSearch, tabRows]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, globalSearch, filterColumn, columnSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / USERS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (safeCurrentPage - 1) * USERS_PER_PAGE;
+    return filteredRows.slice(start, start + USERS_PER_PAGE);
+  }, [filteredRows, safeCurrentPage]);
+
   function exportFilteredCsv() {
     const lines = [
       "Email;Nombre;Rol;Alta",
@@ -327,6 +354,7 @@ export function UsuariosPanel() {
       let skipped = 0;
       const errors: string[] = [];
       const seenInFile = new Set<string>();
+      const candidates: ImportRow[] = [];
 
       for (let i = 0; i < importRows.length; i += 1) {
         const row = importRows[i];
@@ -345,30 +373,59 @@ export function UsuariosPanel() {
           skipped += 1;
           continue;
         }
-        const payload = {
-          email: row.email,
-          password: importPassword,
-          rol: importRole,
-          nombre: [row.nombre, row.apellido].filter(Boolean).join(" ").trim() || row.nombre || row.apellido || undefined,
-          apellido: row.apellido || undefined,
-        };
-        const res = await fetch(`${pub.url}/functions/v1/create-user`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: pub.key,
-          },
-          body: JSON.stringify(payload),
-        });
-        const json = (await res.json()) as { error?: string };
-        if (!res.ok || json.error) {
-          failed += 1;
-          errors.push(`${row.email}: ${friendlyCreateError(json.error || "Error")}`);
-          continue;
+        candidates.push(row);
+      }
+
+      for (let start = 0; start < candidates.length; start += IMPORT_CONCURRENCY) {
+        const batch = candidates.slice(start, start + IMPORT_CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(async (row) => {
+            const payload = {
+              email: row.email,
+              password: importPassword,
+              rol: importRole,
+              nombre: [row.nombre, row.apellido].filter(Boolean).join(" ").trim() || row.nombre || row.apellido || undefined,
+              apellido: row.apellido || undefined,
+            };
+            const res = await fetch(`${pub.url}/functions/v1/create-user`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: pub.key,
+              },
+              body: JSON.stringify(payload),
+            });
+            const json = (await res.json()) as { error?: string };
+            if (!res.ok || json.error) {
+              return {
+                ok: false,
+                error: `${row.email}: ${friendlyCreateError(json.error || "Error")}`,
+              };
+            }
+            try {
+              await Promise.all([
+                forceRoleByEmail(row.email, importRole, supabase),
+                markPasswordChangeRequired(row.email, supabase),
+              ]);
+            } catch {
+              return {
+                ok: false,
+                error: `${row.email}: No se pudo finalizar asignación de rol/clave inicial.`,
+              };
+            }
+            return { ok: true };
+          }),
+        );
+
+        for (const result of batchResults) {
+          if (result.ok) {
+            created += 1;
+          } else {
+            failed += 1;
+            errors.push(result.error || "No se pudo procesar un registro.");
+          }
         }
-        await markPasswordChangeRequired(row.email);
-        created += 1;
       }
 
       setImportResult({ created, failed, skipped, errors: errors.slice(0, 25) });
@@ -499,7 +556,7 @@ export function UsuariosPanel() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((u) => (
+              {paginatedRows.map((u) => (
                 <tr key={u.id} className="border-t border-white/10 text-neutral-200">
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2">{u.nombre}</td>
@@ -530,7 +587,7 @@ export function UsuariosPanel() {
                   </td>
                 </tr>
               ))}
-              {!filteredRows.length ? (
+              {!paginatedRows.length ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-neutral-500">
                     No hay usuarios para mostrar con los filtros actuales.
@@ -539,6 +596,29 @@ export function UsuariosPanel() {
               ) : null}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-5 py-3 text-sm">
+          <p className="text-neutral-400">
+            Mostrando {paginatedRows.length} de {filteredRows.length} usuarios (página {safeCurrentPage} de {totalPages}).
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              className="rounded-lg border border-white/20 px-3 py-1.5 text-neutral-200 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              className="rounded-lg border border-white/20 px-3 py-1.5 text-neutral-200 disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </section>
 
