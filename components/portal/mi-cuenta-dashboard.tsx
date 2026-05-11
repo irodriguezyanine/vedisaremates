@@ -115,7 +115,7 @@ export function MiCuentaDashboard({
   const [savingPw, setSavingPw] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
-  const isClienteRemate = ["cliente_remate", "cliente-remate"].includes((initialRol ?? "").toLowerCase());
+  const isClienteRemate = ["cliente_remate", "cliente-remate", "cliente remate"].includes((initialRol ?? "").toLowerCase());
   const rutIsValid = rut.trim().length === 0 ? true : isValidRut(rut);
   const mainPasswordStrength = passwordStrengthLabel(accountPw1);
   const firstLoginPasswordStrength = passwordStrengthLabel(firstLoginPw1);

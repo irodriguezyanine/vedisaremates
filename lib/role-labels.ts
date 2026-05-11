@@ -5,6 +5,7 @@ const MAP: Record<string, string> = {
   usuario: "Usuario",
   cliente_remate: "Cliente–Remate",
   "cliente-remate": "Cliente–Remate",
+  "cliente remate": "Cliente–Remate",
   cliente_empresa: "Cliente empresa",
   transportista: "Transportista",
   bodega: "Bodega",

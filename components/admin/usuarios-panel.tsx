@@ -44,6 +44,7 @@ function friendlyCreateError(raw: string): string {
   const s = raw.toLowerCase();
   if (s.includes("sin_permiso")) return "Tu usuario no tiene permisos de administrador para esta acción.";
   if (s.includes("rol_invalido")) return "El rol seleccionado no es válido.";
+  if (s.includes("rol_fk_no_encontrada")) return "No se pudo resolver la configuración de roles en la base de datos.";
   if (s.includes("usuario_no_encontrado")) return "No se encontró el usuario en autenticación.";
   if (s.includes("perfil_no_encontrado")) return "No se encontró el perfil del usuario.";
   if (s.includes("email_invalido")) return "El email ingresado no es válido.";
@@ -78,7 +79,7 @@ function normalizeRoleInput(rol: string | null | undefined): string {
 
 function isClienteRemate(rol: string | null | undefined): boolean {
   const value = normalize(rol);
-  return value === "cliente_remate" || value === "cliente-remate";
+  return value === "cliente_remate" || value === "cliente-remate" || value === "cliente remate";
 }
 
 function rowColumnValue(u: ListaUsuarioRow, col: FilterColumn): string {
