@@ -178,6 +178,126 @@ $$;
 REVOKE ALL ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.portal_admin_get_usuario_detalle(
+  p_user_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_email TEXT;
+  v_user JSONB;
+BEGIN
+  IF NOT public.auth_user_es_admin() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
+  END IF;
+
+  SELECT u.email
+    INTO v_email
+  FROM auth.users u
+  WHERE u.id = p_user_id
+  LIMIT 1;
+
+  IF v_email IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'usuario_no_encontrado');
+  END IF;
+
+  SELECT jsonb_build_object(
+    'id', p.id,
+    'email', v_email,
+    'nombre', p.nombre,
+    'apellido', p.apellido,
+    'rut', p.rut,
+    'direccion', p.direccion,
+    'telefono', p.telefono,
+    'rol', p.rol,
+    'must_change_password', p.must_change_password
+  )
+    INTO v_user
+  FROM public.profiles p
+  WHERE p.id = p_user_id
+  LIMIT 1;
+
+  IF v_user IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'perfil_no_encontrado');
+  END IF;
+
+  RETURN jsonb_build_object('ok', true, 'user', v_user);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.portal_admin_update_usuario(
+  p_user_id UUID,
+  p_email TEXT,
+  p_nombre TEXT,
+  p_apellido TEXT,
+  p_rut TEXT,
+  p_direccion TEXT,
+  p_telefono TEXT,
+  p_rol TEXT,
+  p_must_change_password BOOLEAN DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_email TEXT := lower(trim(COALESCE(p_email, '')));
+  v_rol TEXT := lower(trim(COALESCE(p_rol, '')));
+BEGIN
+  IF NOT public.auth_user_es_admin() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'sin_permiso');
+  END IF;
+
+  IF v_email = '' OR position('@' IN v_email) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'email_invalido');
+  END IF;
+
+  IF v_rol NOT IN ('cliente_remate', 'cliente_empresa', 'transportista', 'bodega', 'sac', 'admin', 'usuario') THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'rol_invalido');
+  END IF;
+
+  BEGIN
+    UPDATE auth.users
+    SET email = v_email
+    WHERE id = p_user_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'email_duplicado');
+  END;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'usuario_no_encontrado');
+  END IF;
+
+  UPDATE public.profiles
+  SET
+    nombre = NULLIF(trim(p_nombre), ''),
+    apellido = NULLIF(trim(p_apellido), ''),
+    rut = NULLIF(trim(p_rut), ''),
+    direccion = NULLIF(trim(p_direccion), ''),
+    telefono = NULLIF(trim(p_telefono), ''),
+    rol = v_rol,
+    must_change_password = COALESCE(p_must_change_password, must_change_password)
+  WHERE id = p_user_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'perfil_no_encontrado');
+  END IF;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.portal_listar_mis_ofertas()
 RETURNS TABLE (
   oferta_id UUID,
@@ -233,3 +353,5 @@ COMMENT ON FUNCTION public.portal_mi_cuenta_marcar_clave_actualizada() IS 'Usuar
 COMMENT ON FUNCTION public.portal_update_mi_perfil(TEXT, TEXT, TEXT, TEXT, TEXT) IS 'Usuario autenticado: actualiza su perfil personal (nombre, apellido, rut, direccion, telefono).';
 COMMENT ON FUNCTION public.portal_update_mi_foto(TEXT) IS 'Usuario autenticado: guarda o limpia la URL de su foto de perfil.';
 COMMENT ON FUNCTION public.portal_admin_set_user_role_by_email(TEXT, TEXT) IS 'Admin: fuerza rol en profiles para un usuario existente identificado por email.';
+COMMENT ON FUNCTION public.portal_admin_get_usuario_detalle(UUID) IS 'Admin: obtiene datos completos de un usuario para edición.';
+COMMENT ON FUNCTION public.portal_admin_update_usuario(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) IS 'Admin: actualiza email (auth.users) y perfil/rol de un usuario.';

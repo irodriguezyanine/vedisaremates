@@ -17,6 +17,19 @@ type ImportRow = {
   email: string;
 };
 
+type EditUserForm = {
+  userId: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  rut: string;
+  direccion: string;
+  telefono: string;
+  rol: string;
+  mustChangePassword: boolean;
+  password: string;
+};
+
 const USERS_PER_PAGE = 20;
 const IMPORT_CONCURRENCY = 12;
 
@@ -29,6 +42,12 @@ const FILTER_COLUMN_LABEL: Record<FilterColumn, string> = {
 
 function friendlyCreateError(raw: string): string {
   const s = raw.toLowerCase();
+  if (s.includes("sin_permiso")) return "Tu usuario no tiene permisos de administrador para esta acción.";
+  if (s.includes("rol_invalido")) return "El rol seleccionado no es válido.";
+  if (s.includes("usuario_no_encontrado")) return "No se encontró el usuario en autenticación.";
+  if (s.includes("perfil_no_encontrado")) return "No se encontró el perfil del usuario.";
+  if (s.includes("email_invalido")) return "El email ingresado no es válido.";
+  if (s.includes("email_duplicado")) return "Ese email ya está registrado por otro usuario.";
   if (s.includes("fetch") || s.includes("failed")) return "No se pudo contactar el servicio. Reintentá en unos minutos.";
   if (s.includes("session") || s.includes("sesión")) return raw;
   if (s.includes("already registered") || s.includes("duplicate") || s.includes("already been registered")) return "Ese correo ya tiene una cuenta.";
@@ -125,6 +144,8 @@ export function UsuariosPanel() {
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [pwModal, setPwModal] = useState<{ userId: string; email: string } | null>(null);
+  const [editModal, setEditModal] = useState<EditUserForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("staff");
   const [globalSearch, setGlobalSearch] = useState("");
   const [filterColumn, setFilterColumn] = useState<FilterColumn>("email");
@@ -243,6 +264,124 @@ export function UsuariosPanel() {
       setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function abrirEditorUsuario(row: ListaUsuarioRow) {
+    setLoadErr(null);
+    const baseForm: EditUserForm = {
+      userId: row.id,
+      email: (row.email ?? "").trim(),
+      nombre: (row.nombre ?? "").trim(),
+      apellido: "",
+      rut: "",
+      direccion: "",
+      telefono: "",
+      rol: row.rol ?? "usuario",
+      mustChangePassword: Boolean(row.must_change_password),
+      password: "",
+    };
+    setEditModal(baseForm);
+
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("Servicio no disponible");
+      const { data, error } = await supabase.rpc("portal_admin_get_usuario_detalle", {
+        p_user_id: row.id,
+      });
+      const res = data as
+        | {
+            ok?: boolean;
+            error?: string;
+            user?: {
+              id?: string;
+              email?: string | null;
+              nombre?: string | null;
+              apellido?: string | null;
+              rut?: string | null;
+              direccion?: string | null;
+              telefono?: string | null;
+              rol?: string | null;
+              must_change_password?: boolean | null;
+            };
+          }
+        | null;
+      if (error || !res?.ok || !res.user) return;
+      setEditModal((curr) => {
+        if (!curr || curr.userId !== row.id) return curr;
+        return {
+          ...curr,
+          email: (res.user?.email ?? curr.email ?? "").trim(),
+          nombre: (res.user?.nombre ?? curr.nombre ?? "").trim(),
+          apellido: (res.user?.apellido ?? "").trim(),
+          rut: (res.user?.rut ?? "").trim(),
+          direccion: (res.user?.direccion ?? "").trim(),
+          telefono: (res.user?.telefono ?? "").trim(),
+          rol: (res.user?.rol ?? curr.rol ?? "usuario").trim() || "usuario",
+          mustChangePassword: Boolean(res.user?.must_change_password),
+        };
+      });
+    } catch {
+      // El editor abre con los datos de la tabla aunque falle el detalle.
+    }
+  }
+
+  async function guardarEdicionUsuario(ev: FormEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (!editModal || savingEdit) return;
+    setSavingEdit(true);
+    setLoadErr(null);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("Servicio no disponible");
+      const payload = {
+        p_user_id: editModal.userId,
+        p_email: editModal.email.trim().toLowerCase(),
+        p_nombre: editModal.nombre.trim(),
+        p_apellido: editModal.apellido.trim(),
+        p_rut: editModal.rut.trim(),
+        p_direccion: editModal.direccion.trim(),
+        p_telefono: editModal.telefono.trim(),
+        p_rol: editModal.rol,
+        p_must_change_password: editModal.mustChangePassword,
+      };
+      const { data, error } = await supabase.rpc("portal_admin_update_usuario", payload);
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (error || res?.ok === false) {
+        const raw = res?.error || error?.message || "No se pudo actualizar el usuario";
+        throw new Error(friendlyCreateError(raw));
+      }
+
+      const newPassword = editModal.password.trim();
+      if (newPassword.length > 0) {
+        if (newPassword.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
+        const pub = getPublicSupabaseEnv();
+        if (!pub) throw new Error("Faltan variables de entorno del servidor");
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) throw new Error("Sesión caducada");
+        const resp = await fetch(`${pub.url}/functions/v1/update-user-password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: pub.key,
+          },
+          body: JSON.stringify({ userId: editModal.userId, password: newPassword }),
+        });
+        const json = (await resp.json()) as { error?: string };
+        if (!resp.ok || json.error) {
+          throw new Error(friendlyCreateError(json.error || "Error al actualizar contraseña"));
+        }
+      }
+
+      setEditModal(null);
+      await load();
+    } catch (e: unknown) {
+      setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -579,7 +718,12 @@ export function UsuariosPanel() {
             </thead>
             <tbody>
               {paginatedRows.map((u) => (
-                <tr key={u.id} className="border-t border-white/10 text-neutral-200">
+                <tr
+                  key={u.id}
+                  className="cursor-pointer border-t border-white/10 text-neutral-200 transition hover:bg-white/5"
+                  onClick={() => void abrirEditorUsuario(u)}
+                  title="Haz click para editar usuario"
+                >
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2">{u.nombre}</td>
                   <td className="px-4 py-2">
@@ -597,12 +741,13 @@ export function UsuariosPanel() {
                     <button
                       type="button"
                       className="text-xs font-semibold text-[#33C7E3] hover:underline"
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setPwModal({
                           userId: u.id,
                           email: u.email ?? "",
-                        })
-                      }
+                        });
+                      }}
                     >
                       Cambiar clave
                     </button>
@@ -806,6 +951,126 @@ export function UsuariosPanel() {
                 {importing ? "Importando..." : "Importar usuarios"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-3xl rounded-xl border border-white/15 bg-[#141c28] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-white">Editar usuario</h3>
+                <p className="mt-1 text-sm text-neutral-400">Actualiza datos personales, rol y contraseña.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5"
+                onClick={() => setEditModal(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {loadErr ? <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{loadErr}</p> : null}
+
+            <form onSubmit={(e) => void guardarEdicionUsuario(e)} className="mt-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Email</span>
+                  <input
+                    type="email"
+                    required
+                    value={editModal.email}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, email: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Nombre</span>
+                  <input
+                    value={editModal.nombre}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, nombre: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Apellido</span>
+                  <input
+                    value={editModal.apellido}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, apellido: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">RUT</span>
+                  <input
+                    value={editModal.rut}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, rut: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Teléfono</span>
+                  <input
+                    value={editModal.telefono}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, telefono: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Dirección</span>
+                  <input
+                    value={editModal.direccion}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, direccion: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Rol</span>
+                  <select
+                    value={editModal.rol}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, rol: e.target.value } : curr))}
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  >
+                    {ADMIN_CREATABLE_ROLES.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="block text-neutral-400">Nueva contraseña (opcional)</span>
+                  <input
+                    type="password"
+                    minLength={6}
+                    value={editModal.password}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, password: e.target.value } : curr))}
+                    placeholder="Dejar vacío para no cambiar"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-neutral-300 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={editModal.mustChangePassword}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, mustChangePassword: e.target.checked } : curr))}
+                    className="h-4 w-4 rounded border-white/20 bg-black/25"
+                  />
+                  Forzar cambio de contraseña en próximo inicio de sesión
+                </label>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                <button type="button" className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/5" onClick={() => setEditModal(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={savingEdit} className="rounded-lg bg-[#33C7E3] px-4 py-2 text-sm font-bold text-[#0f1f2c] disabled:opacity-60">
+                  {savingEdit ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
