@@ -57,6 +57,7 @@ const ICON_BTN =
 
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
+  const [vehicleCountByRemate, setVehicleCountByRemate] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
@@ -88,7 +89,23 @@ export function RematesList() {
       setLoadingList(false);
       return;
     }
-    setItems(((data ?? []) as PortalRemateRow[]) || []);
+    const rows = ((data ?? []) as PortalRemateRow[]) || [];
+    setItems(rows);
+
+    if (!rows.length) {
+      setVehicleCountByRemate({});
+      setLoadingList(false);
+      return;
+    }
+
+    const remateIds = rows.map((row) => row.id);
+    const { data: lotesData } = await sb.from("portal_remate_lotes").select("remate_id").in("remate_id", remateIds);
+    const countMap: Record<string, number> = {};
+    for (const row of (lotesData ?? []) as Array<{ remate_id: string | null }>) {
+      if (!row.remate_id) continue;
+      countMap[row.remate_id] = (countMap[row.remate_id] ?? 0) + 1;
+    }
+    setVehicleCountByRemate(countMap);
     setLoadingList(false);
   }, []);
 
@@ -216,7 +233,7 @@ export function RematesList() {
       <ul className="space-y-3">
         {items.map((r) => (
           <li key={r.id}>
-            <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#141c28] p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#141c28] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/admin/remates/${r.id}`}
@@ -224,9 +241,10 @@ export function RematesList() {
                 >
                   {r.titulo}
                 </Link>
-                <p className="mt-1 text-xs text-neutral-500">
-                  Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")} · Identificador corto {r.id.slice(0, 8)}…
-                </p>
+                <p className="mt-1 text-xs text-neutral-500">Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
+              </div>
+              <div className="shrink-0 text-sm font-semibold text-white sm:px-3">
+                {vehicleCountByRemate[r.id] ?? 0} vehículos
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 {badge(r.estado)}
