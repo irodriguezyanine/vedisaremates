@@ -73,9 +73,14 @@ export function RematesList() {
     setSyncing(true);
     // Backfill best-effort para reflejar rápidamente cambios creados desde Tasaciones.
     // Si falla, no bloqueamos el listado del panel.
-    await sb.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 1000 }).catch(() => null);
-    await sb.rpc("portal_integracion_procesar_outbox", { p_limit: 1000 }).catch(() => null);
-    setSyncing(false);
+    try {
+      await sb.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 1000 });
+      await sb.rpc("portal_integracion_procesar_outbox", { p_limit: 1000 });
+    } catch {
+      // Best-effort: errores de sync no deben impedir listar remates.
+    } finally {
+      setSyncing(false);
+    }
 
     const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
     if (error) {
