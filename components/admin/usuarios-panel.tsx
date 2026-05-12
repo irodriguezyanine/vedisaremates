@@ -27,6 +27,13 @@ type ImportProgress = {
   skipped: number;
 };
 
+type ImportColumnKey = "username" | "email" | "nombre" | "apellido";
+type ImportColumnMapping = Record<ImportColumnKey, number>;
+type ParsedImportCsv = {
+  headers: string[];
+  rows: string[][];
+};
+
 type EditUserForm = {
   userId: string;
   email: string;
@@ -69,6 +76,17 @@ function normalize(v: unknown): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizeUsernameValue(v: unknown): string {
+  return String(v ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[_\-.]+|[_\-.]+$/g, "");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -136,38 +154,87 @@ function detectDelimiter(headerLine: string): string {
   return semicolons >= commas ? ";" : ",";
 }
 
-function parseCsvText(raw: string): ImportRow[] {
+function parseImportCsv(raw: string): ParsedImportCsv {
   const lines = raw
     .replace(/^\ufeff/, "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  if (lines.length <= 1) return [];
+  if (!lines.length) return { headers: [], rows: [] };
   const delimiter = detectDelimiter(lines[0]);
-  const headers = parseCsvLine(lines[0], delimiter).map((h) => normalize(h));
+  const firstRow = parseCsvLine(lines[0], delimiter);
+  const firstNormalized = firstRow.map((h) => normalize(h));
+  const knownHeaderTokens = new Set([
+    "user name",
+    "username",
+    "nombre de usuario",
+    "usuario",
+    "login",
+    "email",
+    "email address",
+    "emailaddress",
+    "correo",
+    "e-mail",
+    "first name",
+    "firstname",
+    "nombre",
+    "last name",
+    "lastname",
+    "apellido",
+  ]);
+  const hasHeader = firstNormalized.some((h) => knownHeaderTokens.has(h));
+
+  if (hasHeader) {
+    const rows: string[][] = [];
+    for (let i = 1; i < lines.length; i += 1) {
+      const cols = parseCsvLine(lines[i], delimiter);
+      if (cols.length) rows.push(cols);
+    }
+    return { headers: firstRow, rows };
+  }
+
+  const headers = firstRow.map((_, idx) => `Columna ${idx + 1}`);
+  const rows: string[][] = [firstRow];
+  for (let i = 1; i < lines.length; i += 1) {
+    const cols = parseCsvLine(lines[i], delimiter);
+    if (cols.length) rows.push(cols);
+  }
+  return { headers, rows };
+}
+
+function detectDefaultImportMapping(headers: string[]): ImportColumnMapping {
+  const normalizedHeaders = headers.map((h) => normalize(h));
   const indexOfAny = (aliases: string[]): number => {
-    for (let i = 0; i < headers.length; i += 1) {
-      const h = headers[i];
+    for (let i = 0; i < normalizedHeaders.length; i += 1) {
+      const h = normalizedHeaders[i];
       if (aliases.some((a) => h === normalize(a))) return i;
     }
     return -1;
   };
-  const emailIdx = indexOfAny(["email", "email address", "emailaddress", "correo", "e-mail"]);
-  const usernameIdx = indexOfAny(["user name", "username", "nombre de usuario", "usuario", "login"]);
-  const firstNameIdx = indexOfAny(["first name", "firstname", "nombre", "nombres"]);
-  const lastNameIdx = indexOfAny(["last name", "lastname", "apellido", "apellidos"]);
 
+  const username = indexOfAny(["user name", "username", "nombre de usuario", "usuario", "login"]);
+  const email = indexOfAny(["email", "email address", "emailaddress", "correo", "e-mail"]);
+  const nombre = indexOfAny(["first name", "firstname", "nombre", "nombres"]);
+  const apellido = indexOfAny(["last name", "lastname", "apellido", "apellidos"]);
+
+  return {
+    username: username >= 0 ? username : 1,
+    email: email >= 0 ? email : 2,
+    nombre: nombre >= 0 ? nombre : 0,
+    apellido: apellido >= 0 ? apellido : 3,
+  };
+}
+
+function buildImportRows(parsed: ParsedImportCsv, mapping: ImportColumnMapping): ImportRow[] {
   const rows: ImportRow[] = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const cols = parseCsvLine(lines[i], delimiter);
+  const col = (cols: string[], idx: number): string => (idx >= 0 ? cols[idx] ?? "" : "");
+  for (let i = 0; i < parsed.rows.length; i += 1) {
+    const cols = parsed.rows[i];
     if (!cols.length) continue;
-    const colOrEmpty = (idx: number): string => (idx >= 0 ? cols[idx] ?? "" : "");
-    const legacyLike = emailIdx < 0 && cols.length >= 3;
-    const nombre = legacyLike ? cols[0] ?? "" : colOrEmpty(firstNameIdx);
-    const apellido = legacyLike ? cols[1] ?? "" : colOrEmpty(lastNameIdx);
-    const email = (legacyLike ? cols[2] : colOrEmpty(emailIdx)).toLowerCase();
-    // Fallback explícito para planillas sin cabecera: User Name suele venir en 2da columna.
-    const username = legacyLike ? (cols[1] ?? "") : (usernameIdx >= 0 ? colOrEmpty(usernameIdx) : (cols[1] ?? ""));
+    const nombre = col(cols, mapping.nombre);
+    const apellido = col(cols, mapping.apellido);
+    const email = col(cols, mapping.email).toLowerCase();
+    const username = col(cols, mapping.username);
     if (!email || !email.includes("@")) continue;
     rows.push({ username: username.trim(), nombre: nombre.trim(), apellido: apellido.trim(), email: email.trim() });
   }
@@ -183,7 +250,7 @@ async function markPasswordChangeRequired(email: string, sb = createClient()) {
 }
 
 async function setUsernameByEmail(email: string, username: string, sb = createClient()): Promise<void> {
-  const cleanUsername = username.trim();
+  const cleanUsername = normalizeUsernameValue(username);
   if (!cleanUsername) return;
   if (!sb) throw new Error("Servicio no disponible");
   const { data, error } = await sb.rpc("portal_admin_set_username_by_email", {
@@ -253,11 +320,20 @@ export function UsuariosPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkRole, setBulkRole] = useState("cliente-remate");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   const [importOpen, setImportOpen] = useState(false);
   const [importFileName, setImportFileName] = useState("");
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [importParsed, setImportParsed] = useState<ParsedImportCsv | null>(null);
+  const [importMapping, setImportMapping] = useState<ImportColumnMapping>({
+    username: 1,
+    email: 2,
+    nombre: 0,
+    apellido: 3,
+  });
+  const [importColumnsOpen, setImportColumnsOpen] = useState(false);
   const [importRole, setImportRole] = useState("cliente-remate");
   const [importing, setImporting] = useState(false);
   const [importPassword, setImportPassword] = useState("Vedisa");
@@ -447,7 +523,7 @@ export function UsuariosPanel() {
       const payload = {
         p_user_id: editModal.userId,
         p_email: editModal.email.trim().toLowerCase(),
-        p_username: editModal.username.trim(),
+        p_username: normalizeUsernameValue(editModal.username),
         p_nombre: editModal.nombre.trim(),
         p_apellido: editModal.apellido.trim(),
         p_rut: editModal.rut.trim(),
@@ -593,6 +669,10 @@ export function UsuariosPanel() {
   }, [activeTab, globalSearch]);
 
   useEffect(() => {
+    if (selectedCount === 0) setBulkActionsOpen(false);
+  }, [selectedCount]);
+
+  useEffect(() => {
     setSelectedIds((prev) => {
       if (activeTab !== "cliente_remate") return new Set();
       const allowed = new Set(tabRows.map((u) => u.id));
@@ -636,10 +716,15 @@ export function UsuariosPanel() {
     const f = ev.target.files?.[0];
     if (!f) return;
     const txt = await f.text();
-    const parsed = parseCsvText(txt);
+    const parsed = parseImportCsv(txt);
+    const mapping = detectDefaultImportMapping(parsed.headers);
+    const builtRows = buildImportRows(parsed, mapping);
     setImportFileName(f.name);
-    setImportRows(parsed);
+    setImportParsed(parsed);
+    setImportMapping(mapping);
+    setImportRows(builtRows);
     setImportResult(null);
+    setImportColumnsOpen(false);
   }
 
   async function importCsvUsers() {
@@ -859,6 +944,7 @@ export function UsuariosPanel() {
     sb: ReturnType<typeof createClient>,
   ): Promise<{
     email: string;
+    username: string;
     nombre: string;
     apellido: string;
     rut: string;
@@ -878,6 +964,7 @@ export function UsuariosPanel() {
           ok?: boolean;
           user?: {
             email?: string | null;
+            username?: string | null;
             nombre?: string | null;
             apellido?: string | null;
             rut?: string | null;
@@ -892,6 +979,7 @@ export function UsuariosPanel() {
     if (!res?.ok || !res.user) return null;
     return {
       email: String(res.user.email ?? "").trim().toLowerCase(),
+      username: String(res.user.username ?? "").trim(),
       nombre: String(res.user.nombre ?? "").trim(),
       apellido: String(res.user.apellido ?? "").trim(),
       rut: String(res.user.rut ?? "").trim(),
@@ -925,6 +1013,7 @@ export function UsuariosPanel() {
           const { data, error } = await supabase.rpc("portal_admin_update_usuario", {
             p_user_id: userId,
             p_email: detalle.email,
+            p_username: normalizeUsernameValue(detalle.username),
             p_nombre: detalle.nombre,
             p_apellido: detalle.apellido,
             p_rut: detalle.rut,
@@ -1096,49 +1185,87 @@ export function UsuariosPanel() {
                 <span className="text-xs text-neutral-500">Seleccionados: {selectedCount}</span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={bulkBusy || selectedCount === 0}
-                  onClick={() => void bulkUpdateSelected({ garantiaAprobada: true })}
-                  className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-40"
-                >
-                  Habilitar garantía
-                </button>
-                <button
-                  type="button"
-                  disabled={bulkBusy || selectedCount === 0}
-                  onClick={() => void bulkUpdateSelected({ garantiaAprobada: false })}
-                  className="rounded-lg border border-amber-400/30 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-40"
-                >
-                  Deshabilitar garantía
-                </button>
-                <select
-                  value={bulkRole}
-                  onChange={(e) => setBulkRole(e.target.value)}
-                  className="rounded-lg border border-white/15 bg-black/25 px-3 py-1.5 text-xs text-white"
-                >
-                  {ADMIN_CREATABLE_ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={bulkBusy || selectedCount === 0}
-                  onClick={() => void bulkUpdateSelected({ rol: bulkRole })}
-                  className="rounded-lg border border-sky-400/30 px-3 py-1.5 text-xs font-semibold text-sky-200 disabled:opacity-40"
-                >
-                  Cambiar rol masivo
-                </button>
-                <button
-                  type="button"
-                  disabled={bulkBusy || selectedCount === 0}
-                  onClick={() => void bulkDeleteSelected()}
-                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-200 disabled:opacity-40"
-                >
-                  Eliminar seleccionados
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    disabled={bulkBusy || selectedCount === 0}
+                    onClick={() => setBulkActionsOpen((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-neutral-200 disabled:opacity-40"
+                  >
+                    <span>Opciones masivas</span>
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <circle cx="5" cy="12" r="1.5" />
+                      <circle cx="12" cy="12" r="1.5" />
+                      <circle cx="19" cy="12" r="1.5" />
+                    </svg>
+                  </button>
+                  {bulkActionsOpen ? (
+                    <div className="absolute z-20 mt-2 w-72 rounded-lg border border-white/10 bg-[#101722] p-3 shadow-xl">
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled={bulkBusy || selectedCount === 0}
+                          onClick={() => {
+                            setBulkActionsOpen(false);
+                            void bulkUpdateSelected({ garantiaAprobada: true });
+                          }}
+                          className="w-full rounded-lg border border-emerald-400/30 px-3 py-1.5 text-left text-xs font-semibold text-emerald-200 disabled:opacity-40"
+                        >
+                          Habilitar garantía
+                        </button>
+                        <button
+                          type="button"
+                          disabled={bulkBusy || selectedCount === 0}
+                          onClick={() => {
+                            setBulkActionsOpen(false);
+                            void bulkUpdateSelected({ garantiaAprobada: false });
+                          }}
+                          className="w-full rounded-lg border border-amber-400/30 px-3 py-1.5 text-left text-xs font-semibold text-amber-200 disabled:opacity-40"
+                        >
+                          Deshabilitar garantía
+                        </button>
+                        <div className="rounded-lg border border-white/10 p-2">
+                          <p className="mb-1 text-[11px] text-neutral-400">Cambiar rol masivo</p>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={bulkRole}
+                              onChange={(e) => setBulkRole(e.target.value)}
+                              className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-xs text-white"
+                            >
+                              {ADMIN_CREATABLE_ROLES.map((r) => (
+                                <option key={r.value} value={r.value}>
+                                  {r.label}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={bulkBusy || selectedCount === 0}
+                              onClick={() => {
+                                setBulkActionsOpen(false);
+                                void bulkUpdateSelected({ rol: bulkRole });
+                              }}
+                              className="rounded-lg border border-sky-400/30 px-2 py-1.5 text-xs font-semibold text-sky-200 disabled:opacity-40"
+                            >
+                              Aplicar
+                            </button>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={bulkBusy || selectedCount === 0}
+                          onClick={() => {
+                            setBulkActionsOpen(false);
+                            void bulkDeleteSelected();
+                          }}
+                          className="w-full rounded-lg border border-red-500/40 px-3 py-1.5 text-left text-xs font-semibold text-red-200 disabled:opacity-40"
+                        >
+                          Eliminar seleccionados
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               {bulkMsg ? <p className="mt-2 text-xs text-neutral-400">{bulkMsg}</p> : null}
             </div>
@@ -1327,9 +1454,24 @@ export function UsuariosPanel() {
                 <h3 className="text-lg font-bold text-white">Importar usuarios desde CSV</h3>
                 <p className="mt-1 text-sm text-neutral-400">Archivo esperado: `User Name`, `Email Address`, `First Name`, `Last Name`.</p>
               </div>
-              <button type="button" className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5" onClick={() => setImportOpen(false)}>
-                Cerrar
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 text-neutral-300 hover:bg-white/5"
+                  onClick={() => setImportColumnsOpen((v) => !v)}
+                  title="Elegir columnas del CSV"
+                  aria-label="Elegir columnas del CSV"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path d="M3 6h18" strokeLinecap="round" />
+                    <path d="M6 12h12" strokeLinecap="round" />
+                    <path d="M10 18h4" strokeLinecap="round" />
+                  </svg>
+                </button>
+                <button type="button" className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5" onClick={() => setImportOpen(false)}>
+                  Cerrar
+                </button>
+              </div>
             </div>
             {loadErr ? <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{loadErr}</p> : null}
 
@@ -1353,6 +1495,91 @@ export function UsuariosPanel() {
                 <input value={importPassword} onChange={(e) => setImportPassword(e.target.value)} minLength={6} className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white" />
               </label>
             </div>
+
+            {importColumnsOpen && importParsed?.headers?.length ? (
+              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
+                <p className="text-sm font-semibold text-white">Asignación de columnas CSV</p>
+                <p className="mt-1 text-xs text-neutral-400">Selecciona qué columna corresponde a cada campo, incluyendo Nombre de usuario.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs">
+                    <span className="block text-neutral-400">Nombre de usuario</span>
+                    <select
+                      value={importMapping.username}
+                      onChange={(e) => {
+                        const next = { ...importMapping, username: Number(e.target.value) };
+                        setImportMapping(next);
+                        setImportRows(buildImportRows(importParsed, next));
+                        setImportResult(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-white"
+                    >
+                      {importParsed.headers.map((h, idx) => (
+                        <option key={`u-${idx}`} value={idx}>
+                          {h || `Columna ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    <span className="block text-neutral-400">Email</span>
+                    <select
+                      value={importMapping.email}
+                      onChange={(e) => {
+                        const next = { ...importMapping, email: Number(e.target.value) };
+                        setImportMapping(next);
+                        setImportRows(buildImportRows(importParsed, next));
+                        setImportResult(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-white"
+                    >
+                      {importParsed.headers.map((h, idx) => (
+                        <option key={`e-${idx}`} value={idx}>
+                          {h || `Columna ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    <span className="block text-neutral-400">Nombre</span>
+                    <select
+                      value={importMapping.nombre}
+                      onChange={(e) => {
+                        const next = { ...importMapping, nombre: Number(e.target.value) };
+                        setImportMapping(next);
+                        setImportRows(buildImportRows(importParsed, next));
+                        setImportResult(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-white"
+                    >
+                      {importParsed.headers.map((h, idx) => (
+                        <option key={`n-${idx}`} value={idx}>
+                          {h || `Columna ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    <span className="block text-neutral-400">Apellido</span>
+                    <select
+                      value={importMapping.apellido}
+                      onChange={(e) => {
+                        const next = { ...importMapping, apellido: Number(e.target.value) };
+                        setImportMapping(next);
+                        setImportRows(buildImportRows(importParsed, next));
+                        setImportResult(null);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-white"
+                    >
+                      {importParsed.headers.map((h, idx) => (
+                        <option key={`a-${idx}`} value={idx}>
+                          {h || `Columna ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 text-sm text-neutral-300">
               <p>
