@@ -1183,16 +1183,14 @@ export function UsuariosPanel() {
                   Seleccionar todos los filtrados ({filteredRows.length})
                 </label>
                 <span className="text-xs text-neutral-500">Seleccionados: {selectedCount}</span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="relative">
+                <div className="relative ml-auto">
                   <button
                     type="button"
                     disabled={bulkBusy || selectedCount === 0}
                     onClick={() => setBulkActionsOpen((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-neutral-200 disabled:opacity-40"
                   >
-                    <span>Opciones masivas</span>
+                    <span>Opciones</span>
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                       <circle cx="5" cy="12" r="1.5" />
                       <circle cx="12" cy="12" r="1.5" />
