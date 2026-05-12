@@ -60,6 +60,7 @@ export function RematesList() {
   const [err, setErr] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -69,6 +70,13 @@ export function RematesList() {
       setLoadingList(false);
       return;
     }
+    setSyncing(true);
+    // Backfill best-effort para reflejar rápidamente cambios creados desde Tasaciones.
+    // Si falla, no bloqueamos el listado del panel.
+    await sb.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 1000 }).catch(() => null);
+    await sb.rpc("portal_integracion_procesar_outbox", { p_limit: 1000 }).catch(() => null);
+    setSyncing(false);
+
     const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
     if (error) {
       setErr(error.message || "No se pudo obtener el listado. Revisá tu conexión e intentá de nuevo.");
@@ -176,15 +184,15 @@ export function RematesList() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={loadingList}
+            disabled={loadingList || syncing}
             onClick={() => {
               setLoadingList(true);
               void load();
             }}
             className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <IconArrowPath className={loadingList ? "animate-spin" : ""} />
-            {loadingList ? "Actualizando…" : "Refrescar"}
+            <IconArrowPath className={loadingList || syncing ? "animate-spin" : ""} />
+            {loadingList ? "Actualizando…" : syncing ? "Sincronizando…" : "Refrescar"}
           </button>
           <button
             type="button"
