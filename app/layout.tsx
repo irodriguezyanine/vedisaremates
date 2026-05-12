@@ -13,6 +13,11 @@ const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedisaremates.vercel.a
 
 export const metadata: Metadata = {
   metadataBase: new URL(base),
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
   title: {
     default: "VEDISA Remates · Portal de subastas",
     template: "%s · VEDISA Remates",
