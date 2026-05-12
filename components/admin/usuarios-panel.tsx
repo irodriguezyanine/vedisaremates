@@ -20,6 +20,7 @@ type ImportRow = {
 type EditUserForm = {
   userId: string;
   email: string;
+  username: string;
   nombre: string;
   apellido: string;
   rut: string;
@@ -363,6 +364,7 @@ export function UsuariosPanel() {
     const baseForm: EditUserForm = {
       userId: row.id,
       email: (row.email ?? "").trim(),
+      username: "",
       nombre: (row.nombre ?? "").trim(),
       apellido: "",
       rut: "",
@@ -388,6 +390,7 @@ export function UsuariosPanel() {
             user?: {
               id?: string;
               email?: string | null;
+              username?: string | null;
               nombre?: string | null;
               apellido?: string | null;
               rut?: string | null;
@@ -405,6 +408,7 @@ export function UsuariosPanel() {
         return {
           ...curr,
           email: (res.user?.email ?? curr.email ?? "").trim(),
+          username: (res.user?.username ?? curr.username ?? "").trim(),
           nombre: (res.user?.nombre ?? curr.nombre ?? "").trim(),
           apellido: (res.user?.apellido ?? "").trim(),
           rut: (res.user?.rut ?? "").trim(),
@@ -431,6 +435,7 @@ export function UsuariosPanel() {
       const payload = {
         p_user_id: editModal.userId,
         p_email: editModal.email.trim().toLowerCase(),
+        p_username: editModal.username.trim(),
         p_nombre: editModal.nombre.trim(),
         p_apellido: editModal.apellido.trim(),
         p_rut: editModal.rut.trim(),
@@ -1330,6 +1335,15 @@ export function UsuariosPanel() {
                     value={editModal.email}
                     onChange={(e) => setEditModal((curr) => (curr ? { ...curr, email: e.target.value } : curr))}
                     className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="block text-neutral-400">Nombre de usuario</span>
+                  <input
+                    value={editModal.username}
+                    onChange={(e) => setEditModal((curr) => (curr ? { ...curr, username: e.target.value } : curr))}
+                    placeholder="Ej: JPMONTERO1"
+                    className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
                   />
                 </label>
                 <label className="text-sm">
