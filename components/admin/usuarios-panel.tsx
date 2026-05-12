@@ -673,6 +673,7 @@ export function UsuariosPanel() {
       const errors: string[] = [];
       const seenInFile = new Set<string>();
       const candidates: ImportRow[] = [];
+      const existingCandidates: ImportRow[] = [];
       let lastProgressPush = 0;
 
       for (let i = 0; i < importRows.length; i += 1) {
@@ -681,25 +682,16 @@ export function UsuariosPanel() {
         if (!normalizedEmail) {
           failed += 1;
           errors.push(`Fila ${i + 2}: correo inválido.`);
-          continue;
-        }
-        if (seenInFile.has(normalizedEmail)) {
+        } else if (seenInFile.has(normalizedEmail)) {
           skipped += 1;
-          continue;
-        }
-        seenInFile.add(normalizedEmail);
-        if (existingEmailSet.has(normalizedEmail)) {
-          try {
-            await setUsernameByEmail(row.email, row.username, supabase);
-            updated += 1;
-          } catch (err) {
-            failed += 1;
-            const msg = err instanceof Error ? err.message : "No se pudo actualizar nombre de usuario.";
-            errors.push(`${row.email}: ${friendlyCreateError(msg)}`);
+        } else {
+          seenInFile.add(normalizedEmail);
+          if (existingEmailSet.has(normalizedEmail)) {
+            existingCandidates.push(row);
+          } else {
+            candidates.push(row);
           }
-          continue;
         }
-        candidates.push(row);
 
         const current = i + 1;
         const shouldPush = current === importRows.length || current - lastProgressPush >= 50;
@@ -720,7 +712,7 @@ export function UsuariosPanel() {
       setImportProgress({
         phase: "creating",
         current: 0,
-        total: Math.max(1, candidates.length),
+        total: Math.max(1, existingCandidates.length + candidates.length),
         created,
         updated,
         failed,
@@ -728,6 +720,45 @@ export function UsuariosPanel() {
       });
 
       let createdProcessed = 0;
+      let updatedProcessed = 0;
+
+      for (let start = 0; start < existingCandidates.length; start += IMPORT_CONCURRENCY) {
+        const batch = existingCandidates.slice(start, start + IMPORT_CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(async (row) => {
+            try {
+              await setUsernameByEmail(row.email, row.username, supabase);
+              return { ok: true };
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "No se pudo actualizar nombre de usuario.";
+              return {
+                ok: false,
+                error: `${row.email}: ${friendlyCreateError(msg)}`,
+              };
+            }
+          }),
+        );
+
+        for (const result of batchResults) {
+          if (result.ok) updated += 1;
+          else {
+            failed += 1;
+            errors.push(result.error || "No se pudo actualizar un usuario existente.");
+          }
+          updatedProcessed += 1;
+        }
+
+        setImportProgress({
+          phase: "creating",
+          current: updatedProcessed + createdProcessed,
+          total: Math.max(1, existingCandidates.length + candidates.length),
+          created,
+          updated,
+          failed,
+          skipped,
+        });
+      }
+
       for (let start = 0; start < candidates.length; start += IMPORT_CONCURRENCY) {
         const batch = candidates.slice(start, start + IMPORT_CONCURRENCY);
         const batchResults = await Promise.all(
@@ -783,8 +814,8 @@ export function UsuariosPanel() {
 
         setImportProgress({
           phase: "creating",
-          current: createdProcessed,
-          total: Math.max(1, candidates.length),
+          current: updatedProcessed + createdProcessed,
+          total: Math.max(1, existingCandidates.length + candidates.length),
           created,
           updated,
           failed,
