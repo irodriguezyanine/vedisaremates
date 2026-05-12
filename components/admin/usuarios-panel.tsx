@@ -11,6 +11,7 @@ import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/publi
 type TabKey = "staff" | "cliente_remate";
 
 type ImportRow = {
+  username: string;
   nombre: string;
   apellido: string;
   email: string;
@@ -42,6 +43,8 @@ function friendlyCreateError(raw: string): string {
   if (s.includes("perfil_no_encontrado")) return "No se encontró el perfil del usuario.";
   if (s.includes("email_invalido")) return "El email ingresado no es válido.";
   if (s.includes("email_duplicado")) return "Ese email ya está registrado por otro usuario.";
+  if (s.includes("username_duplicado")) return "Ese nombre de usuario ya está asignado a otra cuenta.";
+  if (s.includes("username_invalido")) return "El nombre de usuario contiene caracteres no válidos.";
   if (s.includes("fetch") || s.includes("failed")) return "No se pudo contactar el servicio. Reintentá en unos minutos.";
   if (s.includes("session") || s.includes("sesión")) return raw;
   if (s.includes("already registered") || s.includes("duplicate") || s.includes("already been registered")) return "Ese correo ya tiene una cuenta.";
@@ -90,18 +93,71 @@ function csvSafe(text: string): string {
   return `"${value}"`;
 }
 
+function parseCsvLine(line: string, delimiter: string): string[] {
+  const cols: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (ch === delimiter && !inQuotes) {
+      cols.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  cols.push(current.trim());
+  return cols;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const semicolons = (headerLine.match(/;/g) ?? []).length;
+  const commas = (headerLine.match(/,/g) ?? []).length;
+  return semicolons >= commas ? ";" : ",";
+}
+
 function parseCsvText(raw: string): ImportRow[] {
-  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = raw
+    .replace(/^\ufeff/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   if (lines.length <= 1) return [];
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = parseCsvLine(lines[0], delimiter).map((h) => normalize(h));
+  const indexOfAny = (aliases: string[]): number => {
+    for (let i = 0; i < headers.length; i += 1) {
+      const h = headers[i];
+      if (aliases.some((a) => h === normalize(a))) return i;
+    }
+    return -1;
+  };
+  const emailIdx = indexOfAny(["email", "email address", "emailaddress", "correo", "e-mail"]);
+  const usernameIdx = indexOfAny(["user name", "username", "nombre de usuario", "usuario", "login"]);
+  const firstNameIdx = indexOfAny(["first name", "firstname", "nombre", "nombres"]);
+  const lastNameIdx = indexOfAny(["last name", "lastname", "apellido", "apellidos"]);
+
   const rows: ImportRow[] = [];
   for (let i = 1; i < lines.length; i += 1) {
-    const cols = lines[i].split(";").map((c) => c.trim());
-    if (cols.length < 3) continue;
-    const nombre = cols[0] ?? "";
-    const apellido = cols[1] ?? "";
-    const email = (cols[2] ?? "").toLowerCase();
+    const cols = parseCsvLine(lines[i], delimiter);
+    if (!cols.length) continue;
+    const colOrEmpty = (idx: number): string => (idx >= 0 ? cols[idx] ?? "" : "");
+    const legacyLike = emailIdx < 0 && cols.length >= 3;
+    const nombre = legacyLike ? cols[0] ?? "" : colOrEmpty(firstNameIdx);
+    const apellido = legacyLike ? cols[1] ?? "" : colOrEmpty(lastNameIdx);
+    const email = (legacyLike ? cols[2] : colOrEmpty(emailIdx)).toLowerCase();
+    const username = legacyLike ? "" : colOrEmpty(usernameIdx);
     if (!email || !email.includes("@")) continue;
-    rows.push({ nombre, apellido, email });
+    rows.push({ username: username.trim(), nombre: nombre.trim(), apellido: apellido.trim(), email: email.trim() });
   }
   return rows;
 }
@@ -112,6 +168,21 @@ async function markPasswordChangeRequired(email: string, sb = createClient()) {
     p_email: email,
     p_requerido: true,
   });
+}
+
+async function setUsernameByEmail(email: string, username: string, sb = createClient()): Promise<void> {
+  const cleanUsername = username.trim();
+  if (!cleanUsername) return;
+  if (!sb) throw new Error("Servicio no disponible");
+  const { data, error } = await sb.rpc("portal_admin_set_username_by_email", {
+    p_email: email,
+    p_username: cleanUsername,
+  });
+  const res = data as { ok?: boolean; error?: string } | null;
+  if (error || !res?.ok) {
+    const err = res?.error || error?.message || "No se pudo actualizar nombre de usuario";
+    throw new Error(err);
+  }
 }
 
 async function forceRoleByEmail(email: string, rol: string, sb = createClient()): Promise<void> {
@@ -180,6 +251,7 @@ export function UsuariosPanel() {
   const [importPassword, setImportPassword] = useState("Vedisa");
   const [importResult, setImportResult] = useState<{
     created: number;
+    updated: number;
     failed: number;
     skipped: number;
     errors: string[];
@@ -569,6 +641,7 @@ export function UsuariosPanel() {
       if (!session) throw new Error("Sesión caducada. Volvé a iniciar sesión.");
 
       let created = 0;
+      let updated = 0;
       let failed = 0;
       let skipped = 0;
       const errors: string[] = [];
@@ -589,7 +662,14 @@ export function UsuariosPanel() {
         }
         seenInFile.add(normalizedEmail);
         if (existingEmailSet.has(normalizedEmail)) {
-          skipped += 1;
+          try {
+            await setUsernameByEmail(row.email, row.username, supabase);
+            updated += 1;
+          } catch (err) {
+            failed += 1;
+            const msg = err instanceof Error ? err.message : "No se pudo actualizar nombre de usuario.";
+            errors.push(`${row.email}: ${friendlyCreateError(msg)}`);
+          }
           continue;
         }
         candidates.push(row);
@@ -626,6 +706,7 @@ export function UsuariosPanel() {
               await Promise.all([
                 forceRoleByEmail(row.email, importRole, supabase),
                 markPasswordChangeRequired(row.email, supabase),
+                setUsernameByEmail(row.email, row.username, supabase),
               ]);
             } catch {
               return {
@@ -647,7 +728,7 @@ export function UsuariosPanel() {
         }
       }
 
-      setImportResult({ created, failed, skipped, errors: errors.slice(0, 25) });
+      setImportResult({ created, updated, failed, skipped, errors: errors.slice(0, 25) });
       await load();
     } catch (e: unknown) {
       setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
@@ -1148,7 +1229,7 @@ export function UsuariosPanel() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-white">Importar usuarios desde CSV</h3>
-                <p className="mt-1 text-sm text-neutral-400">Archivo esperado: `First Name;Last Name;Email Address`.</p>
+                <p className="mt-1 text-sm text-neutral-400">Archivo esperado: `User Name`, `Email Address`, `First Name`, `Last Name`.</p>
               </div>
               <button type="button" className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5" onClick={() => setImportOpen(false)}>
                 Cerrar
@@ -1184,14 +1265,15 @@ export function UsuariosPanel() {
               <p className="mt-1">
                 Registros listos para importar: <strong className="text-[#33C7E3]">{importRows.length}</strong>
               </p>
-              <p className="mt-1 text-neutral-400">Correos existentes o repetidos en el archivo se omiten automáticamente (sin cambios de contraseña).</p>
+              <p className="mt-1 text-neutral-400">Si el correo ya existe, se actualiza su nombre de usuario. Duplicados dentro del archivo se omiten.</p>
             </div>
 
             {importResult ? (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 text-sm">
                 <p className="text-emerald-300">Creados: {importResult.created}</p>
+                <p className="text-cyan-300">Actualizados existentes: {importResult.updated}</p>
                 <p className="text-amber-300">Con error: {importResult.failed}</p>
-                <p className="text-sky-300">Omitidos por duplicado/existentes: {importResult.skipped}</p>
+                <p className="text-sky-300">Omitidos por duplicado en archivo: {importResult.skipped}</p>
                 {importResult.errors.length ? (
                   <div className="mt-2 max-h-28 overflow-auto text-xs text-neutral-400">
                     {importResult.errors.map((err) => (
