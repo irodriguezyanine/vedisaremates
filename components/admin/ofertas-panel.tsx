@@ -19,6 +19,7 @@ type OfertaFeedRow = {
   es_auto: boolean;
   sospechosa: boolean;
   motivo_sospecha: string | null;
+  es_ganadora: boolean;
 };
 
 export function OfertasPanel() {
@@ -151,7 +152,7 @@ export function OfertasPanel() {
 
   function exportCsv() {
     const lines = [
-      "Fecha;Remate;Lote;Cliente;Usuario;Email;Monto;Auto;Sospechosa;Motivo",
+      "Fecha;Remate;Lote;Cliente;Usuario;Email;Monto;Auto;Sospechosa;Ganadora;Motivo",
       ...filtered.map((r) =>
         [
           new Date(r.fecha).toLocaleString("es-CL"),
@@ -163,6 +164,7 @@ export function OfertasPanel() {
           String(r.monto),
           r.es_auto ? "si" : "no",
           r.sospechosa ? "si" : "no",
+          r.es_ganadora ? "si" : "no",
           r.motivo_sospecha ?? "",
         ]
           .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -191,6 +193,7 @@ export function OfertasPanel() {
 <td>${formatClp(r.monto)}</td>
 <td>${r.es_auto ? "Auto" : "Manual"}</td>
 <td>${r.sospechosa ? r.motivo_sospecha ?? "Revisar" : "-"}</td>
+<td>${r.es_ganadora ? "Si" : "-"}</td>
 </tr>`,
       )
       .join("");
@@ -209,7 +212,7 @@ export function OfertasPanel() {
       <h1>Acta oficial de ofertas</h1>
       <p>Fecha de emisión: ${new Date().toLocaleString("es-CL")}</p>
       <table>
-        <thead><tr><th>Fecha</th><th>Remate</th><th>Lote</th><th>Cliente</th><th>Usuario</th><th>Email</th><th>Oferta</th><th>Tipo</th><th>Alerta</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Remate</th><th>Lote</th><th>Cliente</th><th>Usuario</th><th>Email</th><th>Oferta</th><th>Tipo</th><th>Alerta</th><th>Ganadora</th></tr></thead>
         <tbody>${htmlRows}</tbody>
       </table>
       </body></html>
@@ -326,11 +329,17 @@ export function OfertasPanel() {
               {visibleCols.oferta ? <th className="px-3 py-2 font-semibold">Oferta</th> : null}
               {visibleCols.tipo ? <th className="px-3 py-2 font-semibold">Tipo</th> : null}
               {visibleCols.alerta ? <th className="px-3 py-2 font-semibold">Alerta</th> : null}
+              <th className="px-3 py-2 font-semibold">Ganadora</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => (
-              <tr key={r.oferta_id} className={`border-t border-white/10 ${r.sospechosa ? "bg-amber-900/20" : "text-neutral-200"}`}>
+              <tr
+                key={r.oferta_id}
+                className={`border-t border-white/10 ${
+                  r.es_ganadora ? "bg-emerald-900/25 text-neutral-100" : r.sospechosa ? "bg-amber-900/20" : "text-neutral-200"
+                }`}
+              >
                 {visibleCols.fecha ? <td className="px-3 py-2">{new Date(r.fecha).toLocaleString("es-CL")}</td> : null}
                 {visibleCols.remateLote ? (
                   <td className="px-3 py-2">
@@ -344,11 +353,18 @@ export function OfertasPanel() {
                 {visibleCols.oferta ? <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(r.monto)}</td> : null}
                 {visibleCols.tipo ? <td className="px-3 py-2">{r.es_auto ? "Auto" : "Manual"}</td> : null}
                 {visibleCols.alerta ? <td className="px-3 py-2">{r.sospechosa ? (r.motivo_sospecha ?? "Revisar") : "—"}</td> : null}
+                <td className="px-3 py-2">
+                  {r.es_ganadora ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Sí</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               </tr>
             ))}
             {!filtered.length ? (
               <tr>
-                <td colSpan={Object.values(visibleCols).filter(Boolean).length || 1} className="px-3 py-8 text-center text-neutral-500">
+                <td colSpan={(Object.values(visibleCols).filter(Boolean).length || 1) + 1} className="px-3 py-8 text-center text-neutral-500">
                   {loading ? "Cargando…" : "Sin ofertas para mostrar."}
                 </td>
               </tr>

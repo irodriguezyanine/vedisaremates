@@ -23,6 +23,7 @@ type OfertaAdminRow = {
   es_auto?: boolean;
   sospechosa?: boolean;
   motivo_sospecha?: string | null;
+  es_ganadora?: boolean;
 };
 
 const PAGE_SIZE = 20;
@@ -263,6 +264,30 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     setSavingLoteId(null);
     if (error) {
       setErr(error.message);
+      return;
+    }
+    await load();
+  }
+
+  async function setOfertaGanadora(loteId: string, ofertaId: string | null) {
+    const sb = createClient();
+    if (!sb) {
+      setErr("Servicio de datos no disponible.");
+      return;
+    }
+    setSavingLoteId(loteId);
+    const { data, error } = await sb.rpc("portal_admin_set_oferta_ganadora", {
+      p_lote_id: loteId,
+      p_oferta_id: ofertaId,
+    });
+    setSavingLoteId(null);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (!res?.ok) {
+      setErr(res?.error ?? "No se pudo actualizar la oferta ganadora.");
       return;
     }
     await load();
@@ -511,19 +536,49 @@ export function RemateEditor({ remateId }: { remateId: string }) {
                   <th className="px-3 py-2 font-semibold">Lote</th>
                   <th className="px-3 py-2 font-semibold">Oferta</th>
                   <th className="px-3 py-2 font-semibold">Tipo</th>
+                  <th className="px-3 py-2 font-semibold">Ganadora</th>
                   <th className="px-3 py-2 font-semibold">Alerta</th>
                   <th className="px-3 py-2 font-semibold">Fecha</th>
                 </tr>
               </thead>
               <tbody>
                 {ofertas.map((o) => (
-                  <tr key={o.oferta_id} className={`border-t border-white/10 text-neutral-200 ${o.sospechosa ? "bg-amber-900/20" : ""}`}>
+                  <tr
+                    key={o.oferta_id}
+                    className={`border-t border-white/10 text-neutral-200 ${
+                      o.es_ganadora ? "bg-emerald-900/25" : o.sospechosa ? "bg-amber-900/20" : ""
+                    }`}
+                  >
                     <td className="px-3 py-2">{o.cliente_nombre || "Sin nombre"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{o.cliente_usuario || "—"}</td>
                     <td className="px-3 py-2">{o.cliente_email || "—"}</td>
                     <td className="px-3 py-2">{o.lote_titulo || "Lote"}</td>
                     <td className="px-3 py-2 font-bold text-[#FFC600]">{formatClp(o.monto)}</td>
                     <td className="px-3 py-2">{o.es_auto ? "Auto" : "Manual"}</td>
+                    <td className="px-3 py-2">
+                      {o.es_ganadora ? (
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">Ganadora</span>
+                          <button
+                            type="button"
+                            className="text-xs text-emerald-200 hover:underline disabled:opacity-50"
+                            disabled={savingLoteId === o.lote_id}
+                            onClick={() => void setOfertaGanadora(o.lote_id, null)}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rounded border border-emerald-400/40 px-2 py-1 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                          disabled={savingLoteId === o.lote_id}
+                          onClick={() => void setOfertaGanadora(o.lote_id, o.oferta_id)}
+                        >
+                          Marcar ganadora
+                        </button>
+                      )}
+                    </td>
                     <td className="px-3 py-2">{o.sospechosa ? (o.motivo_sospecha ?? "Revisar") : "—"}</td>
                     <td className="px-3 py-2 text-neutral-400">{new Date(o.fecha).toLocaleString("es-CL")}</td>
                   </tr>
