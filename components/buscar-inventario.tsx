@@ -78,7 +78,7 @@ export function BuscarInventario() {
     if (!isSupabaseConfigured()) {
       setRows([]);
       setLoading(false);
-      setErr("Supabase no está configurado.");
+      setErr("Servicio no disponible en este momento.");
       return;
     }
     const sb = createClient();

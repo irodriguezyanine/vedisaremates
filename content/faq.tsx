@@ -64,8 +64,7 @@ export const FAQ_ITEMS: FaqEntry[] = [
     q: "¿Contraseña olvidada?",
     body: (
       <p>
-        Usa «¿Olvidó su contraseña?» en el inicio de sesión cuando integremos Supabase Auth. Si no llega el
-        correo, revisa spam y contáctanos.
+        Usa «¿Olvidó su contraseña?» en el inicio de sesión. Si no llega el correo, revisa spam y contáctanos.
       </p>
     ),
   },

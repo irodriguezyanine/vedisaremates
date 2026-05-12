@@ -129,7 +129,7 @@ export function NavVerMenuContent({ onNavigate, variant = "dropdown" }: Props) {
         <p className={`${pad} text-xs text-amber-700 dark:text-amber-200`}>{err}</p>
       ) : buckets.length === 0 ? (
         <p className={`${pad} ${subtle}`}>
-          Aún no hay lotes cargados en subastas visibles para el público, o revisá la conexión con Supabase.
+          Aún no hay lotes cargados en subastas visibles para el público.
         </p>
       ) : (
         buckets.map((b) => (

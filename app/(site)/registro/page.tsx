@@ -18,8 +18,7 @@ export default function RegistroPage() {
           <div>
             <h1 className="text-3xl font-black text-neutral-900">Registrarse</h1>
             <p className="mt-2 max-w-xl text-neutral-600">
-              Cuenta única para este portal y para Tasaciones Vedisa (misma Supabase). Completá el formulario o revisá los
-              requisitos al lado.
+              Crea tu cuenta para participar en remates. Completa el formulario y revisa los requisitos al lado.
             </p>
           </div>
           <Link

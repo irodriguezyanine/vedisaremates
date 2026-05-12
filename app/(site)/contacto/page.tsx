@@ -82,10 +82,8 @@ export default function ContactoPage() {
         <HubSpotForm region={region as string} portalId={portalId as string} formId={formId as string} />
       ) : (
         <div className="mt-8 rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center text-sm text-neutral-600">
-          Formulario HubSpot: configurá{" "}
-          <code className="rounded bg-white px-1">NEXT_PUBLIC_HUBSPOT_REGION</code>,{" "}
-          <code className="rounded bg-white px-1">NEXT_PUBLIC_HUBSPOT_PORTAL_ID</code> y{" "}
-          <code className="rounded bg-white px-1">NEXT_PUBLIC_HUBSPOT_FORM_ID</code> en Vercel.
+          El formulario de contacto no está disponible en este momento. Escríbenos por WhatsApp o al correo de pagos y te
+          ayudamos.
         </div>
       )}
 
