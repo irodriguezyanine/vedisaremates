@@ -17,6 +17,16 @@ type ImportRow = {
   email: string;
 };
 
+type ImportProgress = {
+  phase: "validating" | "creating";
+  current: number;
+  total: number;
+  created: number;
+  updated: number;
+  failed: number;
+  skipped: number;
+};
+
 type EditUserForm = {
   userId: string;
   email: string;
@@ -156,7 +166,8 @@ function parseCsvText(raw: string): ImportRow[] {
     const nombre = legacyLike ? cols[0] ?? "" : colOrEmpty(firstNameIdx);
     const apellido = legacyLike ? cols[1] ?? "" : colOrEmpty(lastNameIdx);
     const email = (legacyLike ? cols[2] : colOrEmpty(emailIdx)).toLowerCase();
-    const username = legacyLike ? "" : colOrEmpty(usernameIdx);
+    // Fallback explícito para planillas sin cabecera: User Name suele venir en 2da columna.
+    const username = legacyLike ? (cols[1] ?? "") : (usernameIdx >= 0 ? colOrEmpty(usernameIdx) : (cols[1] ?? ""));
     if (!email || !email.includes("@")) continue;
     rows.push({ username: username.trim(), nombre: nombre.trim(), apellido: apellido.trim(), email: email.trim() });
   }
@@ -257,6 +268,7 @@ export function UsuariosPanel() {
     skipped: number;
     errors: string[];
   } | null>(null);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
 
   const load = useCallback(async () => {
     setLoadErr(null);
@@ -635,6 +647,15 @@ export function UsuariosPanel() {
     setImporting(true);
     setLoadErr(null);
     setImportResult(null);
+    setImportProgress({
+      phase: "validating",
+      current: 0,
+      total: importRows.length,
+      created: 0,
+      updated: 0,
+      failed: 0,
+      skipped: 0,
+    });
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("Servicio no disponible");
@@ -652,6 +673,7 @@ export function UsuariosPanel() {
       const errors: string[] = [];
       const seenInFile = new Set<string>();
       const candidates: ImportRow[] = [];
+      let lastProgressPush = 0;
 
       for (let i = 0; i < importRows.length; i += 1) {
         const row = importRows[i];
@@ -678,8 +700,34 @@ export function UsuariosPanel() {
           continue;
         }
         candidates.push(row);
+
+        const current = i + 1;
+        const shouldPush = current === importRows.length || current - lastProgressPush >= 50;
+        if (shouldPush) {
+          lastProgressPush = current;
+          setImportProgress({
+            phase: "validating",
+            current,
+            total: importRows.length,
+            created,
+            updated,
+            failed,
+            skipped,
+          });
+        }
       }
 
+      setImportProgress({
+        phase: "creating",
+        current: 0,
+        total: Math.max(1, candidates.length),
+        created,
+        updated,
+        failed,
+        skipped,
+      });
+
+      let createdProcessed = 0;
       for (let start = 0; start < candidates.length; start += IMPORT_CONCURRENCY) {
         const batch = candidates.slice(start, start + IMPORT_CONCURRENCY);
         const batchResults = await Promise.all(
@@ -730,7 +778,18 @@ export function UsuariosPanel() {
             failed += 1;
             errors.push(result.error || "No se pudo procesar un registro.");
           }
+          createdProcessed += 1;
         }
+
+        setImportProgress({
+          phase: "creating",
+          current: createdProcessed,
+          total: Math.max(1, candidates.length),
+          created,
+          updated,
+          failed,
+          skipped,
+        });
       }
 
       setImportResult({ created, updated, failed, skipped, errors: errors.slice(0, 25) });
@@ -739,6 +798,7 @@ export function UsuariosPanel() {
       setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   }
 
@@ -1288,6 +1348,34 @@ export function UsuariosPanel() {
                 ) : null}
               </div>
             ) : null}
+            {importing && importProgress ? (
+              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 text-sm text-neutral-300">
+                {(() => {
+                  const progressPct = (Math.min(importProgress.current, importProgress.total) / Math.max(1, importProgress.total)) * 100;
+                  return (
+                    <>
+                <p className="font-semibold text-white">
+                  {importProgress.phase === "validating" ? "Validando archivo..." : "Creando/actualizando usuarios..."}
+                </p>
+                <p className="mt-1">
+                  Progreso: {progressPct.toFixed(1)}% ({importProgress.current} / {importProgress.total})
+                </p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded bg-white/10">
+                  <div
+                    className="h-full bg-[#33C7E3] transition-all duration-200"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, progressPct))}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-neutral-400">
+                  Parcial: creados {importProgress.created}, actualizados {importProgress.updated}, errores {importProgress.failed}, duplicados {importProgress.skipped}
+                </p>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
 
             <div className="mt-5 flex gap-3">
               <button type="button" className="rounded-lg border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/5" onClick={() => setImportOpen(false)}>
@@ -1299,7 +1387,11 @@ export function UsuariosPanel() {
                 onClick={() => void importCsvUsers()}
                 className="rounded-lg bg-[#33C7E3] px-4 py-2 text-sm font-bold text-[#0f1f2c] disabled:opacity-60"
               >
-                {importing ? "Importando..." : "Importar usuarios"}
+                {importing && importProgress
+                  ? `Importando... ${(((Math.min(importProgress.current, importProgress.total) / Math.max(1, importProgress.total)) * 100).toFixed(1))}%`
+                  : importing
+                    ? "Importando..."
+                    : "Importar usuarios"}
               </button>
             </div>
           </div>
