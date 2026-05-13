@@ -20,6 +20,20 @@ type AlertRow = {
   } | null;
 };
 
+type AlertRowRaw = {
+  user_id: string;
+  lote_id: string;
+  notify_email: boolean;
+  lote?:
+    | {
+        id: string;
+        titulo: string | null;
+        remate_id: string | null;
+        remate?: { id: string; titulo: string; estado: string }[] | null;
+      }[]
+    | null;
+};
+
 function unauthorized() {
   return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 }
@@ -46,6 +60,27 @@ function buildMail(remateTitulo: string, loteTitulo: string, link: string) {
       </table>
     </div>`;
   return { subject, text, html };
+}
+
+function normalizeAlertRows(rawRows: AlertRowRaw[]): AlertRow[] {
+  return rawRows.map((raw) => {
+    const loteRaw = Array.isArray(raw.lote) ? (raw.lote[0] ?? null) : null;
+    const remateRaw = loteRaw?.remate;
+    const remate = Array.isArray(remateRaw) ? (remateRaw[0] ?? null) : null;
+    return {
+      user_id: raw.user_id,
+      lote_id: raw.lote_id,
+      notify_email: raw.notify_email,
+      lote: loteRaw
+        ? {
+            id: loteRaw.id,
+            titulo: loteRaw.titulo,
+            remate_id: loteRaw.remate_id,
+            remate,
+          }
+        : null,
+    };
+  });
 }
 
 export async function POST(request: Request) {
@@ -75,7 +110,7 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  const rows = ((data ?? []) as AlertRow[]).filter((r) => r.lote?.remate?.estado === "en_curso");
+  const rows = normalizeAlertRows((data ?? []) as AlertRowRaw[]).filter((r) => r.lote?.remate?.estado === "en_curso");
   let sent = 0;
   let skipped = 0;
 
