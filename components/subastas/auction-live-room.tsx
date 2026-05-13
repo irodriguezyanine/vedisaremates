@@ -40,6 +40,24 @@ function formatCountdown(ms: number | null): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function sanitizeCurrencyInput(raw: string): string {
+  return String(raw ?? "").replace(/[^\d]/g, "");
+}
+
+function formatCurrencyInput(raw: string): string {
+  const digits = sanitizeCurrencyInput(raw);
+  if (!digits) return "";
+  const value = Number.parseInt(digits, 10);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return `$${value.toLocaleString("es-CL")}`;
+}
+
+function parseCurrencyInput(raw: string): number {
+  const digits = sanitizeCurrencyInput(raw);
+  if (!digits) return 0;
+  return Number.parseInt(digits, 10);
+}
+
 type BidMsgTone = "success" | "error" | "info";
 
 function formatBidMessage(raw: string): { text: string; tone: BidMsgTone } {
@@ -280,7 +298,7 @@ export function AuctionLiveRoom({
     }
     setBusy(true);
     setMsg(null);
-    const monto = Number(amount.replace(/\./g, "").replace(",", "."));
+    const monto = parseCurrencyInput(amount);
     if (!Number.isFinite(monto) || monto <= 0) {
       setMsg("Monto inválido.");
       setBusy(false);
@@ -365,7 +383,7 @@ export function AuctionLiveRoom({
       setMsg("Tu garantía aún no está habilitada para ofertar.");
       return;
     }
-    const monto = Number(proxyMax.replace(/\./g, "").replace(",", "."));
+    const monto = parseCurrencyInput(proxyMax);
     if (!Number.isFinite(monto) || monto <= 0) {
       setMsg("Tope automático inválido.");
       return;
@@ -449,7 +467,7 @@ export function AuctionLiveRoom({
   function setQuickBid(multiplier: number) {
     const safeMult = Math.max(1, Math.round(multiplier));
     const next = minNext + Number(active?.incremento_minimo ?? 0) * (safeMult - 1);
-    setAmount(String(Math.max(minNext, next)));
+    setAmount(formatCurrencyInput(String(Math.max(minNext, next))));
   }
 
   async function toggleFavorite(loteId: string) {
@@ -678,7 +696,7 @@ export function AuctionLiveRoom({
                           <p className="mt-1 text-xs text-rose-700">Sugerencia automática: {formatClp(minNext)}</p>
                           <button
                             type="button"
-                            onClick={() => setAmount(String(minNext))}
+                            onClick={() => setAmount(formatCurrencyInput(String(minNext)))}
                             className="mt-2 rounded-md border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                           >
                             Usar sugerencia
@@ -731,10 +749,10 @@ export function AuctionLiveRoom({
                           Monto
                           <input
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
                             inputMode="numeric"
                             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                            placeholder={String(Math.ceil(minNext))}
+                            placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
                           />
                         </label>
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -799,10 +817,10 @@ export function AuctionLiveRoom({
                           <div className="mt-2 flex gap-2">
                             <input
                               value={proxyMax}
-                              onChange={(e) => setProxyMax(e.target.value)}
+                              onChange={(e) => setProxyMax(formatCurrencyInput(e.target.value))}
                               inputMode="numeric"
                               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                              placeholder="Ej: 25000000"
+                              placeholder="$25.000.000"
                             />
                             <button
                               type="button"
