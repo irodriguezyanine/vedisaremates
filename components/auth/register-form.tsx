@@ -14,7 +14,9 @@ function passwordStrength(password: string): { label: string; width: string; col
 }
 
 export function RegisterForm() {
+  const [username, setUsername] = useState("");
   const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -47,7 +49,9 @@ export function RegisterForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          username,
           nombre,
+          apellido,
           email,
           password,
           website,
@@ -59,6 +63,10 @@ export function RegisterForm() {
       if (!res.ok || !data?.ok) {
         const map: Record<string, string> = {
           email_invalido: "Correo inválido.",
+          username_invalido:
+            "El nombre de usuario debe comenzar con letra o número y tener entre 3 y 40 caracteres (solo letras, números, punto, guion y guion bajo).",
+          username_duplicado: "Ese nombre de usuario ya está en uso.",
+          nombre_apellido_requerido: "Debes completar nombre y apellido.",
           password_debil: "La contraseña debe tener al menos 6 caracteres.",
           demasiadas_solicitudes_ip: "Se alcanzó el límite de intentos. Intenta nuevamente en unos minutos.",
           demasiadas_solicitudes_email: "Se alcanzó el límite de envíos para este correo. Intenta más tarde.",
@@ -121,15 +129,41 @@ export function RegisterForm() {
       </p>
       <div className="mt-6 flex flex-col gap-4">
         <label className="block text-sm font-medium text-neutral-700">
-          Nombre (opcional)
+          Nombre de usuario
           <input
             type="text"
-            autoComplete="name"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            autoComplete="username"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
+            placeholder="Ej: usuario_vedisa"
           />
         </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-neutral-700">
+            Nombre
+            <input
+              type="text"
+              autoComplete="given-name"
+              required
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
+            />
+          </label>
+          <label className="block text-sm font-medium text-neutral-700">
+            Apellido
+            <input
+              type="text"
+              autoComplete="family-name"
+              required
+              value={apellido}
+              onChange={(e) => setApellido(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
+            />
+          </label>
+        </div>
         <label className="block text-sm font-medium text-neutral-700">
           Correo
           <input

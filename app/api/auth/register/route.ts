@@ -45,6 +45,19 @@ function normalizeName(raw: unknown) {
   return raw.trim().replace(/\s+/g, " ").slice(0, 80);
 }
 
+function normalizeUsername(raw: unknown) {
+  if (typeof raw !== "string") return "";
+  return raw
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9._-]/g, "")
+    .slice(0, 40);
+}
+
+function isValidUsername(username: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{2,39}$/.test(username);
+}
+
 function isStrongPassword(password: string) {
   return password.length >= 6 && password.length <= 128;
 }
@@ -239,7 +252,13 @@ function buildVerificationMail({
   return { subject, text, html };
 }
 
-async function forceClienteRemateRole(admin: ReturnType<typeof createAdminClient>, userId: string, nombre: string) {
+async function forceClienteRemateRole(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  nombre: string,
+  apellido: string,
+  username: string,
+) {
   if (!admin || !userId) return;
   const roleCandidates = ["cliente-remate", "cliente_remate", "cliente remate"];
   for (const rol of roleCandidates) {
@@ -250,6 +269,8 @@ async function forceClienteRemateRole(admin: ReturnType<typeof createAdminClient
           id: userId,
           rol,
           nombre: nombre || null,
+          apellido: apellido || null,
+          username: username || null,
         },
         { onConflict: "id" },
       );
@@ -277,6 +298,8 @@ export async function POST(request: Request) {
 
   const email = normalizeEmail(body.email);
   const nombre = normalizeName(body.nombre);
+  const apellido = normalizeName(body.apellido);
+  const username = normalizeUsername(body.username);
   const password = typeof body.password === "string" ? body.password : "";
   const botTrap = typeof body.website === "string" ? body.website.trim() : "";
   const formStartedAt = Number(body.formStartedAt ?? 0);
@@ -290,6 +313,8 @@ export async function POST(request: Request) {
     return genericSuccess();
   }
   if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "email_invalido" }, { status: 400 });
+  if (!nombre || !apellido) return NextResponse.json({ ok: false, error: "nombre_apellido_requerido" }, { status: 400 });
+  if (!isValidUsername(username)) return NextResponse.json({ ok: false, error: "username_invalido" }, { status: 400 });
   if (!isStrongPassword(password)) {
     return NextResponse.json({ ok: false, error: "password_debil" }, { status: 400 });
   }
@@ -304,6 +329,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
   }
 
+  const { data: existingUsername } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("username", username)
+    .limit(1);
+  if ((existingUsername ?? []).length > 0) {
+    return NextResponse.json({ ok: false, error: "username_duplicado" }, { status: 400 });
+  }
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: "signup",
     email,
@@ -312,6 +346,8 @@ export async function POST(request: Request) {
       redirectTo,
       data: {
         nombre: nombre || undefined,
+        apellido: apellido || undefined,
+        username: username || undefined,
         registration_channel: "web",
       },
     },
@@ -325,7 +361,7 @@ export async function POST(request: Request) {
   const actionLink = data?.properties?.action_link;
   const userId = data?.user?.id;
   if (userId) {
-    await forceClienteRemateRole(admin, userId, nombre);
+    await forceClienteRemateRole(admin, userId, nombre, apellido, username);
   }
   if (!actionLink) {
     return genericSuccess();

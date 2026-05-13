@@ -24,11 +24,24 @@ type Props = {
   lotes: Lote[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  favoriteLoteIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
+  compareLoteIds?: Set<string>;
+  onToggleCompare?: (id: string) => void;
   /** Carrusel más bajo para dar protagonismo al detalle del lote seleccionado. */
   compact?: boolean;
 };
 
-export function AuctionLotesCarousel({ lotes, activeId, onSelect, compact = false }: Props) {
+export function AuctionLotesCarousel({
+  lotes,
+  activeId,
+  onSelect,
+  favoriteLoteIds,
+  onToggleFavorite,
+  compareLoteIds,
+  onToggleCompare,
+  compact = false,
+}: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const scrollByCards = useCallback((dir: -1 | 1) => {
@@ -91,6 +104,8 @@ export function AuctionLotesCarousel({ lotes, activeId, onSelect, compact = fals
           const plate = inv?.patente ?? `Lote ${i + 1}`;
           const año = inv?.ano ? String(inv.ano).trim() : "";
           const selected = l.id === activeId;
+          const isFav = favoriteLoteIds?.has(l.id) ?? false;
+          const inCompare = compareLoteIds?.has(l.id) ?? false;
 
           const wSel = compact ? "w-[min(12.5rem,78vw)] sm:w-[13.25rem]" : "w-[min(18rem,82vw)] sm:w-[19rem]";
           const wNorm = compact ? "w-[min(12rem,76vw)] sm:w-[12.75rem]" : "w-[min(17.25rem,80vw)] sm:w-[18.25rem]";
@@ -129,6 +144,24 @@ export function AuctionLotesCarousel({ lotes, activeId, onSelect, compact = fals
                   </div>
                 )}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/30 to-transparent" />
+                {onToggleFavorite ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFavorite(l.id);
+                    }}
+                    className={`absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm ${
+                      isFav
+                        ? "border-amber-300 bg-amber-400 text-neutral-900"
+                        : "border-white/65 bg-black/35 text-white hover:bg-black/55"
+                    }`}
+                    aria-label={isFav ? "Quitar favorito" : "Guardar favorito"}
+                    title={isFav ? "Quitar favorito" : "Guardar favorito"}
+                  >
+                    ★
+                  </button>
+                ) : null}
                 {selected ? (
                   <span
                     className={`absolute left-1.5 top-1.5 rounded-full border border-white/60 bg-[#009ade]/95 font-bold uppercase tracking-wide text-white shadow-lg backdrop-blur-sm ${compact ? "px-1.5 py-0.5 text-[8px]" : "left-2 top-2 px-2.5 py-0.5 text-[10px]"}`}
@@ -153,6 +186,22 @@ export function AuctionLotesCarousel({ lotes, activeId, onSelect, compact = fals
                 </div>
                 <p className={`${priceSize} ${selected ? "text-[#006a98]" : "text-neutral-900"} transition-colors`}>{formatClp(l.precio_base)}</p>
                 <p className={`font-semibold uppercase tracking-wide text-neutral-400 ${compact ? "text-[9px]" : "text-[10px]"}`}>Precio base</p>
+                {onToggleCompare ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleCompare(l.id);
+                    }}
+                    className={`mt-1 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
+                      inCompare
+                        ? "border-[#009ade]/40 bg-[#009ade]/10 text-[#006a98]"
+                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {inCompare ? "En comparador" : "Comparar"}
+                  </button>
+                ) : null}
               </div>
             </button>
           );

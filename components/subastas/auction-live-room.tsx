@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
@@ -10,6 +10,7 @@ import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-t
 import { formatClp } from "@/lib/format-clp";
 import type {
   InventarioRow,
+  PortalLoteFavoritoRow,
   PortalOfertaRow,
   PortalRemateLoteRow,
   PortalRemateRow,
@@ -124,8 +125,15 @@ export function AuctionLiveRoom({
   const [proxyMax, setProxyMax] = useState("");
   const [cfg, setCfg] = useState<PortalRematesConfigRow | null>(null);
   const [viewerRole, setViewerRole] = useState<string>("");
+  const [favoriteLoteIds, setFavoriteLoteIds] = useState<Set<string>>(new Set());
+  const [compareLoteIds, setCompareLoteIds] = useState<Set<string>>(new Set());
+  const [quickCustomIncrements, setQuickCustomIncrements] = useState("3");
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [roomView, setRoomView] = useState<"compacta" | "detallada">("detallada");
+  const lastSoundBucketRef = useRef<number | null>(null);
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
+  const lotesById = useMemo(() => new Map(lotes.map((l) => [l.id, l])), [lotes]);
 
   const loadOffers = useCallback(
     async (loteIds: string[]) => {
@@ -182,6 +190,28 @@ export function AuctionLiveRoom({
   }, [viewerId]);
 
   useEffect(() => {
+    if (!viewerId || !lotes.length) {
+      setFavoriteLoteIds(new Set());
+      return;
+    }
+    const sb = createClient();
+    if (!sb) return;
+    const loteIds = lotes.map((l) => l.id);
+    void sb
+      .from("portal_lote_favoritos")
+      .select("lote_id")
+      .eq("user_id", viewerId)
+      .in("lote_id", loteIds)
+      .then(({ data }) => {
+        const set = new Set<string>();
+        for (const row of (data ?? []) as Pick<PortalLoteFavoritoRow, "lote_id">[]) {
+          if (row?.lote_id) set.add(row.lote_id);
+        }
+        setFavoriteLoteIds(set);
+      });
+  }, [viewerId, lotes]);
+
+  useEffect(() => {
     const sb = createClient();
     const ids = lotes.map((l) => l.id);
     if (!sb || !ids.length) return;
@@ -234,6 +264,10 @@ export function AuctionLiveRoom({
     if (max === null) return Number(active.precio_base) || 0;
     return max + Number(active.incremento_minimo);
   }, [active, offersByLote]);
+  const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
+  const topForActive = listForActive[0] ?? null;
+  const viewerHasBidInActive = !!(viewerId && listForActive.some((o) => o.user_id === viewerId));
+  const viewerIsTopBidder = !!(viewerId && topForActive && topForActive.user_id === viewerId);
 
   async function placeBid() {
     if (!active || !viewerId) {
@@ -259,6 +293,18 @@ export function AuctionLiveRoom({
       return;
     }
     const hiConfirmFactor = Math.max(1, Number(cfg?.high_bid_confirm_multiplier ?? 3));
+    const summaryMsg = [
+      "Confirme su oferta",
+      "",
+      `Monto a ofertar: ${formatClp(monto)}`,
+      `Mínimo sugerido: ${formatClp(minNext)}`,
+      topForActive ? `Oferta líder actual: ${formatClp(topForActive.monto)}` : "Aún no hay oferta líder.",
+    ].join("\n");
+    const confirmBid = window.confirm(summaryMsg);
+    if (!confirmBid) {
+      setBusy(false);
+      return;
+    }
     if (monto >= minNext * hiConfirmFactor) {
       const ok = window.confirm(
         `Tu oferta ${formatClp(monto)} es alta respecto del mínimo (${formatClp(minNext)}). ¿Confirmas enviarla?`,
@@ -352,7 +398,6 @@ export function AuctionLiveRoom({
     setBusyProxy(false);
   }
 
-  const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
   const countdownLive =
     tick != null && remate.ends_at ? new Date(remate.ends_at).getTime() - tick : null;
   const countdownText = formatCountdown(countdownLive);
@@ -373,11 +418,78 @@ export function AuctionLiveRoom({
   const canBidNow = canBid && lotCanBid;
   const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
   const bidMsg = msg ? formatBidMessage(msg) : null;
+  const customQuick = Math.max(1, Math.min(20, Number(quickCustomIncrements) || 1));
+
+  useEffect(() => {
+    if (!soundEnabled || !isLastTenMinutes || countdownLive == null || countdownLive <= 0) return;
+    const bucket = Math.floor(countdownLive / 60000);
+    if (bucket === lastSoundBucketRef.current) return;
+    lastSoundBucketRef.current = bucket;
+    try {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.value = 0.02;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      window.setTimeout(() => {
+        osc.stop();
+        void ctx.close();
+      }, 140);
+    } catch {
+      // Ignorar si el navegador bloquea autoplay de audio.
+    }
+  }, [soundEnabled, isLastTenMinutes, countdownLive]);
 
   function setQuickBid(multiplier: number) {
     const safeMult = Math.max(1, Math.round(multiplier));
     const next = minNext + Number(active?.incremento_minimo ?? 0) * (safeMult - 1);
     setAmount(String(Math.max(minNext, next)));
+  }
+
+  async function toggleFavorite(loteId: string) {
+    if (!viewerId) {
+      setMsg("Inicia sesión para guardar favoritos.");
+      return;
+    }
+    const sb = createClient();
+    if (!sb) return;
+    const isFav = favoriteLoteIds.has(loteId);
+    if (isFav) {
+      await sb.from("portal_lote_favoritos").delete().eq("user_id", viewerId).eq("lote_id", loteId);
+      setFavoriteLoteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(loteId);
+        return next;
+      });
+      return;
+    }
+    const { error } = await sb.from("portal_lote_favoritos").upsert({ user_id: viewerId, lote_id: loteId, notify_email: true });
+    if (!error) {
+      setFavoriteLoteIds((prev) => {
+        const next = new Set(prev);
+        next.add(loteId);
+        return next;
+      });
+    }
+  }
+
+  function toggleCompare(loteId: string) {
+    setCompareLoteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(loteId)) {
+        next.delete(loteId);
+        return next;
+      }
+      if (next.size >= 3) return prev;
+      next.add(loteId);
+      return next;
+    });
   }
 
   return (
@@ -391,6 +503,31 @@ export function AuctionLiveRoom({
           {remate.descripcion?.trim() ? (
             <p className="mt-2 max-w-2xl text-pretty text-neutral-600">{remate.descripcion}</p>
           ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-neutral-500">Vista de sala:</span>
+            <button
+              type="button"
+              onClick={() => setRoomView("detallada")}
+              className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                roomView === "detallada"
+                  ? "border-[#009ade]/40 bg-[#009ade]/10 text-[#006a98]"
+                  : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              Detallada
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoomView("compacta")}
+              className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                roomView === "compacta"
+                  ? "border-[#009ade]/40 bg-[#009ade]/10 text-[#006a98]"
+                  : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              Compacta
+            </button>
+          </div>
         </div>
         <div className="w-full shrink-0 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm shadow-sm lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
@@ -417,7 +554,7 @@ export function AuctionLiveRoom({
             <div
               className={`min-w-[11rem] rounded-xl border px-3 py-2 text-center xl:text-left ${
                 isLastTenMinutes
-                  ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)]"
+                  ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)] animate-pulse"
                   : "border-sky-200 bg-sky-50"
               }`}
             >
@@ -436,7 +573,7 @@ export function AuctionLiveRoom({
                 {countdownText}
               </p>
               {isLastTenMinutes ? (
-                <p className="text-[10px] font-semibold text-rose-700">Últimos 10 minutos</p>
+                <p className="text-[10px] font-semibold text-rose-700">Alerta activa: últimos 10 minutos</p>
               ) : null}
             </div>
           </div>
@@ -489,7 +626,7 @@ export function AuctionLiveRoom({
                       ) : null}
                     </div>
 
-                    {active.inventario ? (
+                    {active.inventario && roomView === "detallada" ? (
                       <div className="border-t border-neutral-100 bg-white px-4 py-6 sm:px-6 sm:py-8">
                         <InventarioFichaTecnica
                           inventario={active.inventario as InventarioRow & Record<string, unknown>}
@@ -519,6 +656,40 @@ export function AuctionLiveRoom({
                 </div>
 
                 <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+                  {viewerId ? (
+                    <div
+                      className={`rounded-2xl border p-4 shadow-sm ${
+                        viewerIsTopBidder
+                          ? "border-emerald-200 bg-emerald-50"
+                          : viewerHasBidInActive
+                            ? "border-rose-200 bg-rose-50"
+                            : "border-neutral-200 bg-white"
+                      }`}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Estado de su puja</p>
+                      {viewerIsTopBidder ? (
+                        <>
+                          <p className="mt-1 text-sm font-bold text-emerald-800">Usted es el mejor postor</p>
+                          {topForActive ? <p className="mt-1 text-xs text-emerald-700">Monto líder: {formatClp(topForActive.monto)}</p> : null}
+                        </>
+                      ) : viewerHasBidInActive ? (
+                        <>
+                          <p className="mt-1 text-sm font-bold text-rose-700">Usted fue sobrepasado</p>
+                          <p className="mt-1 text-xs text-rose-700">Sugerencia automática: {formatClp(minNext)}</p>
+                          <button
+                            type="button"
+                            onClick={() => setAmount(String(minNext))}
+                            className="mt-2 rounded-md border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                          >
+                            Usar sugerencia
+                          </button>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-sm text-neutral-600">Aún no tiene ofertas en este lote.</p>
+                      )}
+                    </div>
+                  ) : null}
+
                   <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm ring-1 ring-neutral-100/80">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Precios del lote</p>
                     <p className="mt-2 text-2xl font-black tabular-nums text-neutral-900">{formatClp(active.precio_base)}</p>
@@ -588,7 +759,33 @@ export function AuctionLiveRoom({
                           >
                             + 2 incrementos
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setQuickBid(customQuick)}
+                            className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
+                          >
+                            + {customQuick - 1} incrementos (personalizado)
+                          </button>
                         </div>
+                        <label className="mt-2 block text-xs text-neutral-600">
+                          Oferta rápida personalizada (cantidad de incrementos)
+                          <input
+                            value={quickCustomIncrements}
+                            onChange={(e) => setQuickCustomIncrements(e.target.value)}
+                            inputMode="numeric"
+                            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                            placeholder="Ej: 4"
+                          />
+                        </label>
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-600">
+                          <input
+                            type="checkbox"
+                            checked={soundEnabled}
+                            onChange={(e) => setSoundEnabled(e.target.checked)}
+                            className="h-4 w-4 rounded border-neutral-300 text-[#009ade] focus:ring-[#009ade]"
+                          />
+                          Activar alerta sonora en últimos minutos
+                        </label>
                         <button
                           type="button"
                           disabled={busy}
@@ -634,7 +831,8 @@ export function AuctionLiveRoom({
                   ) : null}
                   </div>
 
-                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                  {roomView === "detallada" ? (
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
                   <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
                     {listForActive.length === 0 ? (
@@ -655,10 +853,62 @@ export function AuctionLiveRoom({
                     )}
                   </ul>
                 </div>
+                  ) : null}
               </aside>
             </div>
 
-              <AuctionLotesCarousel compact lotes={lotes} activeId={activeId} onSelect={setActiveId} />
+              {compareLoteIds.size > 0 ? (
+                <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-bold text-neutral-900">Comparador de lotes ({compareLoteIds.size}/3)</h3>
+                    <button
+                      type="button"
+                      onClick={() => setCompareLoteIds(new Set())}
+                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs font-semibold text-neutral-600 hover:bg-neutral-50"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    {[...compareLoteIds].map((id) => {
+                      const row = lotesById.get(id);
+                      if (!row) return null;
+                      const inv = row.inventario;
+                      const currentMax = (offersByLote[id]?.[0]?.monto ?? null) as number | null;
+                      const nextMin = currentMax == null ? Number(row.precio_base) : currentMax + Number(row.incremento_minimo);
+                      return (
+                        <article key={id} className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
+                          <p className="line-clamp-2 text-sm font-bold text-neutral-900">
+                            {[inv?.marca, inv?.modelo].filter(Boolean).join(" ") || row.titulo || "Lote"}
+                          </p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            {[inv?.patente, inv?.ano ? String(inv.ano) : null, inv?.categoria].filter(Boolean).join(" · ") || "Sin detalle"}
+                          </p>
+                          <div className="mt-2 text-xs text-neutral-700">
+                            <p>
+                              Base: <strong>{formatClp(row.precio_base)}</strong>
+                            </p>
+                            <p>
+                              Sig. mínima: <strong>{formatClp(nextMin)}</strong>
+                            </p>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              <AuctionLotesCarousel
+                compact={roomView === "compacta"}
+                lotes={lotes}
+                activeId={activeId}
+                onSelect={setActiveId}
+                favoriteLoteIds={favoriteLoteIds}
+                onToggleFavorite={toggleFavorite}
+                compareLoteIds={compareLoteIds}
+                onToggleCompare={toggleCompare}
+              />
             </>
           ) : null}
         </div>

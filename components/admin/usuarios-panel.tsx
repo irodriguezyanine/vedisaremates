@@ -78,6 +78,15 @@ function normalize(v: unknown): string {
     .trim();
 }
 
+function parseSearchTerms(raw: string): string[] {
+  const clean = String(raw ?? "").trim();
+  if (!clean) return [];
+  return clean
+    .split(/[\s,;]+/g)
+    .map((token) => normalize(token))
+    .filter(Boolean);
+}
+
 function normalizeUsernameValue(v: unknown): string {
   return String(v ?? "")
     .normalize("NFD")
@@ -640,7 +649,10 @@ export function UsuariosPanel() {
 
   const filteredRows = useMemo(() => {
     const g = normalize(globalSearch);
+    const terms = parseSearchTerms(globalSearch);
+    const isMultiTerm = terms.length > 1;
     return tabRows.filter((u) => {
+      const emailNorm = normalize(u.email ?? "");
       const allCols = [
         u.email ?? "",
         u.nombre ?? "",
@@ -649,7 +661,12 @@ export function UsuariosPanel() {
       ]
         .join(" | ")
         .toLowerCase();
-      const globalOk = !g || normalize(allCols).includes(g);
+      const allNorm = normalize(allCols);
+      const globalOk = !g
+        ? true
+        : isMultiTerm
+          ? terms.some((term) => (term.includes("@") ? emailNorm === term : allNorm.includes(term)))
+          : allNorm.includes(g);
       return globalOk;
     });
   }, [globalSearch, tabRows]);
@@ -1165,7 +1182,7 @@ export function UsuariosPanel() {
               <input
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
-                placeholder="Buscar por email, nombre, rol o fecha..."
+                placeholder="Buscar por email, nombre, rol o fecha. Puede pegar varios correos separados por espacio/coma."
                 className="mt-1 w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-white placeholder:text-neutral-600"
               />
             </label>

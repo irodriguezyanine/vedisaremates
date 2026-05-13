@@ -11,7 +11,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? "/subastas";
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,9 +26,29 @@ export function LoginForm() {
         setError("El ingreso web no está disponible en este entorno. Probá más tarde o contactá soporte Vedisa.");
         return;
       }
-      const { error: signErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      let emailForLogin = identifier.trim();
+      if (!emailForLogin) {
+        setError("Ingresa tu correo o nombre de usuario.");
+        return;
+      }
+
+      if (!emailForLogin.includes("@")) {
+        const resolveRes = await fetch("/api/auth/login/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: emailForLogin }),
+        });
+        if (resolveRes.ok) {
+          const resolveData = (await resolveRes.json()) as { ok?: boolean; email?: string };
+          if (resolveData?.email) emailForLogin = resolveData.email;
+        }
+      } else {
+        emailForLogin = emailForLogin.toLowerCase();
+      }
+
+      const { error: signErr } = await supabase.auth.signInWithPassword({ email: emailForLogin, password });
       if (signErr) {
-        setError(signErr.message);
+        setError("Credenciales inválidas. Revisa tu correo/nombre de usuario y contraseña.");
         return;
       }
       const {
@@ -56,13 +76,14 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <label className="block text-sm font-medium text-neutral-700">
-        Correo
+        Correo o nombre de usuario
         <input
-          type="email"
-          autoComplete="email"
+          type="text"
+          autoComplete="username"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          placeholder="correo@dominio.cl o usuario"
           className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
         />
       </label>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
-import type { PortalRemateRow } from "@/lib/portal-types";
+import type { PortalRemateRecomendadoRow, PortalRemateRow } from "@/lib/portal-types";
 import { fetchRemateThumbnailMap } from "@/lib/remate-cover-thumbnails";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,6 +27,10 @@ export default async function SubastasIndexPage() {
     );
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
     .from("portal_remates")
     .select("*")
@@ -34,6 +38,12 @@ export default async function SubastasIndexPage() {
     .order("ends_at", { ascending: true });
 
   const rows = ((data ?? []) as PortalRemateRow[]) ?? [];
+  let recomendado: PortalRemateRecomendadoRow | null = null;
+  if (user?.id) {
+    const { data: recData } = await supabase.rpc("portal_recomendar_proximo_remate");
+    const first = ((recData ?? []) as PortalRemateRecomendadoRow[])[0];
+    if (first?.remate_id) recomendado = first;
+  }
 
   const thumbMap = await fetchRemateThumbnailMap(
     supabase,
@@ -47,6 +57,22 @@ export default async function SubastasIndexPage() {
         Eventos en vivo con ofertas en tiempo real. Inicie sesión para participar; si ya tiene usuario Vedisa desde otro
         canal, puede usar ese mismo correo y clave.
       </p>
+
+      {recomendado ? (
+        <div className="mt-6 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-sky-700">Próximo remate recomendado</p>
+          <p className="mt-1 text-sm font-semibold text-neutral-900">{recomendado.titulo}</p>
+          <p className="mt-0.5 text-xs text-neutral-600">{recomendado.motivo}</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
+            <span>
+              Cierre: <strong>{new Date(recomendado.ends_at).toLocaleString("es-CL")}</strong>
+            </span>
+            <Link href={`/subastas/${recomendado.remate_id}`} className="font-bold text-[#009ade] hover:underline">
+              Ver recomendado →
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

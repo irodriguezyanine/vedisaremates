@@ -55,6 +55,13 @@ export type PortalOfertaRow = {
   monto: number;
 };
 
+export type PortalLoteFavoritoRow = {
+  user_id: string;
+  lote_id: string;
+  notify_email: boolean;
+  created_at: string;
+};
+
 /** Fila de `portal_listar_mis_ofertas()` */
 export type PortalMisOfertaRow = {
   oferta_id: string;
@@ -84,4 +91,13 @@ export type InventarioRow = {
   valor_esperado?: number | null;
   imagenes?: string[] | null;
   descripcion?: string | null;
+};
+
+export type PortalRemateRecomendadoRow = {
+  remate_id: string;
+  titulo: string;
+  starts_at: string | null;
+  ends_at: string;
+  score: number;
+  motivo: string;
 };
