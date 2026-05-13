@@ -686,10 +686,6 @@ export function UsuariosPanel() {
   }, [activeTab, globalSearch]);
 
   useEffect(() => {
-    if (selectedCount === 0) setBulkActionsOpen(false);
-  }, [selectedCount]);
-
-  useEffect(() => {
     setSelectedIds((prev) => {
       if (activeTab !== "cliente_remate") return new Set();
       const allowed = new Set(tabRows.map((u) => u.id));
@@ -1016,9 +1012,10 @@ export function UsuariosPanel() {
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("Servicio no disponible");
+      const targetIds = new Set(selectedIds);
       let updated = 0;
       let failed = 0;
-      for (const userId of selectedIds) {
+      for (const userId of targetIds) {
         const detalle = await fetchDetalleUsuario(userId, supabase);
         if (!detalle) {
           failed += 1;
@@ -1052,7 +1049,16 @@ export function UsuariosPanel() {
       }
       setBulkMsg(`Acción masiva finalizada. Actualizados: ${updated}. Fallidos: ${failed}.`);
       if (updated > 0) {
-        setSelectedIds(new Set());
+        setUsers((prev) =>
+          prev.map((u) => {
+            if (!targetIds.has(u.id)) return u;
+            return {
+              ...u,
+              rol: patch.rol != null ? patch.rol : u.rol,
+              garantia_aprobada: patch.garantiaAprobada != null ? patch.garantiaAprobada : u.garantia_aprobada,
+            };
+          }),
+        );
         await load();
       }
     } catch (e: unknown) {
@@ -1203,7 +1209,7 @@ export function UsuariosPanel() {
                 <div className="relative ml-auto">
                   <button
                     type="button"
-                    disabled={bulkBusy || selectedCount === 0}
+                    disabled={bulkBusy}
                     onClick={() => setBulkActionsOpen((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-neutral-200 disabled:opacity-40"
                   >
