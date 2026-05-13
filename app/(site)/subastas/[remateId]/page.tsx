@@ -31,6 +31,11 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  let viewerHasGarantia = false;
+  if (user?.id) {
+    const { data: profile } = await supabase.from("profiles").select("garantia_aprobada").eq("id", user.id).maybeSingle();
+    viewerHasGarantia = profile?.garantia_aprobada === true;
+  }
 
   const { data: remate, error: e1 } = await supabase.from("portal_remates").select("*").eq("id", remateId).single();
 
@@ -83,6 +88,7 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
         initialRemate={r}
         initialLotes={lotesEnriquecidos}
         viewerId={user?.id ?? null}
+        viewerHasGarantia={viewerHasGarantia}
         fichaDisplayConfig={fichaDisplayConfig}
         initialActiveLoteId={initialActiveLoteId}
       />

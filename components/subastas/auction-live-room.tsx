@@ -92,6 +92,7 @@ type Props = {
   initialRemate: PortalRemateRow;
   initialLotes: Lote[];
   viewerId?: string | null;
+  viewerHasGarantia?: boolean;
   fichaDisplayConfig?: unknown | null;
   /** Lote activo inicial (ej. viene de ?lote= al abrir desde el catálogo de fotos). */
   initialActiveLoteId?: string | null;
@@ -101,6 +102,7 @@ export function AuctionLiveRoom({
   initialRemate,
   initialLotes,
   viewerId,
+  viewerHasGarantia = false,
   fichaDisplayConfig,
   initialActiveLoteId = null,
 }: Props) {
@@ -313,6 +315,10 @@ export function AuctionLiveRoom({
       setMsg("Inicie sesión para configurar puja automática.");
       return;
     }
+    if (!viewerHasGarantia) {
+      setMsg("Tu garantía aún no está habilitada para ofertar.");
+      return;
+    }
     const monto = Number(proxyMax.replace(/\./g, "").replace(",", "."));
     if (!Number.isFinite(monto) || monto <= 0) {
       setMsg("Tope automático inválido.");
@@ -357,6 +363,7 @@ export function AuctionLiveRoom({
   const remateAbierto = remate.estado === "en_curso" || remate.estado === "publicado";
   const canBid =
     viewerId &&
+    viewerHasGarantia &&
     remateAbierto &&
     tick != null &&
     countdownLive !== null &&
@@ -530,6 +537,8 @@ export function AuctionLiveRoom({
                           ? "Este remate aún no está habilitado para ofertar."
                           : !lotCanBid
                             ? "Este lote está pausado/cerrado y no recibe ofertas."
+                          : !viewerHasGarantia
+                            ? "Debe tener la garantía habilitada para poder ofertar."
                           : countdownLive !== null && countdownLive <= 0
                             ? "El remate ya cerró según la fecha de fin."
                             : tick === null

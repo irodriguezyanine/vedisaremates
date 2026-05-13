@@ -1371,10 +1371,13 @@ export function UsuariosPanel() {
               </div>
               <button
                 type="button"
-                className="shrink-0 rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5"
+                className="shrink-0 rounded-lg border border-white/20 p-1.5 text-neutral-300 hover:bg-white/5"
+                aria-label="Cerrar modal nuevo usuario"
                 onClick={() => setCreateOpen(false)}
               >
-                Cerrar
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M6 6l12 12M18 6 6 18" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
             {loadErr ? <p className="mx-5 mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 sm:mx-6">{loadErr}</p> : null}
@@ -1466,8 +1469,15 @@ export function UsuariosPanel() {
                     <path d="M10 18h4" strokeLinecap="round" />
                   </svg>
                 </button>
-                <button type="button" className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5" onClick={() => setImportOpen(false)}>
-                  Cerrar
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/20 p-1.5 text-neutral-300 hover:bg-white/5"
+                  aria-label="Cerrar modal de importacion"
+                  onClick={() => setImportOpen(false)}
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path d="M6 6l12 12M18 6 6 18" strokeLinecap="round" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1664,10 +1674,13 @@ export function UsuariosPanel() {
               </div>
               <button
                 type="button"
-                className="rounded-lg border border-white/20 px-3 py-1 text-sm text-neutral-300 hover:bg-white/5"
+                className="rounded-lg border border-white/20 p-1.5 text-neutral-300 hover:bg-white/5"
+                aria-label="Cerrar modal de edicion"
                 onClick={() => setEditModal(null)}
               >
-                Cerrar
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M6 6l12 12M18 6 6 18" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
 
