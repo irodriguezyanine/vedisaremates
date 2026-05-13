@@ -377,7 +377,42 @@ export function UsuariosPanel() {
       setLoadErr("No se pudo cargar el listado. Verifique permisos o vuelva a intentarlo.");
       return;
     }
-    setUsers(((data ?? []) as ListaUsuarioRow[]) || []);
+    const rows = (((data ?? []) as ListaUsuarioRow[]) || []).map((u) => ({ ...u }));
+    const ids = rows.map((u) => String(u.id ?? "").trim()).filter(Boolean);
+    if (!ids.length) {
+      setUsers(rows);
+      return;
+    }
+
+    // Normaliza garantía desde profiles para evitar desincronización del RPC listar_usuarios.
+    const garantiaRes = await fetch("/api/admin/users/garantia-map", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: ids }),
+    });
+    if (!garantiaRes.ok) {
+      setUsers(rows);
+      return;
+    }
+    const garantiaJson = (await garantiaRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      rows?: Array<{ id: string; garantia_aprobada: boolean | null }>;
+    };
+    if (!garantiaJson.ok || !Array.isArray(garantiaJson.rows)) {
+      setUsers(rows);
+      return;
+    }
+
+    const garantiaMap = new Map<string, boolean | null>();
+    for (const row of garantiaJson.rows) {
+      garantiaMap.set(String(row.id), row.garantia_aprobada ?? null);
+    }
+    setUsers(
+      rows.map((u) => ({
+        ...u,
+        garantia_aprobada: garantiaMap.has(u.id) ? (garantiaMap.get(u.id) ?? null) : (u.garantia_aprobada ?? null),
+      })),
+    );
   }, []);
 
   useEffect(() => {
