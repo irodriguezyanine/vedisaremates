@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { RegisterForm } from "@/components/auth/register-form";
-import { CtaRegisterBand, RegisterPitch } from "@/components/home-sections";
+import { RegisterPitch } from "@/components/home-sections";
 import { Reveal } from "@/components/reveal-on-scroll";
 
 export const metadata: Metadata = {
@@ -30,11 +30,8 @@ export default function RegistroPage() {
         </div>
 
         <Reveal className="grid gap-12 lg:grid-cols-2 lg:items-start">
-          <div className="flex flex-col gap-8">
-            <RegisterForm />
-            <CtaRegisterBand />
-          </div>
           <RegisterPitch />
+          <RegisterForm />
         </Reveal>
       </div>
     </div>

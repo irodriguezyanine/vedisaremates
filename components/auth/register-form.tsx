@@ -114,7 +114,7 @@ export function RegisterForm() {
   const passStrength = passwordStrength(password);
 
   return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+    <form id="crear-cuenta-portal" onSubmit={onSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-bold text-neutral-900">Crear cuenta en el portal</h2>
       <p className="mt-1 text-sm text-neutral-600">
         Puede usar la misma cuenta en los canales Vedisa que compartan este registro.

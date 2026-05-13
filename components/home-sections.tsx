@@ -37,38 +37,9 @@ export function TrustStrip() {
   );
 }
 
-export function CtaRegisterBand() {
-  const cat = catalogoHref();
-  return (
-    <section className="mx-auto max-w-3xl rounded-2xl border-2 border-[#FFC107] bg-[#f8fafc] px-6 py-10 text-center shadow-[0_10px_36px_rgba(255,193,7,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_44px_rgba(255,193,7,0.45)]">
-      <h2 className="text-2xl font-extrabold text-[#053247]">¿No estás registrado?</h2>
-      <p className="mx-auto mt-4 max-w-xl text-neutral-700">
-        Sin cuenta no podrás ofertar. Regístrate, deposita tu garantía y participa en remates 100% online.
-      </p>
-      <p className="mx-auto mt-3 max-w-xl text-sm text-neutral-600">
-        Las exhibiciones en bodega son públicas y <strong>no requieren garantía</strong> para visitar.
-      </p>
-      <div className="mt-8 flex flex-wrap justify-center gap-4">
-        <Link
-          href="/registro"
-          className="inline-flex items-center justify-center rounded-full bg-[#4bc0f9] px-8 py-3 text-sm font-bold text-[#053247] shadow-md ring-1 ring-sky-200 hover:brightness-105"
-        >
-          Regístrate ahora
-        </Link>
-        <Link
-          href={cat}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center rounded-full border-2 border-[#009ade] px-8 py-3 text-sm font-bold text-[#009ade] hover:bg-[#009ade] hover:text-white"
-        >
-          Ver catálogo
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 export function RegisterPitch() {
+  const cat = catalogoHref();
+
   return (
     <section className="mx-auto max-w-2xl rounded-2xl border border-neutral-200 bg-white px-6 py-10 shadow-sm">
       <h2 className="text-2xl font-extrabold text-[#009ade]">¡Bienvenido al portal líder en remates!</h2>
@@ -103,6 +74,32 @@ export function RegisterPitch() {
           <span className="font-bold text-[#009ade]">✓ Soporte</span> — Contact Center acompaña tu proceso.
         </li>
       </ul>
+
+      <div className="mt-8 rounded-xl border border-[#FFC107]/40 bg-[#f8fafc] p-5">
+        <h3 className="text-lg font-extrabold text-[#053247]">¿No está registrado?</h3>
+        <p className="mt-2 text-sm text-neutral-700">
+          Sin cuenta no podrá ofertar. Regístrese, deposite su garantía y participe en remates 100% online.
+        </p>
+        <p className="mt-2 text-sm text-neutral-600">
+          Las exhibiciones en bodega son públicas y <strong>no requieren garantía</strong> para visitar.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href="#crear-cuenta-portal"
+            className="inline-flex items-center justify-center rounded-full bg-[#4bc0f9] px-6 py-2.5 text-sm font-bold text-[#053247] shadow-sm ring-1 ring-sky-200 hover:brightness-105"
+          >
+            Crear cuenta ahora
+          </Link>
+          <Link
+            href={cat}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-full border-2 border-[#009ade] px-6 py-2.5 text-sm font-bold text-[#009ade] hover:bg-[#009ade] hover:text-white"
+          >
+            Ver catálogo
+          </Link>
+        </div>
+      </div>
 
       <p className="mt-8 border-t border-neutral-200 pt-5 text-xs text-neutral-500">
         *Al registrarte aceptas los{" "}
