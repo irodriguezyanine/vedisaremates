@@ -13,6 +13,7 @@ const IP_WINDOW_MS = 10 * 60 * 1000;
 const EMAIL_WINDOW_MS = 20 * 60 * 1000;
 const IP_LIMIT = 25;
 const EMAIL_LIMIT = 4;
+const DEFAULT_SITE_ORIGIN = "https://vedisaremates-mu.vercel.app";
 
 const ipHits = new Map<string, number[]>();
 const emailHits = new Map<string, number[]>();
@@ -45,22 +46,7 @@ function normalizeName(raw: unknown) {
 }
 
 function isStrongPassword(password: string) {
-  if (password.length < 10 || password.length > 128) return false;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasDigit = /\d/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  return hasUpper && hasLower && hasDigit && hasSpecial;
-}
-
-function sanitizeRedirectOrigin(origin: string) {
-  try {
-    const url = new URL(origin);
-    if (url.protocol !== "https:" && url.hostname !== "localhost") return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+  return password.length >= 6 && password.length <= 128;
 }
 
 function getClientIp(request: Request) {
@@ -294,9 +280,7 @@ export async function POST(request: Request) {
   const password = typeof body.password === "string" ? body.password : "";
   const botTrap = typeof body.website === "string" ? body.website.trim() : "";
   const formStartedAt = Number(body.formStartedAt ?? 0);
-  const origin = sanitizeRedirectOrigin(typeof body.origin === "string" ? body.origin : "");
-  const fallbackOrigin = sanitizeRedirectOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? "");
-  const siteOrigin = origin ?? fallbackOrigin ?? "https://vedisaremates.vercel.app";
+  const siteOrigin = DEFAULT_SITE_ORIGIN;
   const redirectTo = `${siteOrigin}/ingreso?verified=1`;
 
   registerHit(ipHits, ip);

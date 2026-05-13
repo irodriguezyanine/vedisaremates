@@ -7,15 +7,9 @@ import { SITE } from "@/lib/site-config";
 
 function passwordStrength(password: string): { label: string; width: string; color: string } {
   if (!password) return { label: "Sin definir", width: "w-0", color: "bg-neutral-300" };
-  let score = 0;
-  if (password.length >= 10) score += 1;
-  if (/[A-Z]/.test(password)) score += 1;
-  if (/[a-z]/.test(password)) score += 1;
-  if (/\d/.test(password)) score += 1;
-  if (/[^A-Za-z0-9]/.test(password)) score += 1;
-  if (score <= 2) return { label: "Baja", width: "w-1/4", color: "bg-rose-500" };
-  if (score === 3) return { label: "Media", width: "w-2/4", color: "bg-amber-500" };
-  if (score === 4) return { label: "Buena", width: "w-3/4", color: "bg-sky-500" };
+  if (password.length < 6) return { label: "Baja", width: "w-1/4", color: "bg-rose-500" };
+  if (password.length < 9) return { label: "Media", width: "w-2/4", color: "bg-amber-500" };
+  if (password.length < 12) return { label: "Buena", width: "w-3/4", color: "bg-sky-500" };
   return { label: "Alta", width: "w-full", color: "bg-emerald-500" };
 }
 
@@ -65,8 +59,7 @@ export function RegisterForm() {
       if (!res.ok || !data?.ok) {
         const map: Record<string, string> = {
           email_invalido: "Correo inválido.",
-          password_debil:
-            "La contraseña debe tener al menos 10 caracteres e incluir mayúsculas, minúsculas, número y símbolo.",
+          password_debil: "La contraseña debe tener al menos 6 caracteres.",
           demasiadas_solicitudes_ip: "Se alcanzó el límite de intentos. Intenta nuevamente en unos minutos.",
           demasiadas_solicitudes_email: "Se alcanzó el límite de envíos para este correo. Intenta más tarde.",
           mail_no_enviado: "No pudimos enviar el correo en este momento. Intenta nuevamente en unos minutos.",
@@ -149,12 +142,12 @@ export function RegisterForm() {
           />
         </label>
         <label className="block text-sm font-medium text-neutral-700">
-          Contraseña (mín. 10 caracteres)
+          Contraseña (mín. 6 caracteres)
           <input
             type="password"
             autoComplete="new-password"
             required
-            minLength={10}
+            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
@@ -172,7 +165,7 @@ export function RegisterForm() {
             type="password"
             autoComplete="new-password"
             required
-            minLength={10}
+            minLength={6}
             value={password2}
             onChange={(e) => setPassword2(e.target.value)}
             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"

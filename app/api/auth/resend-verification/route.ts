@@ -9,21 +9,12 @@ export const runtime = "nodejs";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const WINDOW_MS = 20 * 60 * 1000;
 const LIMIT_PER_EMAIL = 4;
+const DEFAULT_SITE_ORIGIN = "https://vedisaremates-mu.vercel.app";
 const hitsByEmail = new Map<string, number[]>();
 
 function normalizeEmail(raw: unknown) {
   if (typeof raw !== "string") return "";
   return raw.trim().toLowerCase();
-}
-
-function sanitizeOrigin(origin: string) {
-  try {
-    const u = new URL(origin);
-    if (u.protocol !== "https:" && u.hostname !== "localhost") return null;
-    return u.origin;
-  } catch {
-    return null;
-  }
 }
 
 function markAndCount(email: string) {
@@ -168,10 +159,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
 
-  const siteOrigin =
-    sanitizeOrigin(typeof body.origin === "string" ? body.origin : "") ??
-    sanitizeOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? "") ??
-    "https://vedisaremates.vercel.app";
+  const siteOrigin = DEFAULT_SITE_ORIGIN;
 
   const { data, error } = await admin.auth.admin.generateLink({
     type: "magiclink",
