@@ -47,15 +47,6 @@ export function RegisterPitch() {
         Registrarte es el primer paso para participar con seguridad.
       </p>
 
-      <div className="mt-6 rounded-xl border border-sky-100 bg-sky-50/60 p-5">
-        <p className="text-sm font-semibold text-neutral-800">Aviso sobre tu correo de activación</p>
-        <p className="mt-2 text-sm leading-relaxed text-neutral-700">
-          Algunos proveedores (p. ej. <mark className="rounded bg-amber-200 px-0.5">Hotmail</mark>) pueden demorar o
-          filtrar correos automáticos. Para acceso inmediato y comprobantes,{" "}
-          <strong>recomendamos Gmail o correo corporativo</strong>.
-        </p>
-      </div>
-
       <h3 className="mt-8 text-lg font-bold text-neutral-800">Al crear tu cuenta obtienes</h3>
       <ul className="mt-4 space-y-3 text-[15px] text-neutral-700">
         <li>
@@ -65,10 +56,6 @@ export function RegisterPitch() {
         <li>
           <span className="font-bold text-[#009ade]">✓ Garantía de participación</span> — derecho a ofertar en
           remates habilitados.
-        </li>
-        <li>
-          <span className="font-bold text-[#009ade]">✓ Notificaciones</span> — alertas sobre intereses (próximamente
-          personalizables).
         </li>
         <li>
           <span className="font-bold text-[#009ade]">✓ Soporte</span> — Contact Center acompaña tu proceso.
