@@ -104,32 +104,86 @@ function buildVerificationMail({
   ].join("\n");
 
   const html = `
-  <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937;max-width:640px;margin:0 auto;">
-    <h2 style="margin:0 0 16px;color:#0f3d5c;">${SITE.name}</h2>
-    <p>${salutation}</p>
-    <p>Gracias por registrarte. Para activar tu cuenta, verifica tu correo con el siguiente botón:</p>
-    <p style="margin:20px 0;">
-      <a href="${actionLink}" style="background:#009ade;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;display:inline-block;">
-        Verificar mi cuenta
-      </a>
-    </p>
-    <p style="font-size:13px;color:#4b5563;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
-    <p style="font-size:13px;word-break:break-all;"><a href="${actionLink}">${actionLink}</a></p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;" />
-    <h3 style="margin:0 0 10px;color:#0f3d5c;">Paso siguiente: constituir garantía</h3>
-    <ul style="padding-left:18px;margin:0 0 12px;">
-      <li>Monto de garantía: <strong>${SITE.guaranteeAmountDisplay}</strong>.</li>
-      <li>Envía el comprobante para habilitar tu participación en remates.</li>
-      <li>Puedes adjuntarlo por WhatsApp o por correo.</li>
-    </ul>
-    <p style="margin:10px 0;">
-      <a href="${wa}" style="color:#0f766e;font-weight:700;">Enviar comprobante por WhatsApp</a><br/>
-      <a href="mailto:${SITE.pagosEmail}" style="color:#0f766e;font-weight:700;">Enviar comprobante por correo (${SITE.pagosEmail})</a>
-    </p>
-    <p style="font-size:12px;color:#6b7280;margin-top:24px;">Si no solicitaste este registro, puedes ignorar este mensaje.</p>
+  <div style="margin:0;background:#f3f7fb;padding:24px 12px;font-family:Arial,sans-serif;color:#0f1f2c;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe7f2;border-radius:14px;overflow:hidden;">
+      <tr>
+        <td style="background:linear-gradient(90deg,#0f2f49,#0f3d5c);padding:18px 22px;">
+          <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#7dd3fc;font-weight:700;">${SITE.name}</div>
+          <div style="font-size:24px;line-height:1.2;color:#ffffff;font-weight:800;margin-top:6px;">Verifica tu cuenta</div>
+          <div style="font-size:14px;color:#cfe9ff;margin-top:6px;">Activa tu acceso para participar en remates.</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:22px;">
+          <p style="margin:0 0 14px;font-size:15px;">${salutation}</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#334155;">
+            Gracias por registrarte. Para activar tu cuenta de manera segura, presiona el siguiente botón:
+          </p>
+          <p style="margin:0 0 18px;">
+            <a href="${actionLink}" style="display:inline-block;background:#009ade;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">
+              Verificar mi cuenta
+            </a>
+          </p>
+          <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Si el botón no funciona, copia este enlace:</p>
+          <p style="margin:0 0 18px;font-size:12px;word-break:break-all;">
+            <a href="${actionLink}" style="color:#0369a1;">${actionLink}</a>
+          </p>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #fde68a;background:#fffbeb;border-radius:10px;">
+            <tr>
+              <td style="padding:14px 14px 8px;font-size:16px;font-weight:800;color:#92400e;">Siguiente paso: constituir garantía</td>
+            </tr>
+            <tr>
+              <td style="padding:0 14px 14px;">
+                <ol style="margin:0;padding-left:18px;color:#7c2d12;font-size:14px;line-height:1.55;">
+                  <li>Constituye tu garantía de participación (<strong>${SITE.guaranteeAmountDisplay}</strong>).</li>
+                  <li>Envía tu comprobante para habilitar tu cuenta en remates.</li>
+                  <li>Adjunta por WhatsApp o por correo.</li>
+                </ol>
+              </td>
+            </tr>
+          </table>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
+            <tr>
+              <td style="padding:0 0 8px;">
+                <a href="${wa}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;font-weight:700;">Enviar comprobante por WhatsApp</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-size:14px;">
+                <a href="mailto:${SITE.pagosEmail}" style="color:#0f766e;font-weight:700;text-decoration:none;">Enviar comprobante por correo (${SITE.pagosEmail})</a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:18px 0 0;font-size:12px;color:#64748b;">
+            Si no solicitaste este registro, puedes ignorar este correo.
+          </p>
+        </td>
+      </tr>
+    </table>
   </div>`;
 
   return { subject, text, html };
+}
+
+async function forceClienteRemateRole(admin: ReturnType<typeof createAdminClient>, userId: string, nombre: string) {
+  if (!admin || !userId) return;
+  const roleCandidates = ["cliente-remate", "cliente_remate", "cliente remate"];
+  for (const rol of roleCandidates) {
+    const { error } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          rol,
+          nombre: nombre || null,
+        },
+        { onConflict: "id" },
+      );
+    if (!error) return;
+  }
 }
 
 export async function POST(request: Request) {
@@ -200,6 +254,10 @@ export async function POST(request: Request) {
   }
 
   const actionLink = data?.properties?.action_link;
+  const userId = data?.user?.id;
+  if (userId) {
+    await forceClienteRemateRole(admin, userId, nombre);
+  }
   if (!actionLink) {
     return genericSuccess();
   }
