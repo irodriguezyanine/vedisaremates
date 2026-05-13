@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type TabKey = "staff" | "cliente_remate";
+type SortKey = "email" | "nombre" | "rol" | "garantia" | "created_at";
+type SortDir = "asc" | "desc";
 
 type ImportRow = {
   username: string;
@@ -129,6 +131,12 @@ function isClienteRemate(rol: string | null | undefined): boolean {
 function csvSafe(text: string): string {
   const value = text.replace(/"/g, '""');
   return `"${value}"`;
+}
+
+function garantiaSortWeight(value: boolean | null | undefined): number {
+  if (value === true) return 2; // habilitada
+  if (value == null) return 1; // pendiente
+  return 0; // no habilitada
 }
 
 function parseCsvLine(line: string, delimiter: string): string[] {
@@ -325,6 +333,8 @@ export function UsuariosPanel() {
   const [activeTab, setActiveTab] = useState<TabKey>("staff");
   const [globalSearch, setGlobalSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [forceChangeOnCreate, setForceChangeOnCreate] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkRole, setBulkRole] = useState("cliente-remate");
@@ -671,7 +681,38 @@ export function UsuariosPanel() {
     });
   }, [globalSearch, tabRows]);
 
-  const filteredIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+  const sortedRows = useMemo(() => {
+    const sorted = [...filteredRows];
+    const dir = sortDir === "asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      let av = "";
+      let bv = "";
+      if (sortKey === "email") {
+        av = normalize(a.email);
+        bv = normalize(b.email);
+      } else if (sortKey === "nombre") {
+        av = normalize(a.nombre);
+        bv = normalize(b.nombre);
+      } else if (sortKey === "rol") {
+        av = normalize(formatRoleLabel(a.rol));
+        bv = normalize(formatRoleLabel(b.rol));
+      } else if (sortKey === "created_at") {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return (at - bt) * dir;
+      } else {
+        const ag = garantiaSortWeight(a.garantia_aprobada);
+        const bg = garantiaSortWeight(b.garantia_aprobada);
+        return (ag - bg) * dir;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    return sorted;
+  }, [filteredRows, sortDir, sortKey]);
+
+  const filteredIds = useMemo(() => sortedRows.map((r) => r.id), [sortedRows]);
   const selectedCount = useMemo(() => {
     let count = 0;
     for (const id of filteredIds) {
@@ -697,12 +738,26 @@ export function UsuariosPanel() {
     });
   }, [activeTab, tabRows]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / USERS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / USERS_PER_PAGE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedRows = useMemo(() => {
     const start = (safeCurrentPage - 1) * USERS_PER_PAGE;
-    return filteredRows.slice(start, start + USERS_PER_PAGE);
-  }, [filteredRows, safeCurrentPage]);
+    return sortedRows.slice(start, start + USERS_PER_PAGE);
+  }, [safeCurrentPage, sortedRows]);
+
+  function onSortColumn(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir("asc");
+  }
+
+  function sortIndicator(key: SortKey): string {
+    if (sortKey !== key) return "↕";
+    return sortDir === "asc" ? "↑" : "↓";
+  }
 
   function exportFilteredCsv() {
     const lines = [
@@ -1015,6 +1070,24 @@ export function UsuariosPanel() {
       const targetIds = new Set(selectedIds);
       let updated = 0;
       let failed = 0;
+
+      // Ruta rápida para garantía masiva: una sola llamada backend (persistente y mucho más rápida).
+      if (patch.garantiaAprobada != null && patch.rol == null) {
+        const resp = await fetch("/api/admin/users/garantia-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userIds: [...targetIds],
+            garantiaAprobada: patch.garantiaAprobada,
+          }),
+        });
+        const json = (await resp.json().catch(() => ({}))) as { ok?: boolean; updated?: number; failed?: number; error?: string };
+        if (!resp.ok || !json.ok) {
+          throw new Error(friendlyCreateError(json.error ?? "No se pudo actualizar garantía en forma masiva."));
+        }
+        updated = Number(json.updated ?? 0);
+        failed = Number(json.failed ?? 0);
+      } else {
       for (const userId of targetIds) {
         const detalle = await fetchDetalleUsuario(userId, supabase);
         if (!detalle) {
@@ -1046,6 +1119,7 @@ export function UsuariosPanel() {
         }
         if (ok) updated += 1;
         else failed += 1;
+      }
       }
       setBulkMsg(`Acción masiva finalizada. Actualizados: ${updated}. Fallidos: ${failed}.`);
       if (updated > 0) {
@@ -1221,7 +1295,7 @@ export function UsuariosPanel() {
                     </svg>
                   </button>
                   {bulkActionsOpen ? (
-                    <div className="absolute z-20 mt-2 w-72 rounded-lg border border-white/10 bg-[#101722] p-3 shadow-xl">
+                    <div className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-white/10 bg-[#101722] p-3 shadow-xl">
                       <div className="space-y-2">
                         <button
                           type="button"
@@ -1297,11 +1371,37 @@ export function UsuariosPanel() {
             <thead className="text-neutral-500">
               <tr>
                 {activeTab === "cliente_remate" ? <th className="px-4 py-2 font-medium">Sel.</th> : null}
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">Rol</th>
-                {activeTab === "cliente_remate" ? <th className="px-4 py-2 font-medium">Garantia</th> : null}
-                <th className="px-4 py-2 font-medium">Alta</th>
+                <th className="px-4 py-2 font-medium">
+                  <button type="button" onClick={() => onSortColumn("email")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                    Email <span className="text-[11px]">{sortIndicator("email")}</span>
+                  </button>
+                </th>
+                <th className="px-4 py-2 font-medium">
+                  <button type="button" onClick={() => onSortColumn("nombre")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                    Nombre <span className="text-[11px]">{sortIndicator("nombre")}</span>
+                  </button>
+                </th>
+                <th className="px-4 py-2 font-medium">
+                  <button type="button" onClick={() => onSortColumn("rol")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                    Rol <span className="text-[11px]">{sortIndicator("rol")}</span>
+                  </button>
+                </th>
+                {activeTab === "cliente_remate" ? (
+                  <th className="px-4 py-2 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => onSortColumn("garantia")}
+                      className="inline-flex items-center gap-1 hover:text-neutral-300"
+                    >
+                      Garantía <span className="text-[11px]">{sortIndicator("garantia")}</span>
+                    </button>
+                  </th>
+                ) : null}
+                <th className="px-4 py-2 font-medium">
+                  <button type="button" onClick={() => onSortColumn("created_at")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                    Alta <span className="text-[11px]">{sortIndicator("created_at")}</span>
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1329,13 +1429,29 @@ export function UsuariosPanel() {
                   </td>
                   {activeTab === "cliente_remate" ? (
                     <td className="px-4 py-2">
-                      {u.garantia_aprobada ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
-                          <span aria-hidden>✔</span> Habilitada
+                      {u.garantia_aprobada === true ? (
+                        <span
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 text-xs text-emerald-200"
+                          title="Habilitada"
+                          aria-label="Garantía habilitada"
+                        >
+                          ✓
+                        </span>
+                      ) : u.garantia_aprobada == null ? (
+                        <span
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-400/40 bg-amber-500/10 text-xs text-amber-200"
+                          title="Pendiente"
+                          aria-label="Garantía pendiente"
+                        >
+                          ⏳
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-500/10 px-2 py-0.5 text-xs text-red-200">
-                          <span aria-hidden>✖</span> No habilitada
+                        <span
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-400/40 bg-red-500/10 text-xs text-red-200"
+                          title="No habilitada"
+                          aria-label="Garantía no habilitada"
+                        >
+                          ✖
                         </span>
                       )}
                     </td>
@@ -1355,7 +1471,7 @@ export function UsuariosPanel() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-5 py-3 text-sm">
           <p className="text-neutral-400">
-            Mostrando {paginatedRows.length} de {filteredRows.length} usuarios (página {safeCurrentPage} de {totalPages}).
+            Mostrando {paginatedRows.length} de {sortedRows.length} usuarios (página {safeCurrentPage} de {totalPages}).
           </p>
           <div className="flex items-center gap-2">
             <button
