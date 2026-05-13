@@ -430,8 +430,8 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">
         <h2 className="text-lg font-bold text-white">Añadir desde inventario Tasaciones</h2>
         <p className="mt-1 text-sm text-neutral-400">
-          Abrí el inventario completo ({PAGE_SIZE} por página): buscador, marcá varios ítems y sumalos como lotes. Lo que ya está
-          en este remate no vuelve a aparecer en la lista.
+          Abra el inventario completo ({PAGE_SIZE} por página): buscador, marque varios ítems y agréguelos como lotes. Lo que
+          ya está en este remate no vuelve a aparecer en la lista.
         </p>
         <button
           type="button"

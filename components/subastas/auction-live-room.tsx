@@ -235,7 +235,7 @@ export function AuctionLiveRoom({
 
   async function placeBid() {
     if (!active || !viewerId) {
-      setMsg("Iniciá sesión para ofertar.");
+      setMsg("Inicie sesión para ofertar.");
       return;
     }
     if (["pausado", "adjudicado", "vendido", "anulado"].includes(String(active.estado ?? ""))) {
@@ -252,7 +252,7 @@ export function AuctionLiveRoom({
     }
     const sb = createClient();
     if (!sb) {
-      setMsg("No se pudo iniciar la conexión. Actualizá la página o intentá más tarde.");
+      setMsg("No se pudo iniciar la conexión. Actualice la página o intente más tarde.");
       setBusy(false);
       return;
     }
@@ -310,7 +310,7 @@ export function AuctionLiveRoom({
 
   async function setProxyBid() {
     if (!active || !viewerId) {
-      setMsg("Iniciá sesión para configurar puja automática.");
+      setMsg("Inicie sesión para configurar puja automática.");
       return;
     }
     const monto = Number(proxyMax.replace(/\./g, "").replace(",", "."));
@@ -438,7 +438,7 @@ export function AuctionLiveRoom({
               href={`/ingreso?redirect=/subastas/${remate.id}`}
               className="mt-2 inline-flex w-full justify-center rounded-lg bg-[#009ade]/10 px-3 py-1.5 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15 sm:w-auto sm:justify-start"
             >
-              Iniciá sesión para ofertar
+              Inicie sesión para ofertar
             </Link>
           ) : null}
         </div>
@@ -535,10 +535,10 @@ export function AuctionLiveRoom({
                             : tick === null
                               ? "Cargando estado del remate…"
                               : !viewerId
-                                ? "Iniciá sesión para ofertar."
+                                ? "Inicie sesión para ofertar."
                                 : remate.starts_at && new Date(remate.starts_at).getTime() > tick
                                   ? "Esperando la hora de inicio."
-                                  : "No podés ofertar en este momento."}
+                                  : "No puede ofertar en este momento."}
                       </p>
                     ) : (
                       <>

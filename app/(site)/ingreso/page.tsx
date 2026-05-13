@@ -9,8 +9,8 @@ export default function IngresoPage() {
       <div>
         <h1 className="text-2xl font-bold text-neutral-900">Inicia sesión</h1>
         <p className="mt-2 text-neutral-600">
-          Ingresá con el correo y la clave que te asignaron. Los clientes remate pueden gestionar su perfil y ver sus ofertas
-          en &quot;Mi cuenta&quot; una vez dentro.
+          Ingrese con el correo y la clave asignados. Los clientes remate pueden gestionar su perfil y ver sus ofertas en
+          &quot;Mi cuenta&quot; una vez dentro.
         </p>
       </div>
       <Suspense fallback={<p className="text-sm text-neutral-500">Cargando formulario…</p>}>

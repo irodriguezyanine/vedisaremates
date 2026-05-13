@@ -85,7 +85,7 @@ export function RematesList() {
 
     const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
     if (error) {
-      setErr(error.message || "No se pudo obtener el listado. Revisá tu conexión e intentá de nuevo.");
+      setErr(error.message || "No se pudo obtener el listado. Revise su conexión e intente nuevamente.");
       setLoadingList(false);
       return;
     }
@@ -138,7 +138,7 @@ export function RematesList() {
       .single();
 
     if (error) {
-      setErr("No se pudo crear el borrador. ¿Tenés permisos de administrador?");
+      setErr("No se pudo crear el borrador. ¿Tiene permisos de administrador?");
       return;
     }
     if (data?.id) {
@@ -162,7 +162,7 @@ export function RematesList() {
     const { error } = await sb.from("portal_remates").delete().eq("id", r.id);
     setDeletingId(null);
     if (error) {
-      setErr("No se pudo eliminar. Revisá permisos o intentá más tarde.");
+      setErr("No se pudo eliminar. Revise permisos o intente más tarde.");
       return;
     }
     await load();
@@ -198,9 +198,9 @@ export function RematesList() {
         <div>
           <h1 className="text-xl font-bold text-white">Remates y lotes</h1>
           <p className="mt-1 text-sm text-neutral-400">
-            Acá ves <strong className="font-medium text-neutral-200">todos</strong> los remates de la base (incluidos
+            Aquí ve <strong className="font-medium text-neutral-200">todos</strong> los remates de la base (incluidos
             borradores). La home pública solo muestra eventos publicados, en curso o cerrados para visitantes; las tarjetas
-            de ejemplo del inicio no son remates reales hasta que existan acá.
+            de ejemplo del inicio no son remates reales hasta que existan aquí.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -275,7 +275,7 @@ export function RematesList() {
           </li>
         ))}
         {!items.length ? (
-          <p className="text-neutral-500">Aún no hay remates en la base. Creá el primero con el botón + arriba a la derecha.</p>
+          <p className="text-neutral-500">Aún no hay remates en la base. Cree el primero con el botón + arriba a la derecha.</p>
         ) : null}
       </ul>
     </div>

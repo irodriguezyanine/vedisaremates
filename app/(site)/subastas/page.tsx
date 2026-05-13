@@ -44,13 +44,13 @@ export default async function SubastasIndexPage() {
     <div className="mx-auto max-w-4xl px-4 py-14">
       <h1 className="text-3xl font-black text-neutral-900">Sala de subastas</h1>
       <p className="mt-3 max-w-2xl text-neutral-600">
-        Eventos en vivo con ofertas en tiempo real. Iniciá sesión para participar; si ya tenés usuario Vedisa desde otro
-        canal, podés usar ese mismo correo y clave.
+        Eventos en vivo con ofertas en tiempo real. Inicie sesión para participar; si ya tiene usuario Vedisa desde otro
+        canal, puede usar ese mismo correo y clave.
       </p>
 
       {error ? (
         <p className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No se pudo cargar la lista. Verificá conexión o probá dentro de unos minutos.
+          No se pudo cargar la lista. Verifique su conexión o pruebe nuevamente dentro de unos minutos.
         </p>
       ) : null}
 
@@ -108,7 +108,7 @@ export default async function SubastasIndexPage() {
       {!rows.length && !error ? (
         <p className="mt-10 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center text-neutral-600">
           Todavía no hay remates publicados. Cuando los administradores creen eventos y los marquen como publicados,
-          aparecerán acá automáticamente.
+          aparecerán aquí automáticamente.
         </p>
       ) : null}
     </div>

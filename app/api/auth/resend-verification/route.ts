@@ -42,8 +42,10 @@ function responseOk() {
   });
 }
 
-function buildMail(actionLink: string) {
+function buildMail(actionLink: string, siteOrigin: string) {
   const wa = `${SITE.whatsappHref}?text=${encodeURIComponent("Hola, quiero enviar mi comprobante de garantía para habilitar mi cuenta.")}`;
+  const paymentLink = "https://www.tuu.cl/vedisaremates";
+  const logoUrl = `${siteOrigin}/vedisa-logo-navbar.png`;
   return {
     subject: "Enlace de acceso/verificación · VEDISA Remates",
     text: [
@@ -52,25 +54,95 @@ function buildMail(actionLink: string) {
       "",
       "Recuerda constituir tu garantía para participar en remates.",
       `Monto de garantía: ${SITE.guaranteeAmountDisplay}`,
+      "",
+      "Pago con tarjeta:",
+      paymentLink,
+      "(Usa el mismo nombre y correo registrados en VEDISA Remates).",
+      "",
+      "Transferencia bancaria:",
+      "VEDISA REMATES LIMITADA",
+      "RUT: 76.114.336-0",
+      "CUENTA CORRIENTE: 08490043006",
+      "BANCO: BANCO DE CHILE",
+      "Correo: PAGOS@VEDISAREMATES.CL",
+      "",
       `WhatsApp: ${wa}`,
       `Correo de pagos: ${SITE.pagosEmail}`,
+      "Tiempo de habilitación aproximado: menos de 1 hora en horario laboral.",
     ].join("\n"),
     html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937;max-width:640px;margin:0 auto;">
-        <h2 style="margin:0 0 16px;color:#0f3d5c;">${SITE.name}</h2>
-        <p>Recibimos una solicitud para reenviar tu enlace de verificación/acceso.</p>
-        <p style="margin:20px 0;">
-          <a href="${actionLink}" style="background:#009ade;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;display:inline-block;">
-            Abrir enlace seguro
-          </a>
-        </p>
-        <p style="font-size:13px;word-break:break-all;"><a href="${actionLink}">${actionLink}</a></p>
-        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;" />
-        <p>Para participar en remates debes constituir garantía (${SITE.guaranteeAmountDisplay}) y enviar comprobante:</p>
-        <p>
-          <a href="${wa}" style="color:#0f766e;font-weight:700;">Enviar comprobante por WhatsApp</a><br/>
-          <a href="mailto:${SITE.pagosEmail}" style="color:#0f766e;font-weight:700;">Enviar por correo (${SITE.pagosEmail})</a>
-        </p>
+      <div style="margin:0;background:#f3f7fb;padding:24px 12px;font-family:Arial,sans-serif;color:#0f1f2c;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe7f2;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="background:linear-gradient(90deg,#0f2f49,#0f3d5c);padding:18px 22px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="vertical-align:top;padding-right:12px;">
+                    <div style="font-size:29px;line-height:1.15;color:#ffffff;font-weight:900;margin:0;">Enlace seguro</div>
+                    <div style="font-size:14px;color:#cfe9ff;margin-top:6px;">Reenvío de verificación y acceso.</div>
+                  </td>
+                  <td style="width:220px;text-align:right;vertical-align:middle;">
+                    <img src="${logoUrl}" alt="${SITE.name}" width="200" style="display:inline-block;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px;">
+              <p style="margin:0 0 12px;font-size:15px;color:#334155;">Recibimos una solicitud para reenviar tu enlace de verificación/acceso.</p>
+              <p style="margin:0 0 18px;">
+                <a href="${actionLink}" style="display:inline-block;background:#009ade;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">
+                  Abrir enlace seguro
+                </a>
+              </p>
+              <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Si el botón no funciona, copia este enlace:</p>
+              <p style="margin:0 0 18px;font-size:12px;word-break:break-all;"><a href="${actionLink}" style="color:#0369a1;">${actionLink}</a></p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #d1e9f7;background:#f8fcff;border-radius:10px;">
+                <tr>
+                  <td style="padding:12px 14px 8px;font-size:15px;font-weight:800;color:#0f3d5c;">Opciones de pago de garantía</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 14px 14px;">
+                    <p style="margin:0 0 8px;font-size:14px;color:#1e293b;">
+                      <strong>Pago con tarjeta:</strong>
+                      <a href="${paymentLink}" style="color:#0369a1;font-weight:700;text-decoration:none;margin-left:6px;">${paymentLink}</a>
+                    </p>
+                    <p style="margin:0 0 10px;font-size:13px;color:#475569;">
+                      Importante: usa el mismo nombre y correo registrados en tu cuenta de VEDISA Remates.
+                    </p>
+                    <p style="margin:0 0 4px;font-size:14px;color:#1e293b;"><strong>Transferencia bancaria:</strong></p>
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;">
+                      <strong>VEDISA REMATES LIMITADA</strong><br/>
+                      RUT: 76.114.336-0<br/>
+                      Cuenta Corriente: 08490043006<br/>
+                      Banco de Chile<br/>
+                      Correo: pagos@vedisaremates.cl
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
+                <tr>
+                  <td style="padding:0 0 8px;">
+                    <a href="${wa}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;font-weight:700;">Enviar comprobante por WhatsApp</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;">
+                    <a href="mailto:${SITE.pagosEmail}" style="color:#0f766e;font-weight:700;text-decoration:none;">Enviar comprobante por correo (${SITE.pagosEmail})</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:10px 0 0;font-size:13px;color:#0f3d5c;">
+                Tiempo de habilitación aproximado: <strong>menos de 1 hora en horario laboral</strong>.
+              </p>
+            </td>
+          </tr>
+        </table>
       </div>
     `,
   };
@@ -96,7 +168,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
 
-  const origin =
+  const siteOrigin =
     sanitizeOrigin(typeof body.origin === "string" ? body.origin : "") ??
     sanitizeOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? "") ??
     "https://vedisaremates.vercel.app";
@@ -105,7 +177,7 @@ export async function POST(request: Request) {
     type: "magiclink",
     email,
     options: {
-      redirectTo: `${origin}/ingreso?verified=1`,
+      redirectTo: `${siteOrigin}/ingreso?verified=1`,
     },
   });
 
@@ -113,7 +185,7 @@ export async function POST(request: Request) {
   const actionLink = data?.properties?.action_link;
   if (!actionLink) return responseOk();
 
-  const mail = buildMail(actionLink);
+  const mail = buildMail(actionLink, siteOrigin);
   const sent = await sendSesEmail({
     to: email,
     subject: mail.subject,

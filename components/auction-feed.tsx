@@ -255,14 +255,13 @@ function RemateLotsStrip({
             </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-neutral-500">
-            Podés hacer clic en una foto para abrir ese lote en la sala. Vista {start + 1}–
-            {Math.min(start + THUMB_VISIBLE, n)} de {n}{" "}
+            Puede hacer clic en una foto para abrir ese lote en la sala. Vista {start + 1}–{Math.min(start + THUMB_VISIBLE, n)} de {n}{" "}
             <span className="tabular-nums text-neutral-400">({start + 1}/{maxStart + 1})</span>
           </p>
         </>
       ) : (
         <p className="mt-2 text-center text-[11px] text-neutral-500">
-          Hacé clic en una foto para ver el detalle del lote.
+          Haga clic en una foto para ver el detalle del lote.
         </p>
       )}
     </div>

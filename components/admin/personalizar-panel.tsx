@@ -516,7 +516,7 @@ export function PersonalizarPanel() {
     const nk = normalizeMapKey(customKeyInput.trim());
     if (!nk.length) return;
     if (!customLabelDraft.trim()) {
-      setFichaErr("Para añadir una clave nueva escribí un título público inicial (podés editarlo después).");
+      setFichaErr("Para añadir una clave nueva, escriba un título público inicial (puede editarlo después).");
       return;
     }
     setFichaOverrides((prev) => ({
@@ -543,7 +543,7 @@ export function PersonalizarPanel() {
           {err}
           {missingSql ? (
             <span className="mt-2 block">
-              ¿Faltan migraciones en Supabase? Podés ejecutar{" "}
+              ¿Faltan migraciones en Supabase? Puede ejecutar{" "}
               <strong className="font-semibold">supabase/migrations/portal_home_hero_carousel.sql</strong> (carrusel) y{" "}
               <strong className="font-semibold">supabase/migrations/portal_inventario_ficha_config.sql</strong>{" "}
               (ficha subastas).
@@ -566,7 +566,7 @@ export function PersonalizarPanel() {
               {fichaLoadErr ?? fichaErr}
               {missingFichaSql ? (
                 <span className="mt-2 block">
-                  Si la tabla no existe, ejecutá{" "}
+                  Si la tabla no existe, ejecute{" "}
                   <strong className="font-semibold">supabase/migrations/portal_inventario_ficha_config.sql</strong>.
                 </span>
               ) : null}
@@ -691,22 +691,22 @@ export function PersonalizarPanel() {
             <h2 className="text-base font-bold uppercase tracking-wide text-[#84d8ec]">Vista pública del vehículo en una subasta</h2>
 
             <div className="rounded-2xl border border-[#33C7E3]/35 bg-gradient-to-br from-[#0f1a24] to-[#0b1219] p-6">
-              <p className="text-lg font-bold text-white">¿Qué estás tocando acá?</p>
+              <p className="text-lg font-bold text-white">¿Qué está modificando aquí?</p>
               <p className="mt-2 max-w-[76ch] text-sm leading-relaxed text-neutral-300">
                 Esto <strong className="text-white">no cambia el sistema de Tasaciones</strong>: sólo la forma en que se lee el auto en la sala de remates. Son tres ideas distintas
                 (no tienen el mismo lugar en la página):
               </p>
               <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-200">
                 <li>
-                  <strong className="text-white">Capítulos grandes</strong> (“Identificación”, “Motor”, “Otros datos…”): la misma idea que un catálogo en columnas. Ahí definís el orden, podés
-                  arrastrar y podés <strong className="text-white">ocultar todo un capítulo</strong> en Internet.
+                  <strong className="text-white">Capítulos grandes</strong> (“Identificación”, “Motor”, “Otros datos…”): la misma idea que un catálogo en columnas. Ahí define el orden, puede
+                  arrastrar y puede <strong className="text-white">ocultar todo un capítulo</strong> en Internet.
                 </li>
                 <li>
                   <strong className="text-white">Tarjeta corta de precio y fechas</strong>: aparece <em>arriba de la foto grande</em> en la sala, con textos del evento y del lote. Es independiente de los
                   capítulos.
                 </li>
                 <li>
-                  <strong className="text-white">Ajustes finos</strong> (abajo, cerrados por defecto): renombrar un renglón suelto o moverlo a otro capítulo. Abrilos sólo si falta algo muy específico.
+                  <strong className="text-white">Ajustes finos</strong> (abajo, cerrados por defecto): renombrar un renglón suelto o moverlo a otro capítulo. Ábralos solo si falta algo muy específico.
                 </li>
               </ul>
               <label className="mt-5 flex cursor-pointer items-start gap-2 text-xs text-neutral-400">
@@ -725,8 +725,8 @@ export function PersonalizarPanel() {
                 <div>
                   <p className="text-lg font-bold text-white">Capítulos del detalle (lista estilo catálogo)</p>
                   <p className="mt-1 max-w-[70ch] text-xs text-neutral-400">
-                    Arrastrá desde el botón de puntos (izquierda) o usá Subir/Bajar.{" "}
-                    <strong className="text-neutral-200">Ocultar</strong> hace desaparecer el capítulo entero en la web (sigue en tu lista por si lo querés volver a mostrar).
+                    Arrastre desde el botón de puntos (izquierda) o use Subir/Bajar.{" "}
+                    <strong className="text-neutral-200">Ocultar</strong> hace desaparecer el capítulo completo en la web (se mantiene en la lista por si desea volver a mostrarlo).
                   </p>
                 </div>
               </div>
@@ -844,7 +844,7 @@ export function PersonalizarPanel() {
             <div className="rounded-xl border border-white/10 bg-[#141c28] p-4 sm:p-5">
               <p className="text-base font-bold text-white">Tarjeta de precio y fechas (arriba de la foto grande)</p>
               <p className="mt-2 text-xs text-neutral-400">
-                Franja con datos del lote y del remate (no es un capítulo del catálogo). Los códigos internos no se listan acá: ni en el panel ni en la sala. Arrastrá filas para orden;
+                Franja con datos del lote y del remate (no es un capítulo del catálogo). Los códigos internos no se listan aquí: ni en el panel ni en la sala. Arrastre filas para ordenar;
                 el ojo cambia ver / ocultar / valor Vedisa; el lápiz abre nombre público y orden manual.
               </p>
               <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
@@ -1018,7 +1018,7 @@ export function PersonalizarPanel() {
                   <span className="text-xs font-semibold text-[#84d8ec]">Tocar para abrir</span>
                 </div>
                 <p className="mt-2 max-w-[72ch] text-xs text-neutral-400">
-                  Tablas compactas por capítulo: ojo para visibilidad, lápiz para título público, capítulo destino y prioridad. Abrí sólo lo que necesites tocar.
+                  Tablas compactas por capítulo: ojo para visibilidad, lápiz para título público, capítulo destino y prioridad. Abra solo lo que necesite modificar.
                 </p>
               </summary>
               <div className="space-y-3 border-t border-white/10 px-3 pb-4 pt-4 sm:px-5">
@@ -1186,8 +1186,8 @@ export function PersonalizarPanel() {
                   <span className="text-xs font-semibold text-[#84d8ec]">Tocar para abrir</span>
                 </div>
                 <p className="mt-2 max-w-[72ch] text-xs text-neutral-400">
-                  Sólo si ves un dato en Tasaciones que no aparece en los grupos de arriba: agregá la clave interna (sin espacios) y el título que debe leer el público. Si no sabés la clave, pedile a
-                  soporte una captura con el nombre técnico.
+                  Solo si observa un dato en Tasaciones que no aparece en los grupos superiores: agregue la clave interna (sin espacios) y el título que debe leer el público. Si no conoce la clave,
+                  solicite a soporte una captura con el nombre técnico.
                 </p>
               </summary>
               <div className="border-t border-white/10 px-3 pb-5 pt-4 sm:px-5">

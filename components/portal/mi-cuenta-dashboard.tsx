@@ -619,7 +619,7 @@ export function MiCuentaDashboard({
           <div className="border-b border-neutral-100 px-6 py-5 sm:px-8">
             <h2 className="text-xl font-bold text-neutral-900">Ofertas realizadas</h2>
             <p className="mt-1 text-sm text-neutral-600">
-              Historial ordenado desde la última vez que apostaste por un lote. Podés entrar de nuevo al remate desde la tabla.
+              Historial ordenado desde la última vez que apostó por un lote. Puede entrar nuevamente al remate desde la tabla.
             </p>
           </div>
           {ofertasErr ? <p className="px-6 py-8 text-center text-sm text-amber-800 sm:px-8">{ofertasErr}</p> : null}

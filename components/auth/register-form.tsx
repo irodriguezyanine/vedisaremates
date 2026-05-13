@@ -124,7 +124,7 @@ export function RegisterForm() {
     <form onSubmit={onSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-bold text-neutral-900">Crear cuenta en el portal</h2>
       <p className="mt-1 text-sm text-neutral-600">
-        Podés usar la misma cuenta en los canales Vedisa que compartan este registro.
+        Puede usar la misma cuenta en los canales Vedisa que compartan este registro.
       </p>
       <div className="mt-6 flex flex-col gap-4">
         <label className="block text-sm font-medium text-neutral-700">

@@ -104,8 +104,8 @@ export function InventarioPanel() {
           <h1 className="text-xl font-bold text-white">Inventario</h1>
           <p className="mt-1 text-sm text-neutral-400">
             Vista de <code className="rounded bg-white/10 px-1 text-neutral-300">public.inventario</code> con{" "}
-            <strong className="text-neutral-200">todos los estados</strong> visibles para administración. Si solo ves un
-            estado, ejecutá en Supabase la migración{" "}
+            <strong className="text-neutral-200">todos los estados</strong> visibles para administración. Si solo ve un
+            estado, ejecute en Supabase la migración{" "}
             <code className="rounded bg-white/10 px-1 text-xs text-neutral-300">
               supabase/migrations/portal_inventario_admin_select_all.sql
             </code>
@@ -191,7 +191,7 @@ export function InventarioPanel() {
         </table>
         {!loading && !filtered.length ? (
           <p className="p-8 text-center text-neutral-500">
-            Sin resultados con los filtros actuales. Si la tabla no carga datos, revisá políticas RLS de{" "}
+            Sin resultados con los filtros actuales. Si la tabla no carga datos, revise políticas RLS de{" "}
             <code className="text-neutral-400">public.inventario</code> para el rol admin.
           </p>
         ) : null}

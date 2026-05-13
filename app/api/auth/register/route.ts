@@ -81,12 +81,16 @@ function genericSuccess() {
 function buildVerificationMail({
   nombre,
   actionLink,
+  siteOrigin,
 }: {
   nombre: string;
   actionLink: string;
+  siteOrigin: string;
 }) {
   const salutation = nombre ? `Hola ${nombre},` : "Hola,";
   const wa = `${SITE.whatsappHref}?text=${encodeURIComponent("Hola, quiero constituir mi garantía y enviar comprobante de pago.")}`;
+  const paymentLink = "https://www.tuu.cl/vedisaremates";
+  const logoUrl = `${siteOrigin}/vedisa-logo-navbar.png`;
   const subject = "Verifica tu cuenta en VEDISA Remates y activa tu garantía";
   const text = [
     `${salutation}`,
@@ -97,8 +101,28 @@ function buildVerificationMail({
     "",
     "Luego, para habilitar tu participación en remates debes constituir tu garantía.",
     `Monto de garantía: ${SITE.guaranteeAmountDisplay}`,
+    "",
+    "Puedes pagar con tarjeta aquí:",
+    paymentLink,
+    "(Importante: paga con el mismo nombre y correo usados en tu cuenta de VEDISA Remates).",
+    "",
+    "O realizar transferencia a:",
+    "VEDISA REMATES LIMITADA",
+    "RUT: 76.114.336-0",
+    "CUENTA CORRIENTE: 08490043006",
+    "BANCO: BANCO DE CHILE",
+    "Correo: PAGOS@VEDISAREMATES.CL",
+    "",
+    "Checklist recomendado:",
+    "1) Verifica tu cuenta con el botón o enlace.",
+    "2) Paga garantía con tarjeta o transferencia.",
+    "3) Envía comprobante por WhatsApp o correo.",
+    "4) Incluye nombre completo y correo de tu cuenta.",
+    "",
     `Puedes enviar el comprobante por WhatsApp: ${wa}`,
     `o por correo a ${SITE.pagosEmail}.`,
+    "Tiempo de habilitación aproximado: menos de 1 hora en horario laboral.",
+    "Nunca compartas tu contraseña por ningún canal.",
     "",
     "Si no iniciaste este registro, ignora este correo.",
   ].join("\n");
@@ -108,9 +132,17 @@ function buildVerificationMail({
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe7f2;border-radius:14px;overflow:hidden;">
       <tr>
         <td style="background:linear-gradient(90deg,#0f2f49,#0f3d5c);padding:18px 22px;">
-          <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#7dd3fc;font-weight:700;">${SITE.name}</div>
-          <div style="font-size:24px;line-height:1.2;color:#ffffff;font-weight:800;margin-top:6px;">Verifica tu cuenta</div>
-          <div style="font-size:14px;color:#cfe9ff;margin-top:6px;">Activa tu acceso para participar en remates.</div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+              <td style="vertical-align:top;padding-right:12px;">
+                <div style="font-size:31px;line-height:1.15;color:#ffffff;font-weight:900;margin:0;">Verifica tu cuenta</div>
+                <div style="font-size:14px;color:#cfe9ff;margin-top:6px;">Activa tu acceso para participar en remates.</div>
+              </td>
+              <td style="width:220px;text-align:right;vertical-align:middle;">
+                <img src="${logoUrl}" alt="${SITE.name}" width="200" style="display:inline-block;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
+              </td>
+            </tr>
+          </table>
         </td>
       </tr>
       <tr>
@@ -118,6 +150,11 @@ function buildVerificationMail({
           <p style="margin:0 0 14px;font-size:15px;">${salutation}</p>
           <p style="margin:0 0 16px;font-size:15px;color:#334155;">
             Gracias por registrarte. Para activar tu cuenta de manera segura, presiona el siguiente botón:
+          </p>
+          <p style="margin:0 0 12px;">
+            <span style="display:inline-block;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;">
+              Proceso guiado en 3 pasos
+            </span>
           </p>
           <p style="margin:0 0 18px;">
             <a href="${actionLink}" style="display:inline-block;background:#009ade;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">
@@ -144,6 +181,47 @@ function buildVerificationMail({
             </tr>
           </table>
 
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;border:1px solid #d1e9f7;background:#f8fcff;border-radius:10px;">
+            <tr>
+              <td style="padding:12px 14px 8px;font-size:15px;font-weight:800;color:#0f3d5c;">Opciones de pago de garantía</td>
+            </tr>
+            <tr>
+              <td style="padding:0 14px 14px;">
+                <p style="margin:0 0 8px;font-size:14px;color:#1e293b;">
+                  <strong>Pago con tarjeta:</strong>
+                  <a href="${paymentLink}" style="color:#0369a1;font-weight:700;text-decoration:none;margin-left:6px;">${paymentLink}</a>
+                </p>
+                <p style="margin:0 0 10px;font-size:13px;color:#475569;">
+                  Importante: el pago debe realizarse con el <strong>mismo nombre y correo</strong> de tu usuario en VEDISA Remates.
+                </p>
+                <p style="margin:0 0 4px;font-size:14px;color:#1e293b;"><strong>Transferencia bancaria:</strong></p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#334155;">
+                  <strong>VEDISA REMATES LIMITADA</strong><br/>
+                  RUT: 76.114.336-0<br/>
+                  Cuenta Corriente: 08490043006<br/>
+                  Banco de Chile<br/>
+                  Correo: pagos@vedisaremates.cl
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;border:1px solid #dbeafe;background:#f8fbff;border-radius:10px;">
+            <tr>
+              <td style="padding:12px 14px 8px;font-size:15px;font-weight:800;color:#1e3a8a;">Checklist para habilitar tu cuenta</td>
+            </tr>
+            <tr>
+              <td style="padding:0 14px 14px;">
+                <ul style="margin:0;padding-left:18px;color:#1e293b;font-size:13px;line-height:1.6;">
+                  <li>Cuenta verificada con el enlace de este correo.</li>
+                  <li>Garantía pagada con tarjeta o transferencia.</li>
+                  <li>Comprobante enviado por WhatsApp o correo.</li>
+                  <li>Nombre y correo del comprobante coinciden con tu usuario.</li>
+                </ul>
+              </td>
+            </tr>
+          </table>
+
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
             <tr>
               <td style="padding:0 0 8px;">
@@ -156,6 +234,13 @@ function buildVerificationMail({
               </td>
             </tr>
           </table>
+
+          <p style="margin:10px 0 0;font-size:13px;color:#0f3d5c;">
+            Tiempo de habilitación aproximado: <strong>menos de 1 hora en horario laboral</strong>.
+          </p>
+          <p style="margin:8px 0 0;font-size:12px;color:#64748b;">
+            Recomendación de seguridad: VEDISA Remates nunca solicitará tu contraseña por WhatsApp, correo o teléfono.
+          </p>
 
           <p style="margin:18px 0 0;font-size:12px;color:#64748b;">
             Si no solicitaste este registro, puedes ignorar este correo.
@@ -262,7 +347,7 @@ export async function POST(request: Request) {
     return genericSuccess();
   }
 
-  const mail = buildVerificationMail({ nombre, actionLink });
+  const mail = buildVerificationMail({ nombre, actionLink, siteOrigin });
   const sent = await sendSesEmail({
     to: email,
     subject: mail.subject,

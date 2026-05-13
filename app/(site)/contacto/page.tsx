@@ -88,7 +88,7 @@ export default function ContactoPage() {
       )}
 
       <p className="mt-8 text-center text-sm text-neutral-500">
-        También podés revisar la <Link href="/faq" className="font-semibold text-[#009ade] hover:underline">sección Ayuda</Link>.
+        También puede revisar la <Link href="/faq" className="font-semibold text-[#009ade] hover:underline">sección Ayuda</Link>.
       </p>
     </div>
   );

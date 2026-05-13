@@ -63,7 +63,7 @@ function friendlyCreateError(raw: string): string {
   if (s.includes("email_duplicado")) return "Ese email ya está registrado por otro usuario.";
   if (s.includes("username_duplicado")) return "Ese nombre de usuario ya está asignado a otra cuenta.";
   if (s.includes("username_invalido")) return "El nombre de usuario contiene caracteres no válidos.";
-  if (s.includes("fetch") || s.includes("failed")) return "No se pudo contactar el servicio. Reintentá en unos minutos.";
+  if (s.includes("fetch") || s.includes("failed")) return "No se pudo contactar el servicio. Intente nuevamente en unos minutos.";
   if (s.includes("session") || s.includes("sesión")) return raw;
   if (s.includes("already registered") || s.includes("duplicate") || s.includes("already been registered")) return "Ese correo ya tiene una cuenta.";
   if (s.includes("invalid") && s.includes("email")) return "Correo no válido.";
@@ -355,7 +355,7 @@ export function UsuariosPanel() {
     }
     const { data, error } = await supabase.rpc("listar_usuarios");
     if (error) {
-      setLoadErr("No se pudo cargar el listado. Verificá permisos o volvé a intentar.");
+      setLoadErr("No se pudo cargar el listado. Verifique permisos o vuelva a intentarlo.");
       return;
     }
     setUsers(((data ?? []) as ListaUsuarioRow[]) || []);
@@ -401,7 +401,7 @@ export function UsuariosPanel() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión caducada. Volvé a iniciar sesión.");
+      if (!session) throw new Error("Sesión caducada. Vuelva a iniciar sesión.");
 
       const payload: Record<string, string | boolean | undefined> = {
         email,
@@ -749,7 +749,7 @@ export function UsuariosPanel() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión caducada. Volvé a iniciar sesión.");
+      if (!session) throw new Error("Sesión caducada. Vuelva a iniciar sesión.");
 
       let created = 0;
       let updated = 0;
