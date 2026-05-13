@@ -391,7 +391,13 @@ export function UsuariosPanel() {
       body: JSON.stringify({ userIds: ids }),
     });
     if (!garantiaRes.ok) {
-      setUsers(rows);
+      setUsers((prev) => {
+        const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
+        return rows.map((u) => ({
+          ...u,
+          garantia_aprobada: u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false,
+        }));
+      });
       return;
     }
     const garantiaJson = (await garantiaRes.json().catch(() => ({}))) as {
@@ -399,7 +405,13 @@ export function UsuariosPanel() {
       rows?: Array<{ id: string; garantia_aprobada: boolean | null }>;
     };
     if (!garantiaJson.ok || !Array.isArray(garantiaJson.rows)) {
-      setUsers(rows);
+      setUsers((prev) => {
+        const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
+        return rows.map((u) => ({
+          ...u,
+          garantia_aprobada: u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false,
+        }));
+      });
       return;
     }
 
@@ -407,12 +419,15 @@ export function UsuariosPanel() {
     for (const row of garantiaJson.rows) {
       garantiaMap.set(String(row.id), row.garantia_aprobada ?? null);
     }
-    setUsers(
-      rows.map((u) => ({
+    setUsers((prev) => {
+      const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
+      return rows.map((u) => ({
         ...u,
-        garantia_aprobada: garantiaMap.has(u.id) ? (garantiaMap.get(u.id) ?? null) : (u.garantia_aprobada ?? null),
-      })),
-    );
+        garantia_aprobada: garantiaMap.has(u.id)
+          ? (garantiaMap.get(u.id) ?? null)
+          : (u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false),
+      }));
+    });
   }, []);
 
   useEffect(() => {

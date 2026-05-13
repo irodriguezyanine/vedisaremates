@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+const CHUNK_SIZE = 200;
 
 type Body = { userIds?: unknown };
 
@@ -34,9 +35,16 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
 
-  const { data, error } = await admin.from("profiles").select("id, garantia_aprobada").in("id", userIds);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  const allRows: Array<{ id: string; garantia_aprobada: boolean | null }> = [];
+  for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
+    const chunk = userIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin.from("profiles").select("id, garantia_aprobada").in("id", chunk);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    for (const row of (data ?? []) as Array<{ id: string; garantia_aprobada: boolean | null }>) {
+      allRows.push(row);
+    }
+  }
 
-  return NextResponse.json({ ok: true, rows: data ?? [] });
+  return NextResponse.json({ ok: true, rows: allRows });
 }
 
