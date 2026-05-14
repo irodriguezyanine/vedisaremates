@@ -122,6 +122,36 @@ function esErrorDeadlock(error: unknown): boolean {
   return text.includes("deadlock");
 }
 
+function isTransientInfraError(error: unknown): boolean {
+  const text = String(error ?? "").toLowerCase();
+  return (
+    text.includes("520") ||
+    text.includes("502") ||
+    text.includes("503") ||
+    text.includes("504") ||
+    text.includes("cloudflare") ||
+    text.includes("statement timeout") ||
+    text.includes("canceling statement due to statement timeout") ||
+    text.includes("failed to load resource") ||
+    text.includes("network")
+  );
+}
+
+function formatUiError(error: unknown, fallback: string): string {
+  const raw = String(error ?? "").trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("<html") ||
+    lower.includes("<!doctype html") ||
+    lower.includes("cloudflare") ||
+    lower.includes("error 520")
+  ) {
+    return "Servicio temporalmente inestable. Reintenta en unos segundos.";
+  }
+  return raw.length > 220 ? `${raw.slice(0, 220)}…` : raw;
+}
+
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
   const [vehicleCountByRemate, setVehicleCountByRemate] = useState<Record<string, number>>({});
@@ -143,9 +173,24 @@ export function RematesList() {
       setLoadingList(false);
       return;
     }
-    const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
-    if (error) {
-      setErr(error.message || "No se pudo obtener el listado. Revise su conexión e intente nuevamente.");
+    let data: PortalRemateRow[] | null = null;
+    let errorMessage = "";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data: rowsData, error } = await sb
+        .from("portal_remates")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error) {
+        data = (rowsData ?? []) as PortalRemateRow[];
+        errorMessage = "";
+        break;
+      }
+      errorMessage = error.message || "No se pudo obtener el listado.";
+      if (!isTransientInfraError(errorMessage) || attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+    if (errorMessage) {
+      setErr(formatUiError(errorMessage, "No se pudo obtener el listado. Revise su conexión e intente nuevamente."));
       setLoadingList(false);
       return;
     }
@@ -268,7 +313,7 @@ export function RematesList() {
         .update({ estado: "cerrado" })
         .eq("id", r.id);
       if (closeError) {
-        setErr(closeError.message);
+        setErr(formatUiError(closeError.message, "No se pudo cerrar el remate."));
       } else {
         await load();
       }
@@ -282,16 +327,16 @@ export function RematesList() {
     if (typed !== "ELIMINAR") return;
 
     setErr(null);
-    const sb = createClient();
-    if (!sb) {
-      setErr("No hay servicio de datos.");
-      return;
-    }
     setDeletingId(r.id);
-    const { error } = await sb.from("portal_remates").delete().eq("id", r.id);
+    const response = await fetch("/api/admin/remates/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remateId: r.id }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     setDeletingId(null);
-    if (error) {
-      setErr("No se pudo eliminar. Revise permisos o intente más tarde.");
+    if (!response.ok || !payload.ok) {
+      setErr(formatUiError(payload.error, "No se pudo eliminar. Revise permisos o intente más tarde."));
       return;
     }
     await load();
@@ -317,7 +362,7 @@ export function RematesList() {
           setErr(null);
         }
       } else {
-        setErr(msg);
+        setErr(formatUiError(msg, "No se pudo completar la sincronización."));
       }
     } finally {
       setSyncing(false);

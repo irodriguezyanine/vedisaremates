@@ -15,6 +15,21 @@ function isRetryableSyncError(errorMessage: string): boolean {
   );
 }
 
+function formatApiError(error: unknown, fallback: string): string {
+  const raw = String(error ?? "").trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("<html") ||
+    lower.includes("<!doctype html") ||
+    lower.includes("cloudflare") ||
+    lower.includes("error 520")
+  ) {
+    return "Servicio de sincronización temporalmente inestable. Reintenta en unos segundos.";
+  }
+  return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw;
+}
+
 function isAuthorized(req: Request) {
   const expected = process.env.CRON_SECRET?.trim();
   if (!expected) return true;
@@ -23,36 +38,46 @@ function isAuthorized(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  try {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+    }
+
+    const admin = createAdminClient();
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
+    }
+
+    const warnings: string[] = [];
+    const replayRes = await admin.rpc("portal_integracion_replay_failed", { p_limit: 120 });
+    if (replayRes.error && !isRetryableSyncError(replayRes.error.message)) {
+      return NextResponse.json({ ok: false, error: formatApiError(replayRes.error.message, "Error replay failed.") }, { status: 500 });
+    }
+    if (replayRes.error) warnings.push(`replay_failed: ${formatApiError(replayRes.error.message, "timeout")}`);
+
+    const processRes = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 300 });
+    if (processRes.error && !isRetryableSyncError(processRes.error.message)) {
+      return NextResponse.json(
+        { ok: false, error: formatApiError(processRes.error.message, "Error procesando outbox.") },
+        { status: 500 },
+      );
+    }
+    if (processRes.error) warnings.push(`procesar_outbox: ${formatApiError(processRes.error.message, "timeout")}`);
+
+    const statsRes = await admin.rpc("portal_integracion_sync_dashboard");
+    if (statsRes.error) warnings.push(`sync_dashboard: ${formatApiError(statsRes.error.message, "timeout")}`);
+
+    return NextResponse.json({
+      ok: true,
+      replay: replayRes.data,
+      processed: processRes.data,
+      stats: Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data,
+      warnings,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: formatApiError(error, "No se pudo ejecutar la sincronización programada.") },
+      { status: 500 },
+    );
   }
-
-  const admin = createAdminClient();
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
-  }
-
-  const warnings: string[] = [];
-  const replayRes = await admin.rpc("portal_integracion_replay_failed", { p_limit: 120 });
-  if (replayRes.error && !isRetryableSyncError(replayRes.error.message)) {
-    return NextResponse.json({ ok: false, error: replayRes.error.message }, { status: 500 });
-  }
-  if (replayRes.error) warnings.push(`replay_failed: ${replayRes.error.message}`);
-
-  const processRes = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 300 });
-  if (processRes.error && !isRetryableSyncError(processRes.error.message)) {
-    return NextResponse.json({ ok: false, error: processRes.error.message }, { status: 500 });
-  }
-  if (processRes.error) warnings.push(`procesar_outbox: ${processRes.error.message}`);
-
-  const statsRes = await admin.rpc("portal_integracion_sync_dashboard");
-  if (statsRes.error) warnings.push(`sync_dashboard: ${statsRes.error.message}`);
-
-  return NextResponse.json({
-    ok: true,
-    replay: replayRes.data,
-    processed: processRes.data,
-    stats: Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data,
-    warnings,
-  });
 }
