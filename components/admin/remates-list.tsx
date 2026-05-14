@@ -108,6 +108,20 @@ function tituloEventoCard(value: string | null | undefined): string {
   return truncarTexto(limpiarTituloEvento(value), 120);
 }
 
+function etiquetaOrigenSimple(sourceSystem: string | null | undefined): string {
+  const source = String(sourceSystem ?? "").trim().toLowerCase();
+  if (source === "portal" || source === "subastas") return "Subastas";
+  if (source === "catalogo") return "Catálogo";
+  if (source === "tasaciones") return "Tasaciones";
+  if (!source) return "Subastas";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
+function esErrorDeadlock(error: unknown): boolean {
+  const text = String(error ?? "").toLowerCase();
+  return text.includes("deadlock");
+}
+
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
   const [vehicleCountByRemate, setVehicleCountByRemate] = useState<Record<string, number>>({});
@@ -117,7 +131,7 @@ export function RematesList() {
   const [syncing, setSyncing] = useState(false);
   const [syncStats, setSyncStats] = useState<{ pending: number; failed: number; done_today: number } | null>(null);
   const [tipoVista, setTipoVista] = useState<TipoVistaEvento>("remate");
-  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("abierto");
   const [paginaActual, setPaginaActual] = useState(1);
   const autoSyncIntentadoRef = useRef(false);
 
@@ -181,7 +195,7 @@ export function RematesList() {
     const listaVacia = items.length === 0;
     if (!hayPendientes && !listaVacia) return;
     autoSyncIntentadoRef.current = true;
-    void sincronizarAhora();
+    void sincronizarAhora(true);
   }, [items.length, syncStats]);
 
   const itemsFiltrados = useMemo(() => {
@@ -283,7 +297,7 @@ export function RematesList() {
     await load();
   }
 
-  async function sincronizarAhora() {
+  async function sincronizarAhora(silentDeadlock = false) {
     setErr(null);
     setSyncing(true);
     try {
@@ -294,7 +308,17 @@ export function RematesList() {
       }
       await load();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "No se pudo completar la sincronización.");
+      const msg = e instanceof Error ? e.message : "No se pudo completar la sincronización.";
+      if (esErrorDeadlock(msg)) {
+        // Si el outbox está ocupado en otra transacción, evitamos ensuciar la UI con error técnico.
+        if (!silentDeadlock) {
+          setErr("Sincronización en curso. Intenta nuevamente en unos segundos.");
+        } else {
+          setErr(null);
+        }
+      } else {
+        setErr(msg);
+      }
     } finally {
       setSyncing(false);
     }
@@ -433,12 +457,10 @@ export function RematesList() {
                   {tituloLimpio}
                 </Link>
                 <p className="mt-1 text-xs text-neutral-500">Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
-                <p className="mt-1 text-[11px] text-neutral-500">
-                  Origen: {r.source_system ?? "portal"} {r.tasaciones_remate_id ? `· Link Tasaciones: ${r.tasaciones_remate_id}` : "· Sin link"}
-                </p>
               </div>
-              <div className="shrink-0 text-sm font-semibold text-white sm:px-3">
-                {vehicleCountByRemate[r.id] ?? 0} vehículos
+              <div className="flex shrink-0 items-center gap-4 text-sm font-semibold text-white sm:px-3">
+                <span>{etiquetaOrigenSimple(r.source_system)}</span>
+                <span>{vehicleCountByRemate[r.id] ?? 0} vehículos</span>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 {badge(r.estado)}
