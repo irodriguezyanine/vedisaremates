@@ -110,6 +110,50 @@ const THUMB_VISIBLE = 4;
 
 const EMPTY_SLIDES: RemateCarouselSlide[] = [];
 
+function normalizeEventTextKey(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function sanitizeEventText(value: string | null | undefined, maxLen = 180): string {
+  const raw = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+
+  const collapsed = raw
+    .replace(/\s*[\u00b7|]+\s*/g, " · ")
+    .replace(/(remate\s*#?\s*[0-9]{3,6}\s*-\s*){2,}/gi, (match) => {
+      const parts = match
+        .split(/\s+-\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return parts[0] ? `${parts[0]} - ` : match;
+    })
+    .trim();
+
+  const parts = collapsed
+    .split(/\s+-\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) {
+    return collapsed.length > maxLen ? `${collapsed.slice(0, maxLen - 1).trim()}…` : collapsed;
+  }
+
+  const seen = new Set<string>();
+  const dedup: string[] = [];
+  for (const part of parts) {
+    const key = normalizeEventTextKey(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(part);
+    if (dedup.length >= 8) break;
+  }
+  const merged = dedup.join(" - ") || collapsed;
+  return merged.length > maxLen ? `${merged.slice(0, maxLen - 1).trim()}…` : merged;
+}
+
 function RemateLotsStrip({
   slides,
   remateId,
@@ -311,7 +355,9 @@ function DemoRemateLotsStrip() {
 
 export function AuctionFeed() {
   const cat = catalogoHref();
-  const [tab, setTab] = useState<AuctionTab>("actuales");
+  // Mostramos "Próximas" por defecto para visibilizar remates recién sincronizados
+  // que aún no están en curso.
+  const [tab, setTab] = useState<AuctionTab>("proximas");
   const [sub, setSub] = useState<EstadoFiltro>("actual");
   const [bundle, setBundle] = useState<
     | { kind: "loading" }
@@ -562,15 +608,19 @@ export function AuctionFeed() {
               const slice = classifyRemateForFeed(r);
               const cd = slice !== "cerrada" ? countdownLabelFromEndsAt(r.ends_at) : null;
               const slides = carouselMap[r.id] ?? EMPTY_SLIDES;
+              const tituloLimpio = sanitizeEventText(r.titulo, 140) || "Remate";
+              const descripcionLimpia =
+                sanitizeEventText(renderLiveSubtitle(r), 240) ||
+                "Consulta la ficha y las condiciones en la sala oficial antes de ofertar.";
 
               return (
                 <article key={r.id} className={cardShell}>
                   <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{r.titulo}</h3>
+                      <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{tituloLimpio}</h3>
                       {badgeForSlice(slice, r.estado)}
                     </div>
-                    <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{renderLiveSubtitle(r)}</p>
+                    <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{descripcionLimpia}</p>
                     {cd ? (
                       <p className="mt-3 text-xs font-medium text-red-700">
                         Cierra en: <span className="tabular-nums font-bold">{cd}</span>
@@ -590,7 +640,7 @@ export function AuctionFeed() {
                     </div>
                   </div>
                   <div className="p-4 sm:p-5">
-                    <RemateLotsStrip slides={slides} remateId={r.id} altBase={r.titulo} />
+                    <RemateLotsStrip slides={slides} remateId={r.id} altBase={tituloLimpio} />
                   </div>
                 </article>
               );
