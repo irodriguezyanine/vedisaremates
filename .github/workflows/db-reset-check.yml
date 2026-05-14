@@ -1,0 +1,25 @@
+name: DB Reset Check
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/db-reset-check.yml"
+  workflow_dispatch:
+
+jobs:
+  supabase-db-reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration order with reset
+        run: |
+          supabase db reset --local --debug

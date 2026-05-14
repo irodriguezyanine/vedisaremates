@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type SVGProps } from "react";
+import { useCallback, useEffect, useMemo, useState, type SVGProps } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
@@ -54,6 +54,28 @@ function IconArrowPath(props: SVGProps<SVGSVGElement>) {
 
 const ICON_BTN =
   "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-50";
+const PAGE_SIZE = 5;
+
+type TipoVistaEvento = "remate" | "venta_directa";
+type EstadoFiltro = "todos" | "abierto" | "cerrado";
+
+function normalizarTexto(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function esVentaDirectaPortal(row: PortalRemateRow): boolean {
+  const texto = normalizarTexto(`${row.titulo ?? ""} ${row.descripcion ?? ""}`);
+  return (
+    texto.includes("ventadirecta") ||
+    texto.includes("vtadirecta") ||
+    texto.includes("vtdirecta") ||
+    texto.includes("ventadir")
+  );
+}
 
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
@@ -62,6 +84,10 @@ export function RematesList() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncStats, setSyncStats] = useState<{ pending: number; failed: number; done_today: number } | null>(null);
+  const [tipoVista, setTipoVista] = useState<TipoVistaEvento>("remate");
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
+  const [paginaActual, setPaginaActual] = useState(1);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -71,18 +97,6 @@ export function RematesList() {
       setLoadingList(false);
       return;
     }
-    setSyncing(true);
-    // Backfill best-effort para reflejar rápidamente cambios creados desde Tasaciones.
-    // Si falla, no bloqueamos el listado del panel.
-    try {
-      await sb.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 1000 });
-      await sb.rpc("portal_integracion_procesar_outbox", { p_limit: 1000 });
-    } catch {
-      // Best-effort: errores de sync no deben impedir listar remates.
-    } finally {
-      setSyncing(false);
-    }
-
     const { data, error } = await sb.from("portal_remates").select("*").order("created_at", { ascending: false });
     if (error) {
       setErr(error.message || "No se pudo obtener el listado. Revise su conexión e intente nuevamente.");
@@ -106,6 +120,20 @@ export function RematesList() {
       countMap[row.remate_id] = (countMap[row.remate_id] ?? 0) + 1;
     }
     setVehicleCountByRemate(countMap);
+    try {
+      const statsRes = await fetch("/api/admin/sync", { cache: "no-store" });
+      const statsPayload = (await statsRes.json().catch(() => ({}))) as { stats?: Record<string, unknown> };
+      const first = statsPayload.stats;
+      if (statsRes.ok && first && typeof first === "object") {
+        setSyncStats({
+          pending: Number((first as Record<string, unknown>).pending ?? 0),
+          failed: Number((first as Record<string, unknown>).failed ?? 0),
+          done_today: Number((first as Record<string, unknown>).done_today ?? 0),
+        });
+      }
+    } catch {
+      setSyncStats(null);
+    }
     setLoadingList(false);
   }, []);
 
@@ -114,6 +142,30 @@ export function RematesList() {
       void load();
     });
   }, [load]);
+
+  const itemsFiltrados = useMemo(() => {
+    return items.filter((row) => {
+      const esVentaDirecta = esVentaDirectaPortal(row);
+      if (tipoVista === "venta_directa" && !esVentaDirecta) return false;
+      if (tipoVista === "remate" && esVentaDirecta) return false;
+      if (estadoFiltro === "cerrado") return row.estado === "cerrado";
+      if (estadoFiltro === "abierto") return row.estado !== "cerrado";
+      return true;
+    });
+  }, [estadoFiltro, items, tipoVista]);
+
+  const totalPaginas = Math.max(1, Math.ceil(itemsFiltrados.length / PAGE_SIZE));
+  const paginaSegura = Math.min(Math.max(1, paginaActual), totalPaginas);
+  const inicio = (paginaSegura - 1) * PAGE_SIZE;
+  const itemsPagina = itemsFiltrados.slice(inicio, inicio + PAGE_SIZE);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [tipoVista, estadoFiltro]);
+
+  useEffect(() => {
+    if (paginaActual > totalPaginas) setPaginaActual(totalPaginas);
+  }, [paginaActual, totalPaginas]);
 
   async function nuevo() {
     setErr(null);
@@ -147,10 +199,32 @@ export function RematesList() {
   }
 
   async function eliminarRemate(r: PortalRemateRow) {
-    const ok = window.confirm(
-      `¿Eliminar permanentemente el remate «${r.titulo}» y todos sus lotes? Esta acción no se puede deshacer.`,
+    const cerrarPrimero = window.confirm(
+      `¿Quieres cerrar y despublicar «${r.titulo}»? Recomendado para evitar pérdidas de sincronización.`,
     );
-    if (!ok) return;
+    if (cerrarPrimero) {
+      const sb = createClient();
+      if (!sb) {
+        setErr("No hay servicio de datos.");
+        return;
+      }
+      const { error: closeError } = await sb
+        .from("portal_remates")
+        .update({ estado: "cerrado" })
+        .eq("id", r.id);
+      if (closeError) {
+        setErr(closeError.message);
+      } else {
+        await load();
+      }
+      return;
+    }
+    const confirmDelete = window.confirm(
+      `Vas a eliminar permanentemente «${r.titulo}». ¿Confirmas borrado definitivo?`,
+    );
+    if (!confirmDelete) return;
+    const typed = window.prompt("Escribe ELIMINAR para confirmar el borrado permanente");
+    if (typed !== "ELIMINAR") return;
 
     setErr(null);
     const sb = createClient();
@@ -166,6 +240,23 @@ export function RematesList() {
       return;
     }
     await load();
+  }
+
+  async function sincronizarAhora() {
+    setErr(null);
+    setSyncing(true);
+    try {
+      const response = await fetch("/api/admin/sync", { method: "POST" });
+      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? `Error HTTP ${response.status}`);
+      }
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo completar la sincronización.");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const badge = (e: PortalRemateRow["estado"]) => {
@@ -202,8 +293,22 @@ export function RematesList() {
             borradores). La home pública solo muestra eventos publicados, en curso o cerrados para visitantes; las tarjetas
             de ejemplo del inicio no son remates reales hasta que existan aquí.
           </p>
+          {syncStats ? (
+            <p className="mt-2 text-xs text-neutral-400">
+              Sync outbox: pendientes {syncStats.pending} · fallidos {syncStats.failed} · procesados hoy {syncStats.done_today}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={syncing}
+            onClick={() => void sincronizarAhora()}
+            className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-60"
+          >
+            <IconArrowPath className={syncing ? "animate-spin" : ""} />
+            {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+          </button>
           <button
             type="button"
             disabled={loadingList || syncing}
@@ -228,10 +333,52 @@ export function RematesList() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#141c28] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTipoVista("remate")}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              tipoVista === "remate"
+                ? "bg-[#33C7E3]/25 text-[#8de7f7] border border-[#33C7E3]/60"
+                : "border border-white/15 text-neutral-300 hover:bg-white/5"
+            }`}
+          >
+            Remates
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoVista("venta_directa")}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              tipoVista === "venta_directa"
+                ? "bg-[#33C7E3]/25 text-[#8de7f7] border border-[#33C7E3]/60"
+                : "border border-white/15 text-neutral-300 hover:bg-white/5"
+            }`}
+          >
+            Ventas directas
+          </button>
+        </div>
+        <div className="inline-flex items-center gap-2">
+          <label className="text-sm text-neutral-300" htmlFor="filtro-estado-remates-admin">
+            Estado
+          </label>
+          <select
+            id="filtro-estado-remates-admin"
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+            className="rounded-lg border border-white/15 bg-[#0e1520] px-3 py-2 text-sm text-white outline-none focus:border-[#33C7E3]"
+          >
+            <option value="todos">Todos</option>
+            <option value="abierto">Abierto</option>
+            <option value="cerrado">Cerrado</option>
+          </select>
+        </div>
+      </div>
+
       {err ? <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p> : null}
 
       <ul className="space-y-3">
-        {items.map((r) => (
+        {itemsPagina.map((r) => (
           <li key={r.id}>
             <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#141c28] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 flex-1">
@@ -242,6 +389,9 @@ export function RematesList() {
                   {r.titulo}
                 </Link>
                 <p className="mt-1 text-xs text-neutral-500">Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  Origen: {r.source_system ?? "portal"} {r.tasaciones_remate_id ? `· Link Tasaciones: ${r.tasaciones_remate_id}` : "· Sin link"}
+                </p>
               </div>
               <div className="shrink-0 text-sm font-semibold text-white sm:px-3">
                 {vehicleCountByRemate[r.id] ?? 0} vehículos
@@ -274,10 +424,40 @@ export function RematesList() {
             </div>
           </li>
         ))}
-        {!items.length ? (
-          <p className="text-neutral-500">Aún no hay remates en la base. Cree el primero con el botón + arriba a la derecha.</p>
+        {!itemsFiltrados.length ? (
+          <p className="text-neutral-500">
+            No hay {tipoVista === "venta_directa" ? "ventas directas" : "remates"} para el filtro seleccionado.
+          </p>
         ) : null}
       </ul>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-400">
+          Mostrando {itemsFiltrados.length === 0 ? 0 : inicio + 1}-
+          {Math.min(inicio + PAGE_SIZE, itemsFiltrados.length)} de {itemsFiltrados.length}
+        </p>
+        <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            disabled={paginaSegura <= 1}
+            onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+            className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span className="text-sm text-neutral-300">
+            Página {paginaSegura} de {totalPaginas}
+          </span>
+          <button
+            type="button"
+            disabled={paginaSegura >= totalPaginas}
+            onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+            className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

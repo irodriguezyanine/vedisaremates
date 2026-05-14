@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+
+async function authorizeAdmin() {
+  const supabase = await createClient();
+  if (!supabase) return { ok: false as const, status: 503 };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, status: 401 };
+  const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).maybeSingle();
+  const rol = String(profile?.rol ?? "").toLowerCase();
+  if (!["admin", "sac"].includes(rol)) return { ok: false as const, status: 403 };
+  return { ok: true as const };
+}
+
+export async function GET() {
+  const auth = await authorizeAdmin();
+  if (!auth.ok) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: auth.status });
+  const admin = createAdminClient();
+  if (!admin) return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
+  const { data, error } = await admin.rpc("portal_integracion_sync_dashboard");
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  const stats = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json({ ok: true, stats });
+}
+
+export async function POST() {
+  const auth = await authorizeAdmin();
+  if (!auth.ok) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: auth.status });
+  const admin = createAdminClient();
+  if (!admin) return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
+
+  const [bootTas, bootPortal, processRes, statsRes] = await Promise.all([
+    admin.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 2000 }),
+    admin.rpc("portal_integracion_bootstrap_desde_portal", { p_limit: 2000 }),
+    admin.rpc("portal_integracion_procesar_outbox", { p_limit: 5000 }),
+    admin.rpc("portal_integracion_sync_dashboard"),
+  ]);
+
+  const firstError = bootTas.error ?? bootPortal.error ?? processRes.error ?? statsRes.error;
+  if (firstError) {
+    return NextResponse.json({ ok: false, error: firstError.message }, { status: 500 });
+  }
+  return NextResponse.json({
+    ok: true,
+    bootstrap_tasaciones: bootTas.data,
+    bootstrap_portal: bootPortal.data,
+    processed: processRes.data,
+    stats: Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data,
+  });
+}
