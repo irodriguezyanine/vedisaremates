@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type SVGProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
@@ -77,6 +77,37 @@ function esVentaDirectaPortal(row: PortalRemateRow): boolean {
   );
 }
 
+function limpiarTituloEvento(value: string | null | undefined): string {
+  const raw = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return "Sin título";
+  const parts = raw
+    .split(/\s*-\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return raw;
+
+  const seen = new Set<string>();
+  const dedup: string[] = [];
+  for (const part of parts) {
+    const key = normalizarTexto(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(part);
+    if (dedup.length >= 8) break;
+  }
+  const merged = dedup.join(" - ").trim();
+  return merged || "Sin título";
+}
+
+function truncarTexto(value: string, max = 120): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+function tituloEventoCard(value: string | null | undefined): string {
+  return truncarTexto(limpiarTituloEvento(value), 120);
+}
+
 export function RematesList() {
   const [items, setItems] = useState<PortalRemateRow[]>([]);
   const [vehicleCountByRemate, setVehicleCountByRemate] = useState<Record<string, number>>({});
@@ -88,6 +119,7 @@ export function RematesList() {
   const [tipoVista, setTipoVista] = useState<TipoVistaEvento>("remate");
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
   const [paginaActual, setPaginaActual] = useState(1);
+  const autoSyncIntentadoRef = useRef(false);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -142,6 +174,15 @@ export function RematesList() {
       void load();
     });
   }, [load]);
+
+  useEffect(() => {
+    if (autoSyncIntentadoRef.current) return;
+    const hayPendientes = (syncStats?.pending ?? 0) > 0 || (syncStats?.failed ?? 0) > 0;
+    const listaVacia = items.length === 0;
+    if (!hayPendientes && !listaVacia) return;
+    autoSyncIntentadoRef.current = true;
+    void sincronizarAhora();
+  }, [items.length, syncStats]);
 
   const itemsFiltrados = useMemo(() => {
     return items.filter((row) => {
@@ -378,15 +419,18 @@ export function RematesList() {
       {err ? <p className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p> : null}
 
       <ul className="space-y-3">
-        {itemsPagina.map((r) => (
+        {itemsPagina.map((r) => {
+          const tituloLimpio = tituloEventoCard(r.titulo);
+          return (
           <li key={r.id}>
             <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#141c28] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/admin/remates/${r.id}`}
                   className="inline-block text-base font-semibold text-white decoration-[#33C7E3]/50 underline-offset-2 hover:text-[#33C7E3] hover:underline"
+                  title={tituloLimpio}
                 >
-                  {r.titulo}
+                  {tituloLimpio}
                 </Link>
                 <p className="mt-1 text-xs text-neutral-500">Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
                 <p className="mt-1 text-[11px] text-neutral-500">
@@ -423,7 +467,8 @@ export function RematesList() {
               </div>
             </div>
           </li>
-        ))}
+          );
+        })}
         {!itemsFiltrados.length ? (
           <p className="text-neutral-500">
             No hay {tipoVista === "venta_directa" ? "ventas directas" : "remates"} para el filtro seleccionado.
