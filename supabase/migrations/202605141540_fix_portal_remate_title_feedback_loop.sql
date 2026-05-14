@@ -109,9 +109,9 @@ SET descripcion = NULLIF(
     regexp_replace(
       regexp_replace(
         COALESCE(r.descripcion, ''),
-        '((?i:remate\\s*#?\\s*\\d{3,6})\\s*-\\s*){2,}',
+        '((remate\\s*#?\\s*[0-9]{3,6})\\s*-\\s*){2,}',
         '\\2 - ',
-        'g'
+        'gi'
       ),
       '\\s{2,}',
       ' ',
