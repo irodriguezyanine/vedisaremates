@@ -140,7 +140,6 @@ export async function POST(req: Request) {
   const { error: tasUpdateError } = await admin
     .from("remates")
     .update({
-      numero_remate: numeroRemate,
       descripcion: descripcion || null,
       fecha_hora_inicio: startIso,
       fecha_hora_cierre: endsAt,
