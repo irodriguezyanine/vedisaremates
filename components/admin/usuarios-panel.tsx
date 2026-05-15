@@ -49,6 +49,7 @@ type EditUserForm = {
   rol: string;
   mustChangePassword: boolean;
   garantiaAprobada: boolean;
+  garantiaOriginal: boolean;
   password: string;
 };
 
@@ -549,6 +550,7 @@ export function UsuariosPanel() {
       rol: normalizeRoleInput(row.rol ?? "usuario"),
       mustChangePassword: Boolean(row.must_change_password),
       garantiaAprobada: Boolean(row.garantia_aprobada),
+      garantiaOriginal: Boolean(row.garantia_aprobada),
       password: "",
     };
     setEditModal(baseForm);
@@ -593,6 +595,7 @@ export function UsuariosPanel() {
           rol: normalizeRoleInput(res.user?.rol ?? curr.rol ?? "usuario"),
           mustChangePassword: Boolean(res.user?.must_change_password),
           garantiaAprobada: Boolean(res.user?.garantia_aprobada),
+          garantiaOriginal: Boolean(res.user?.garantia_aprobada),
         };
       });
     } catch {
@@ -608,6 +611,8 @@ export function UsuariosPanel() {
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("Servicio no disponible");
+      const garantiaNueva = editModal.garantiaAprobada;
+      const garantiaOriginal = editModal.garantiaOriginal;
       const payload = {
         p_user_id: editModal.userId,
         p_email: editModal.email.trim().toLowerCase(),
@@ -618,7 +623,9 @@ export function UsuariosPanel() {
         p_direccion: editModal.direccion.trim(),
         p_telefono: editModal.telefono.trim(),
         p_must_change_password: editModal.mustChangePassword,
-        p_garantia_aprobada: editModal.garantiaAprobada,
+        // La actualización de garantía se canaliza por /api/admin/users/garantia-bulk
+        // para mantener trazabilidad y envío de correo de habilitación.
+        p_garantia_aprobada: garantiaOriginal,
       };
       const roleCandidates = buildRoleCandidates(editModal.rol);
       let updateOk = false;
@@ -642,6 +649,21 @@ export function UsuariosPanel() {
       }
       if (!updateOk) {
         throw new Error(friendlyCreateError(updateRawError));
+      }
+
+      if (garantiaNueva !== garantiaOriginal) {
+        const garantiaResp = await fetch("/api/admin/users/garantia-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userIds: [editModal.userId],
+            garantiaAprobada: garantiaNueva,
+          }),
+        });
+        const garantiaJson = (await garantiaResp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!garantiaResp.ok || !garantiaJson.ok) {
+          throw new Error(friendlyCreateError(garantiaJson.error ?? "No se pudo actualizar la garantía del usuario."));
+        }
       }
 
       const newPassword = editModal.password.trim();
