@@ -38,10 +38,12 @@ export function LoginForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ identifier: emailForLogin }),
         });
-        if (resolveRes.ok) {
-          const resolveData = (await resolveRes.json()) as { ok?: boolean; email?: string };
-          if (resolveData?.email) emailForLogin = resolveData.email;
+        const resolveData = (await resolveRes.json().catch(() => ({}))) as { ok?: boolean; email?: string };
+        if (!resolveRes.ok || !resolveData?.ok || !resolveData?.email || !resolveData.email.includes("@")) {
+          setError("Credenciales inválidas. Revisa tu correo/nombre de usuario y contraseña.");
+          return;
         }
+        emailForLogin = resolveData.email.toLowerCase();
       } else {
         emailForLogin = emailForLogin.toLowerCase();
       }

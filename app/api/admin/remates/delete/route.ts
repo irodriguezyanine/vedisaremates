@@ -27,6 +27,7 @@ export async function POST(req: Request) {
   if (!remateId) {
     return NextResponse.json({ ok: false, error: "Falta remateId." }, { status: 400 });
   }
+  const warnings: string[] = [];
 
   const { data: row, error: fetchError } = await admin
     .from("portal_remates")
@@ -69,10 +70,7 @@ export async function POST(req: Request) {
       .delete()
       .eq("remate_id", tasacionesRemateId);
     if (delSharedItemsError) {
-      return NextResponse.json(
-        { ok: false, error: `No se pudieron eliminar items compartidos: ${delSharedItemsError.message}` },
-        { status: 500 },
-      );
+      warnings.push(`No se pudieron eliminar items compartidos: ${delSharedItemsError.message}`);
     }
 
     const { error: delSharedRemateError } = await admin
@@ -80,10 +78,7 @@ export async function POST(req: Request) {
       .delete()
       .eq("id", tasacionesRemateId);
     if (delSharedRemateError) {
-      return NextResponse.json(
-        { ok: false, error: `No se pudo eliminar remate compartido: ${delSharedRemateError.message}` },
-        { status: 500 },
-      );
+      warnings.push(`No se pudo eliminar remate compartido: ${delSharedRemateError.message}`);
     }
 
     // Para superar trigger de protección en portal_remates, quitamos vínculo antes de eliminar en portal.
@@ -145,8 +140,11 @@ export async function POST(req: Request) {
     );
   }
 
-  await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 120 });
+  const { error: outboxError } = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 120 });
+  if (outboxError) {
+    warnings.push(`No se pudo procesar outbox: ${outboxError.message}`);
+  }
 
-  return NextResponse.json({ ok: true, removed: true });
+  return NextResponse.json({ ok: true, removed: true, warnings });
 }
 
