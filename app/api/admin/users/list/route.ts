@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 const PAGE_SIZE = 1000;
-const MAX_USERS = 10000;
+const MAX_PAGES = 250;
 
 function isPrivilegedRole(role: string): boolean {
   return ["admin", "sac"].includes(role);
@@ -28,16 +28,23 @@ export async function GET() {
   // Camino A (preferido): SERVICE_ROLE presente => ignora diferencias de RLS entre entornos.
   const admin = createAdminClient();
   if (admin) {
-    const { data: profilesData, error: profilesError } = await admin
-      .from("profiles")
-      .select("id, nombre, rol, created_at, must_change_password, garantia_aprobada")
-      .order("created_at", { ascending: false })
-      .limit(MAX_USERS);
-    if (profilesError) return NextResponse.json({ ok: false, error: profilesError.message }, { status: 500 });
+    const profileRows: ListaUsuarioRow[] = [];
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data: chunk, error: profilesError } = await admin
+        .from("profiles")
+        .select("id, nombre, rol, created_at, must_change_password, garantia_aprobada")
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (profilesError) return NextResponse.json({ ok: false, error: profilesError.message }, { status: 500 });
+      const rows = ((chunk ?? []) as ListaUsuarioRow[]) || [];
+      profileRows.push(...rows);
+      if (rows.length < PAGE_SIZE) break;
+    }
 
-    const profileRows = ((profilesData ?? []) as ListaUsuarioRow[]) || [];
     const authUsersById = new Map<string, string | null>();
-    for (let page = 1; page < 100; page += 1) {
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
       const { data, error } = await admin.auth.admin.listUsers({
         page,
         perPage: PAGE_SIZE,
