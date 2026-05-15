@@ -425,10 +425,6 @@ export function AuctionLiveRoom({
       setMsg("Inicie sesión para configurar puja automática.");
       return;
     }
-    if (!viewerHasGarantiaLive) {
-      setMsg("Tu garantía aún no está habilitada para ofertar.");
-      return;
-    }
     const monto = parseCurrencyInput(proxyMax);
     if (!Number.isFinite(monto) || monto <= 0) {
       setMsg("Tope automático inválido.");
@@ -472,7 +468,6 @@ export function AuctionLiveRoom({
   const remateAbierto = remate.estado === "en_curso" || remate.estado === "publicado";
   const canBid =
     viewerId &&
-    viewerHasGarantiaLive &&
     remateAbierto &&
     tick != null &&
     countdownLive !== null &&
@@ -772,8 +767,6 @@ export function AuctionLiveRoom({
                           ? "Este remate aún no está habilitado para ofertar."
                           : !lotCanBid
                             ? "Este lote está pausado/cerrado y no recibe ofertas."
-                          : !viewerHasGarantiaLive
-                            ? "Debe tener la garantía habilitada para poder ofertar."
                           : countdownLive !== null && countdownLive <= 0
                             ? "El remate ya cerró según la fecha de fin."
                             : tick === null
@@ -786,6 +779,11 @@ export function AuctionLiveRoom({
                       </p>
                     ) : (
                       <>
+                        {!viewerHasGarantiaLive ? (
+                          <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                            Si tu garantía fue aprobada recientemente, puedes intentar ofertar. La validación final se realiza al enviar la puja.
+                          </p>
+                        ) : null}
                         {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
                           <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                             Últimos minutos: una nueva oferta puede extender el cierre automáticamente.

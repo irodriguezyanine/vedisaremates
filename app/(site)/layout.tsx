@@ -17,15 +17,19 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
     const emailVerificado = Boolean(user?.email_confirmed_at);
 
     if (userId) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("garantia_aprobada, rol")
         .eq("id", userId)
         .maybeSingle();
 
-      const rol = String(profile?.rol ?? "").toLowerCase();
-      const isPrivileged = ["admin", "sac"].includes(rol);
-      showGarantiaBanner = emailVerificado && !isPrivileged && profile?.garantia_aprobada !== true;
+      if (!profileError && profile) {
+        const rol = String(profile.rol ?? "").toLowerCase();
+        const isPrivileged = ["admin", "sac"].includes(rol);
+        showGarantiaBanner = emailVerificado && !isPrivileged && profile.garantia_aprobada === false;
+      } else {
+        showGarantiaBanner = false;
+      }
     }
   }
 
