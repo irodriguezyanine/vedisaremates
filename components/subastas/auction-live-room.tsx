@@ -145,6 +145,7 @@ export function AuctionLiveRoom({
   const [proxyMax, setProxyMax] = useState("");
   const [cfg, setCfg] = useState<PortalRematesConfigRow | null>(null);
   const [viewerRole, setViewerRole] = useState<string>("");
+  const [viewerHasGarantiaLive, setViewerHasGarantiaLive] = useState<boolean>(viewerHasGarantia);
   const [favoriteLoteIds, setFavoriteLoteIds] = useState<Set<string>>(new Set());
   const [compareLoteIds, setCompareLoteIds] = useState<Set<string>>(new Set());
   const [quickCustomIncrements, setQuickCustomIncrements] = useState("3");
@@ -207,6 +208,41 @@ export function AuctionLiveRoom({
       .then(({ data }) => {
         setViewerRole(String(data?.rol ?? "").toLowerCase());
       });
+  }, [viewerId]);
+
+  useEffect(() => {
+    setViewerHasGarantiaLive(Boolean(viewerHasGarantia));
+  }, [viewerHasGarantia]);
+
+  useEffect(() => {
+    if (!viewerId) {
+      setViewerHasGarantiaLive(false);
+      return;
+    }
+    const sb = createClient();
+    if (!sb) return;
+
+    let cancelled = false;
+    const refreshGarantia = async () => {
+      const { data } = await sb
+        .from("profiles")
+        .select("garantia_aprobada")
+        .eq("id", viewerId)
+        .maybeSingle();
+      if (!cancelled) {
+        setViewerHasGarantiaLive(data?.garantia_aprobada === true);
+      }
+    };
+
+    void refreshGarantia();
+    const pollId = window.setInterval(() => {
+      void refreshGarantia();
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
+    };
   }, [viewerId]);
 
   useEffect(() => {
@@ -389,6 +425,10 @@ export function AuctionLiveRoom({
       setMsg("Inicie sesión para configurar puja automática.");
       return;
     }
+    if (!viewerHasGarantiaLive) {
+      setMsg("Tu garantía aún no está habilitada para ofertar.");
+      return;
+    }
     const monto = parseCurrencyInput(proxyMax);
     if (!Number.isFinite(monto) || monto <= 0) {
       setMsg("Tope automático inválido.");
@@ -432,6 +472,7 @@ export function AuctionLiveRoom({
   const remateAbierto = remate.estado === "en_curso" || remate.estado === "publicado";
   const canBid =
     viewerId &&
+    viewerHasGarantiaLive &&
     remateAbierto &&
     tick != null &&
     countdownLive !== null &&
@@ -731,6 +772,8 @@ export function AuctionLiveRoom({
                           ? "Este remate aún no está habilitado para ofertar."
                           : !lotCanBid
                             ? "Este lote está pausado/cerrado y no recibe ofertas."
+                          : !viewerHasGarantiaLive
+                            ? "Debe tener la garantía habilitada para poder ofertar."
                           : countdownLive !== null && countdownLive <= 0
                             ? "El remate ya cerró según la fecha de fin."
                             : tick === null
@@ -743,11 +786,6 @@ export function AuctionLiveRoom({
                       </p>
                     ) : (
                       <>
-                        {!viewerHasGarantia ? (
-                          <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            Si tu garantía fue aprobada recientemente, ya puedes intentar ofertar. La validación final se realiza al enviar la puja.
-                          </p>
-                        ) : null}
                         {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
                           <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                             Últimos minutos: una nueva oferta puede extender el cierre automáticamente.
