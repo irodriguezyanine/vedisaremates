@@ -328,7 +328,17 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     setAddingBulk(false);
   }
 
-  const toLocal = (iso: string | null) => (iso ? iso.slice(0, 16) : "");
+  function toLocalDateTimeInput(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  }
 
   const assignedCount = lotes.filter((l) => l.inventario_id).length;
 
@@ -395,7 +405,7 @@ export function RemateEditor({ remateId }: { remateId: string }) {
             <input
               type="datetime-local"
               name="starts_at"
-              defaultValue={toLocal(remate.starts_at)}
+              defaultValue={toLocalDateTimeInput(remate.starts_at)}
               className="mt-1 w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-white"
             />
           </label>
@@ -405,7 +415,7 @@ export function RemateEditor({ remateId }: { remateId: string }) {
               required
               type="datetime-local"
               name="ends_at"
-              defaultValue={toLocal(remate.ends_at)}
+              defaultValue={toLocalDateTimeInput(remate.ends_at)}
               className="mt-1 w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-white"
             />
           </label>
