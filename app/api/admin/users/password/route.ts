@@ -76,7 +76,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "No se pudo resolver userId de autenticación." }, { status: 500 });
   }
 
-  const { error } = await admin.auth.admin.updateUserById(authUserId, { password });
+  const { error } = await admin.auth.admin.updateUserById(authUserId, {
+    password,
+    email_confirm: true,
+  });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, userId: authUserId });

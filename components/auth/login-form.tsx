@@ -7,6 +7,21 @@ import { type FormEvent, useState } from "react";
 import { PasswordInput } from "@/components/auth/password-input";
 import { createClient } from "@/lib/supabase/client";
 
+function mapAuthError(message: string): string {
+  const text = String(message ?? "").toLowerCase();
+  if (!text) return "Credenciales inválidas. Revisa tu correo/nombre de usuario y contraseña.";
+  if (text.includes("email not confirmed")) {
+    return "Tu correo aún no está verificado. Revisa tu bandeja o solicita reenvío de verificación.";
+  }
+  if (text.includes("invalid login credentials") || text.includes("invalid_grant")) {
+    return "Credenciales inválidas. Revisa tu correo/nombre de usuario y contraseña.";
+  }
+  if (text.includes("too many requests")) {
+    return "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.";
+  }
+  return message;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -51,7 +66,7 @@ export function LoginForm() {
 
       const { error: signErr } = await supabase.auth.signInWithPassword({ email: emailForLogin, password });
       if (signErr) {
-        setError("Credenciales inválidas. Revisa tu correo/nombre de usuario y contraseña.");
+        setError(mapAuthError(signErr.message));
         return;
       }
       const {

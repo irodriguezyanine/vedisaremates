@@ -6,6 +6,10 @@ function normalizeDigits(value: string) {
   return value.replace(/\D/g, "").replace(/^0+/, "");
 }
 
+function zeroPad(value: string, length: number) {
+  return value.padStart(length, "0");
+}
+
 function extractRemateNumberFromTitle(title: string) {
   const m = title.match(/#\s*([0-9]+)/);
   if (!m?.[1]) return "";
@@ -53,7 +57,9 @@ export async function POST(req: Request) {
   const sourceSystem = String((row as { source_system?: string | null }).source_system ?? "").trim().toLowerCase();
   const remateTitle = String((row as { titulo?: string | null }).titulo ?? "");
   const remateEndsAt = String((row as { ends_at?: string | null }).ends_at ?? "");
-  const isTasacionesSource = sourceSystem === "tasaciones";
+  const remateNumberFromTitle = extractRemateNumberFromTitle(remateTitle);
+  const looksLikeTasacionesByTitle = Boolean(remateNumberFromTitle);
+  const isTasacionesSource = sourceSystem === "tasaciones" || looksLikeTasacionesByTitle;
 
   // Fallback para datos históricos: inferir vínculo Tasaciones desde lotes vinculados.
   if (!tasacionesRemateId) {
@@ -77,12 +83,48 @@ export async function POST(req: Request) {
 
   // Fallback adicional: inferir por número de remate cuando el vínculo directo no exista.
   if (!tasacionesRemateId && isTasacionesSource) {
-    const remateNumber = extractRemateNumberFromTitle(remateTitle);
+    const remateNumber = remateNumberFromTitle;
     if (remateNumber) {
-      const { data: rematesCandidates } = await admin
+      const remateNumberPadded4 = zeroPad(remateNumber, 4);
+      const remateNumberPadded5 = zeroPad(remateNumber, 5);
+      const orExpr = [
+        `numero_remate.eq.${remateNumber}`,
+        `numero_remate.eq.${remateNumberPadded4}`,
+        `numero_remate.eq.${remateNumberPadded5}`,
+        `numero_remate.ilike.%${remateNumberPadded4}%`,
+        `numero_remate.ilike.%${remateNumberPadded5}%`,
+      ].join(",");
+
+      let rematesCandidates: Array<{
+        id: string | null;
+        numero_remate: string | null;
+        fecha_hora_remate: string | null;
+      }> = [];
+
+      const { data: rematesByNumber } = await admin
         .from("remates")
         .select("id, numero_remate, fecha_hora_remate")
+        .or(orExpr)
         .limit(200);
+      rematesCandidates = (rematesByNumber ?? []) as Array<{
+        id: string | null;
+        numero_remate: string | null;
+        fecha_hora_remate: string | null;
+      }>;
+
+      if (!rematesCandidates.length) {
+        const { data: rematesWide } = await admin
+          .from("remates")
+          .select("id, numero_remate, fecha_hora_remate")
+          .order("created_at", { ascending: false })
+          .limit(5000);
+        rematesCandidates = (rematesWide ?? []) as Array<{
+          id: string | null;
+          numero_remate: string | null;
+          fecha_hora_remate: string | null;
+        }>;
+      }
+
       const candidates = (rematesCandidates ?? []) as Array<{
         id: string | null;
         numero_remate: string | null;
