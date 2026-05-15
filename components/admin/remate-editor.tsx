@@ -176,26 +176,22 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     const starts = String(fd.get("starts_at") ?? "").trim();
     const ends = String(fd.get("ends_at") ?? "").trim();
 
-    const sb = createClient();
-    if (!sb) {
-      setErr("Servicio de datos no disponible.");
-      setSaving(false);
-      return;
-    }
-    const { error } = await sb
-      .from("portal_remates")
-      .update({
+    const response = await fetch("/api/admin/remates/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        remateId: remate.id,
         titulo: String(fd.get("titulo") ?? "").trim(),
-        descripcion: String(fd.get("descripcion") ?? "").trim() || null,
+        descripcion: String(fd.get("descripcion") ?? "").trim(),
         estado: fd.get("estado") as PortalRemateRow["estado"],
-        starts_at: starts ? new Date(starts).toISOString() : null,
-        ends_at: ends ? new Date(ends).toISOString() : remate.ends_at,
-      })
-      .eq("id", remate.id);
-
+        startsAt: starts ? new Date(starts).toISOString() : null,
+        endsAt: ends ? new Date(ends).toISOString() : remate.ends_at,
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     setSaving(false);
-    if (error) {
-      setErr(error.message);
+    if (!response.ok || !payload.ok) {
+      setErr(payload.error ?? "No se pudo guardar cambios.");
       return;
     }
     void load();
