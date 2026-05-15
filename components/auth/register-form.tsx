@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { SITE } from "@/lib/site-config";
@@ -14,6 +15,7 @@ function passwordStrength(password: string): { label: string; width: string; col
 }
 
 export function RegisterForm() {
+  const router = useRouter();
   const [username, setUsername] = useState("");
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
@@ -82,6 +84,7 @@ export function RegisterForm() {
       );
       setPassword("");
       setPassword2("");
+      router.push("/");
     } finally {
       setLoading(false);
     }

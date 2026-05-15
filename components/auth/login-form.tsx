@@ -98,6 +98,11 @@ export function LoginForm() {
           className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
         />
       </label>
+      <p className="-mt-1 text-right text-sm">
+        <Link href="/recuperar-clave" className="font-semibold text-[#009ade] hover:underline">
+          ¿Se te olvidó la contraseña?
+        </Link>
+      </p>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <button
         type="submit"

@@ -304,7 +304,7 @@ export async function POST(request: Request) {
   const botTrap = typeof body.website === "string" ? body.website.trim() : "";
   const formStartedAt = Number(body.formStartedAt ?? 0);
   const siteOrigin = DEFAULT_SITE_ORIGIN;
-  const redirectTo = `${siteOrigin}/ingreso?verified=1`;
+  const redirectTo = `${siteOrigin}/?verified=1`;
 
   registerHit(ipHits, ip);
 

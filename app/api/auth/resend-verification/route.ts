@@ -165,7 +165,7 @@ export async function POST(request: Request) {
     type: "magiclink",
     email,
     options: {
-      redirectTo: `${siteOrigin}/ingreso?verified=1`,
+      redirectTo: `${siteOrigin}/?verified=1`,
     },
   });
 
