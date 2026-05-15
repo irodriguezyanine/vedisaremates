@@ -57,6 +57,12 @@ const IMPORT_CONCURRENCY = 12;
 
 function friendlyCreateError(raw: string): string {
   const s = raw.toLowerCase();
+  if (s.includes("no se pudo listar usuarios auth") || s.includes("no se pudo resolver usuario por email")) {
+    return "No pudimos resolver el usuario en autenticación. Reintenta y, si persiste, contacta soporte.";
+  }
+  if (s.includes("no existe usuario auth")) {
+    return "No existe cuenta de autenticación para ese correo.";
+  }
   if (s.includes("sin_permiso")) return "Tu usuario no tiene permisos de administrador para esta acción.";
   if (s.includes("rol_invalido")) return "El rol seleccionado no es válido.";
   if (s.includes("rol_fk_no_encontrada")) return "No se pudo resolver la configuración de roles en la base de datos.";
@@ -69,7 +75,7 @@ function friendlyCreateError(raw: string): string {
   if (s.includes("fetch") || s.includes("failed")) return "No se pudo contactar el servicio. Intente nuevamente en unos minutos.";
   if (s.includes("session") || s.includes("sesión")) return raw;
   if (s.includes("already registered") || s.includes("duplicate") || s.includes("already been registered")) return "Ese correo ya tiene una cuenta.";
-  if (s.includes("invalid") && s.includes("email")) return "Correo no válido.";
+  if (s.includes("email address is invalid")) return "Correo no válido.";
   return raw.replace(/\bsupabase\b/gi, "").trim() || "No se pudo completar la acción.";
 }
 

@@ -33,21 +33,47 @@ export async function POST(request: Request) {
   if (!admin) return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
 
   let authUserId = userId;
-  if (email) {
-    const { data: authUserRow, error: authUserError } = await admin
-      .schema("auth")
-      .from("users")
-      .select("id")
-      .ilike("email", email)
-      .limit(1)
-      .maybeSingle<{ id: string | null }>();
-    if (authUserError) {
-      return NextResponse.json({ ok: false, error: `No se pudo resolver usuario por email: ${authUserError.message}` }, { status: 500 });
+
+  // Primero intentamos validar userId directo si viene.
+  if (authUserId) {
+    const { data: userById, error: userByIdError } = await admin.auth.admin.getUserById(authUserId);
+    if (userByIdError || !userById?.user?.id) {
+      authUserId = "";
     }
-    if (!authUserRow?.id) {
+  }
+
+  // Fallback robusto: resolver por email usando la API admin (sin tocar schema auth).
+  if (!authUserId && email) {
+    let page = 1;
+    const perPage = 200;
+    let foundId = "";
+
+    while (page <= 50 && !foundId) {
+      const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({ page, perPage });
+      if (usersError) {
+        return NextResponse.json(
+          { ok: false, error: `No se pudo listar usuarios auth para resolver email: ${usersError.message}` },
+          { status: 500 },
+        );
+      }
+      const users = usersData?.users ?? [];
+      const match = users.find((user) => String(user.email ?? "").trim().toLowerCase() === email);
+      if (match?.id) {
+        foundId = match.id;
+        break;
+      }
+      if (users.length < perPage) break;
+      page += 1;
+    }
+
+    if (!foundId) {
       return NextResponse.json({ ok: false, error: "No existe usuario auth para ese email." }, { status: 404 });
     }
-    authUserId = String(authUserRow.id);
+    authUserId = foundId;
+  }
+
+  if (!authUserId) {
+    return NextResponse.json({ ok: false, error: "No se pudo resolver userId de autenticación." }, { status: 500 });
   }
 
   const { error } = await admin.auth.admin.updateUserById(authUserId, { password });
