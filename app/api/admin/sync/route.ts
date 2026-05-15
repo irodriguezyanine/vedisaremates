@@ -57,9 +57,11 @@ function buildPortalState(startsAtIso: string, endsAtIso: string, tasacionesStat
   const startMs = new Date(startsAtIso).getTime();
   const endMs = new Date(endsAtIso).getTime();
   const source = String(tasacionesState ?? "").trim().toLowerCase();
-  if (source === "cerrado") return "cerrado";
+  // Para mantener consistencia con "históricos = pasados" de Tasaciones,
+  // privilegiamos ventana temporal por sobre flags textuales de estado.
   if (Number.isFinite(endMs) && endMs <= now) return "cerrado";
   if (Number.isFinite(startMs) && Number.isFinite(endMs) && startMs <= now && now < endMs) return "en_curso";
+  if (source === "en_curso") return "en_curso";
   return "publicado";
 }
 
