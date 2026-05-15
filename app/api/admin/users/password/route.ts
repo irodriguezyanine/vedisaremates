@@ -20,10 +20,11 @@ export async function POST(request: Request) {
   const auth = await authorizeAdmin();
   if (!auth.ok) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: auth.status });
 
-  const body = (await request.json().catch(() => ({}))) as { userId?: string; password?: string };
+  const body = (await request.json().catch(() => ({}))) as { userId?: string; email?: string; password?: string };
   const userId = String(body.userId ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
   const password = String(body.password ?? "");
-  if (!userId) return NextResponse.json({ ok: false, error: "Falta userId." }, { status: 400 });
+  if (!userId && !email) return NextResponse.json({ ok: false, error: "Falta userId o email." }, { status: 400 });
   if (password.length < 6) {
     return NextResponse.json({ ok: false, error: "La contraseña debe tener al menos 6 caracteres." }, { status: 400 });
   }
@@ -31,8 +32,26 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
 
-  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  let authUserId = userId;
+  if (email) {
+    const { data: authUserRow, error: authUserError } = await admin
+      .schema("auth")
+      .from("users")
+      .select("id")
+      .ilike("email", email)
+      .limit(1)
+      .maybeSingle<{ id: string | null }>();
+    if (authUserError) {
+      return NextResponse.json({ ok: false, error: `No se pudo resolver usuario por email: ${authUserError.message}` }, { status: 500 });
+    }
+    if (!authUserRow?.id) {
+      return NextResponse.json({ ok: false, error: "No existe usuario auth para ese email." }, { status: 404 });
+    }
+    authUserId = String(authUserRow.id);
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(authUserId, { password });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, userId: authUserId });
 }

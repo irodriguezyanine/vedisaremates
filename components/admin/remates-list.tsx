@@ -352,14 +352,11 @@ export function RematesList() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ remateId: r.id }),
     });
-    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string; warnings?: string[] };
+    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     setDeletingId(null);
     if (!response.ok || !payload.ok) {
       setErr(formatUiError(payload.error, "No se pudo eliminar. Revise permisos o intente más tarde."));
       return;
-    }
-    if (Array.isArray(payload.warnings) && payload.warnings.length) {
-      setErr(`Remate eliminado en portal con advertencias: ${payload.warnings[0]}`);
     }
     await load();
   }

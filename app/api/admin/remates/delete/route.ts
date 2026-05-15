@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+function normalizeDigits(value: string) {
+  return value.replace(/\D/g, "").replace(/^0+/, "");
+}
+
+function extractRemateNumberFromTitle(title: string) {
+  const m = title.match(/#\s*([0-9]+)/);
+  if (!m?.[1]) return "";
+  return normalizeDigits(m[1]);
+}
+
 async function authorizeAdmin() {
   const supabase = await createClient();
   if (!supabase) return { ok: false as const, status: 503 };
@@ -27,11 +37,9 @@ export async function POST(req: Request) {
   if (!remateId) {
     return NextResponse.json({ ok: false, error: "Falta remateId." }, { status: 400 });
   }
-  const warnings: string[] = [];
-
   const { data: row, error: fetchError } = await admin
     .from("portal_remates")
-    .select("id, tasaciones_remate_id")
+    .select("id, tasaciones_remate_id, source_system, titulo, ends_at")
     .eq("id", remateId)
     .maybeSingle();
   if (fetchError) {
@@ -42,6 +50,10 @@ export async function POST(req: Request) {
   }
 
   let tasacionesRemateId = String(row.tasaciones_remate_id ?? "").trim();
+  const sourceSystem = String((row as { source_system?: string | null }).source_system ?? "").trim().toLowerCase();
+  const remateTitle = String((row as { titulo?: string | null }).titulo ?? "");
+  const remateEndsAt = String((row as { ends_at?: string | null }).ends_at ?? "");
+  const isTasacionesSource = sourceSystem === "tasaciones";
 
   // Fallback para datos históricos: inferir vínculo Tasaciones desde lotes vinculados.
   if (!tasacionesRemateId) {
@@ -63,6 +75,49 @@ export async function POST(req: Request) {
     }
   }
 
+  // Fallback adicional: inferir por número de remate cuando el vínculo directo no exista.
+  if (!tasacionesRemateId && isTasacionesSource) {
+    const remateNumber = extractRemateNumberFromTitle(remateTitle);
+    if (remateNumber) {
+      const { data: rematesCandidates } = await admin
+        .from("remates")
+        .select("id, numero_remate, fecha_hora_remate")
+        .limit(200);
+      const candidates = (rematesCandidates ?? []) as Array<{
+        id: string | null;
+        numero_remate: string | null;
+        fecha_hora_remate: string | null;
+      }>;
+      const byNumber = candidates.find(
+        (candidate) => normalizeDigits(String(candidate.numero_remate ?? "")) === remateNumber,
+      );
+      if (byNumber?.id) {
+        tasacionesRemateId = String(byNumber.id);
+      } else if (remateEndsAt) {
+        const byDate = candidates.find((candidate) => {
+          if (!candidate?.id || !candidate.fecha_hora_remate) return false;
+          const a = new Date(candidate.fecha_hora_remate).getTime();
+          const b = new Date(remateEndsAt).getTime();
+          if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+          return Math.abs(a - b) <= 5 * 60 * 1000;
+        });
+        if (byDate?.id) tasacionesRemateId = String(byDate.id);
+      }
+    }
+  }
+
+  // Si viene de Tasaciones, impedir borrado parcial (si no, se reimporta al sincronizar).
+  if (isTasacionesSource && !tasacionesRemateId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "No se pudo resolver el vínculo con Tasaciones para este remate. No se elimina para evitar reaparición en la próxima sincronización.",
+      },
+      { status: 409 },
+    );
+  }
+
   // Si está vinculado a tablas compartidas, eliminamos primero esos registros.
   if (tasacionesRemateId) {
     const { error: delSharedItemsError } = await admin
@@ -70,7 +125,10 @@ export async function POST(req: Request) {
       .delete()
       .eq("remate_id", tasacionesRemateId);
     if (delSharedItemsError) {
-      warnings.push(`No se pudieron eliminar items compartidos: ${delSharedItemsError.message}`);
+      return NextResponse.json(
+        { ok: false, error: `No se pudieron eliminar items compartidos: ${delSharedItemsError.message}` },
+        { status: 500 },
+      );
     }
 
     const { error: delSharedRemateError } = await admin
@@ -78,7 +136,10 @@ export async function POST(req: Request) {
       .delete()
       .eq("id", tasacionesRemateId);
     if (delSharedRemateError) {
-      warnings.push(`No se pudo eliminar remate compartido: ${delSharedRemateError.message}`);
+      return NextResponse.json(
+        { ok: false, error: `No se pudo eliminar remate compartido: ${delSharedRemateError.message}` },
+        { status: 500 },
+      );
     }
 
     // Para superar trigger de protección en portal_remates, quitamos vínculo antes de eliminar en portal.
@@ -142,9 +203,12 @@ export async function POST(req: Request) {
 
   const { error: outboxError } = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 120 });
   if (outboxError) {
-    warnings.push(`No se pudo procesar outbox: ${outboxError.message}`);
+    return NextResponse.json(
+      { ok: false, error: `Remate eliminado, pero falló procesamiento de outbox: ${outboxError.message}` },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ ok: true, removed: true, warnings });
+  return NextResponse.json({ ok: true, removed: true });
 }
 

@@ -633,7 +633,7 @@ export function UsuariosPanel() {
         const resp = await fetch("/api/admin/users/password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: editModal.userId, password: newPassword }),
+          body: JSON.stringify({ userId: editModal.userId, email: editModal.email, password: newPassword }),
         });
         const json = (await resp.json().catch(() => ({}))) as { error?: string };
         if (!resp.ok || json.error) {
@@ -659,7 +659,7 @@ export function UsuariosPanel() {
       const res = await fetch("/api/admin/users/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: pwModal.userId, password }),
+        body: JSON.stringify({ userId: pwModal.userId, email: pwModal.email, password }),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok || json.error) throw new Error(friendlyCreateError(json.error || "Error al actualizar"));
