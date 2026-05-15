@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { InventarioRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
@@ -9,12 +10,17 @@ import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 type InventarioAnyRow = InventarioRow & Record<string, unknown>;
 type BoolFilter = "todos" | "si" | "no";
 type LoteJoinRow = {
+  id?: string | null;
   inventario: InventarioAnyRow | InventarioAnyRow[] | null;
-  portal_remates: { estado?: string | null; titulo?: string | null; descripcion?: string | null } | Array<{
-    estado?: string | null;
-    titulo?: string | null;
-    descripcion?: string | null;
-  }> | null;
+  portal_remates:
+    | { id?: string | null; estado?: string | null; titulo?: string | null; descripcion?: string | null }
+    | Array<{ id?: string | null; estado?: string | null; titulo?: string | null; descripcion?: string | null }>
+    | null;
+};
+type SearchRow = {
+  inventario: InventarioAnyRow;
+  remateId: string | null;
+  remateEstado: string | null;
 };
 
 function normalize(value: unknown): string {
@@ -71,8 +77,13 @@ function rowMatchesBoolFilter(row: InventarioAnyRow, keys: string[], filter: Boo
 
 const MAX_FETCH = 4000;
 const MAX_RENDER = 12;
+const REMATES_OFERTABLES = ["publicado", "en_curso"];
 
-export function HeroInventorySearch() {
+export function HeroInventorySearch({
+  onSearchActiveChange,
+}: {
+  onSearchActiveChange?: (isActive: boolean) => void;
+}) {
   const [q, setQ] = useState("");
   const [marca, setMarca] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -83,23 +94,26 @@ export function HeroInventorySearch() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [rows, setRows] = useState<InventarioAnyRow[]>([]);
+  const [rows, setRows] = useState<SearchRow[]>([]);
   const [searched, setSearched] = useState(false);
 
   const visibleRows = useMemo(() => rows.slice(0, MAX_RENDER), [rows]);
+  const hasAnyFilter =
+    Boolean(q.trim()) ||
+    Boolean(marca.trim()) ||
+    Boolean(categoria.trim()) ||
+    Boolean(yearFrom.trim()) ||
+    Boolean(yearTo.trim()) ||
+    operativo !== "todos" ||
+    motorArranca !== "todos";
 
-  async function searchInventory() {
+  useEffect(() => {
+    onSearchActiveChange?.(hasAnyFilter);
+  }, [hasAnyFilter, onSearchActiveChange]);
+
+  const searchInventory = useCallback(async () => {
     setErr(null);
     setSearched(true);
-
-    const hasAnyFilter =
-      q.trim() ||
-      marca.trim() ||
-      categoria.trim() ||
-      yearFrom.trim() ||
-      yearTo.trim() ||
-      operativo !== "todos" ||
-      motorArranca !== "todos";
     if (!hasAnyFilter) {
       setRows([]);
       return;
@@ -123,8 +137,9 @@ export function HeroInventorySearch() {
         .from("portal_remate_lotes")
         .select(
           `
+          id,
           inventario(*),
-          portal_remates(estado,titulo,descripcion)
+          portal_remates(id,estado,titulo,descripcion)
         `,
         )
         .order("created_at", { ascending: false })
@@ -135,46 +150,67 @@ export function HeroInventorySearch() {
         return;
       }
 
-      const byId = new Map<string, InventarioAnyRow>();
+      const byId = new Map<string, SearchRow>();
       for (const raw of ((data ?? []) as LoteJoinRow[])) {
         const remate = unwrapEmb(raw.portal_remates);
         const estado = normalize(remate?.estado);
-        if (!["publicado", "en_curso", "cerrado"].includes(estado)) continue;
+        if (!REMATES_OFERTABLES.includes(estado)) continue;
         const inv = unwrapEmb(raw.inventario);
         if (!inv?.id) continue;
-        if (!byId.has(String(inv.id))) byId.set(String(inv.id), inv);
+        const inventarioId = String(inv.id);
+        if (!byId.has(inventarioId)) {
+          byId.set(inventarioId, {
+            inventario: inv,
+            remateId: typeof remate?.id === "string" ? remate.id : null,
+            remateEstado: estado || null,
+          });
+        }
       }
 
       let result = [...byId.values()];
 
-      if (searchToken) result = result.filter((row) => rowMatchesText(row, searchToken));
-      if (marca.trim()) result = result.filter((row) => normalize(row.marca).includes(normalize(marca)));
-      if (categoria.trim()) result = result.filter((row) => normalize(row.categoria).includes(normalize(categoria)));
+      if (searchToken) result = result.filter((row) => rowMatchesText(row.inventario, searchToken));
+      if (marca.trim()) result = result.filter((row) => normalize(row.inventario.marca).includes(normalize(marca)));
+      if (categoria.trim()) result = result.filter((row) => normalize(row.inventario.categoria).includes(normalize(categoria)));
       if (yearFrom.trim()) {
         const minYear = Number(yearFrom);
         if (Number.isFinite(minYear)) {
-          result = result.filter((row) => Number(row.ano ?? 0) >= minYear);
+          result = result.filter((row) => Number(row.inventario.ano ?? 0) >= minYear);
         }
       }
       if (yearTo.trim()) {
         const maxYear = Number(yearTo);
         if (Number.isFinite(maxYear)) {
-          result = result.filter((row) => Number(row.ano ?? 0) <= maxYear);
+          result = result.filter((row) => Number(row.inventario.ano ?? 0) <= maxYear);
         }
       }
 
       result = result.filter((row) =>
-        rowMatchesBoolFilter(row, ["operativo", "es_operativo", "estado_operativo", "funciona"], operativo),
+        rowMatchesBoolFilter(row.inventario, ["operativo", "es_operativo", "estado_operativo", "funciona"], operativo),
       );
       result = result.filter((row) =>
-        rowMatchesBoolFilter(row, ["motor_arranca", "arranca", "motor_funciona"], motorArranca),
+        rowMatchesBoolFilter(row.inventario, ["motor_arranca", "arranca", "motor_funciona"], motorArranca),
       );
 
       setRows(result);
     } finally {
       setLoading(false);
     }
-  }
+  }, [categoria, hasAnyFilter, marca, motorArranca, operativo, q, yearFrom, yearTo]);
+
+  useEffect(() => {
+    if (!hasAnyFilter) {
+      setRows([]);
+      setSearched(false);
+      setErr(null);
+      setLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void searchInventory();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [hasAnyFilter, searchInventory]);
 
   return (
     <section className="w-full border-b border-white/10 bg-[#0b1624]">
@@ -185,9 +221,6 @@ export function HeroInventorySearch() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void searchInventory();
-                }}
                 placeholder="Buscar por marca, patente, VIN, motor, modelo o cualquier dato del inventario..."
                 className="h-12 w-full rounded-xl border border-[#365072] bg-[#0a1523] px-4 text-sm text-white placeholder:text-slate-400 focus:border-[#33C7E3] focus:outline-none"
               />
@@ -203,14 +236,9 @@ export function HeroInventorySearch() {
                 </svg>
                 Filtros
               </button>
-              <button
-                type="button"
-                onClick={() => void searchInventory()}
-                disabled={loading}
-                className="inline-flex h-12 items-center rounded-xl bg-[#33C7E3] px-5 text-sm font-bold text-[#0f1f2c] hover:brightness-105 disabled:opacity-60"
-              >
-                {loading ? "Buscando..." : "Buscar"}
-              </button>
+              <span className="inline-flex h-12 items-center rounded-xl border border-[#365072] bg-[#0a1523] px-4 text-xs font-semibold text-slate-300">
+                {loading ? "Buscando..." : "Búsqueda automática"}
+              </span>
             </div>
           </div>
 
@@ -272,12 +300,22 @@ export function HeroInventorySearch() {
           {visibleRows.length ? (
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {visibleRows.map((row) => (
-                <article key={String(row.id)} className="rounded-lg border border-[#2a3a53] bg-[#0a1523] p-3">
-                  <p className="text-sm font-bold text-white">{String(row.patente ?? "Sin patente")}</p>
-                  <p className="mt-1 text-sm text-slate-200">{[row.marca, row.modelo].filter(Boolean).join(" ") || "Sin marca/modelo"}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Año: {String(row.ano ?? "—")} · Categoría: {String(row.categoria ?? "—")}
+                <article key={String(row.inventario.id)} className="rounded-lg border border-[#2a3a53] bg-[#0a1523] p-3">
+                  <p className="text-sm font-bold text-white">{String(row.inventario.patente ?? "Sin patente")}</p>
+                  <p className="mt-1 text-sm text-slate-200">
+                    {[row.inventario.marca, row.inventario.modelo].filter(Boolean).join(" ") || "Sin marca/modelo"}
                   </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Año: {String(row.inventario.ano ?? "—")} · Categoría: {String(row.inventario.categoria ?? "—")}
+                  </p>
+                  {row.remateId ? (
+                    <Link
+                      href={`/subastas/${row.remateId}`}
+                      className="mt-2 inline-flex rounded-md bg-[#33C7E3] px-3 py-1.5 text-xs font-bold text-[#0f1f2c] hover:brightness-105"
+                    >
+                      Ir a ofertar
+                    </Link>
+                  ) : null}
                 </article>
               ))}
             </div>
