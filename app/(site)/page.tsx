@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AuctionFeed } from "@/components/auction-feed";
 import { HeroActionBar } from "@/components/hero-action-bar";
 import { HeroCarousel } from "@/components/hero-carousel";
+import { HeroInventorySearch } from "@/components/hero-inventory-search";
 import { HeroShine } from "@/components/hero-shine";
 import { Reveal } from "@/components/reveal-on-scroll";
 import { catalogoHref } from "@/lib/site-config";
@@ -12,6 +13,8 @@ export default function HomePage() {
 
   return (
     <div className="bg-[#f1f4f8]">
+      <HeroInventorySearch />
+
       {/* Hero + acciones: ancho completo, sin contenedor estrecho */}
       <div className="flex w-full flex-col">
         <HeroShine />
