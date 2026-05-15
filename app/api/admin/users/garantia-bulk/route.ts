@@ -10,6 +10,10 @@ type Body = {
   garantiaAprobada?: unknown;
 };
 
+function isPrivilegedRole(role: string): boolean {
+  return ["admin", "sac"].includes(role);
+}
+
 function isUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
@@ -25,7 +29,7 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).maybeSingle();
   const role = String(profile?.rol ?? "").trim().toLowerCase();
-  if (role !== "admin") return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  if (!isPrivilegedRole(role)) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
 
   const body = (await request.json().catch(() => ({}))) as Body;
   const garantiaAprobada = body.garantiaAprobada === true;

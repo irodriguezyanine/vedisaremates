@@ -7,6 +7,10 @@ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/client";
 
+function isPrivilegedRole(role: string): boolean {
+  return ["admin", "sac"].includes(role.toLowerCase());
+}
+
 export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
   const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -26,7 +30,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
       setEmail(user?.email ?? null);
       if (user?.id) {
         const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
-        setAdmin((data?.rol ?? "").toLowerCase() === "admin");
+        setAdmin(isPrivilegedRole(String(data?.rol ?? "")));
       } else {
         setAdmin(false);
       }
@@ -42,7 +46,7 @@ export function HeaderAuth({ onNavigate }: { onNavigate?: () => void }) {
       void (async () => {
         if (user?.id) {
           const { data } = await conn.from("profiles").select("rol").eq("id", user.id).maybeSingle();
-          setAdmin((data?.rol ?? "").toLowerCase() === "admin");
+          setAdmin(isPrivilegedRole(String(data?.rol ?? "")));
         } else {
           setAdmin(false);
         }

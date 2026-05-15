@@ -393,7 +393,7 @@ export function MiCuentaDashboard({
                   ? "Gestiona tus datos completos, seguridad de acceso y seguimiento de ofertas en un solo lugar."
                   : "Administra tus datos de cuenta, seguridad y actividad de remates."}
               </p>
-              {!isClienteRemate && (initialRol ?? "").toLowerCase() === "admin" ? (
+              {!isClienteRemate && ["admin", "sac"].includes((initialRol ?? "").toLowerCase()) ? (
                 <div className="mt-6">
                   <Link
                     href="/admin"

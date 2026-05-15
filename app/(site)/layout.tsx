@@ -23,8 +23,9 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
         .eq("id", userId)
         .maybeSingle();
 
-      const isAdmin = String(profile?.rol ?? "").toLowerCase() === "admin";
-      showGarantiaBanner = emailVerificado && !isAdmin && profile?.garantia_aprobada !== true;
+      const rol = String(profile?.rol ?? "").toLowerCase();
+      const isPrivileged = ["admin", "sac"].includes(rol);
+      showGarantiaBanner = emailVerificado && !isPrivileged && profile?.garantia_aprobada !== true;
     }
   }
 

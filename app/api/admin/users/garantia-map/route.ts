@@ -8,6 +8,10 @@ const CHUNK_SIZE = 200;
 
 type Body = { userIds?: unknown };
 
+function isPrivilegedRole(role: string): boolean {
+  return ["admin", "sac"].includes(role);
+}
+
 function isUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
@@ -22,7 +26,8 @@ export async function POST(request: Request) {
   if (!user?.id) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).maybeSingle();
-  if (String(profile?.rol ?? "").trim().toLowerCase() !== "admin") {
+  const role = String(profile?.rol ?? "").trim().toLowerCase();
+  if (!isPrivilegedRole(role)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
