@@ -106,7 +106,7 @@ async function reconcileTasacionesRematesMirror(
         (endsAt ? new Date(new Date(endsAt).getTime() - 24 * 60 * 60 * 1000).toISOString() : new Date().toISOString());
       const numero = String(row.numero_remate ?? "").trim();
       const descripcion = String(row.descripcion ?? "").trim();
-      const titulo = [numero, descripcion].filter(Boolean).join(" - ") || numero || "Remate";
+      const titulo = descripcion || "Sin nombre";
       return {
         titulo,
         descripcion: descripcion || null,

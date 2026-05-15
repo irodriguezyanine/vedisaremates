@@ -39,13 +39,10 @@ function normalizeNumeroRemate(input: string): string {
   return raw;
 }
 
-function buildPortalTitle(numeroRemate: string, descripcion: string): string {
-  const numero = String(numeroRemate ?? "").trim();
-  const desc = String(descripcion ?? "").trim();
-  if (numero && desc) return `${numero} - ${desc}`;
-  if (numero) return numero;
-  if (desc) return desc;
-  return "Remate";
+function buildPortalTitle(nombreRemate: string): string {
+  const name = String(nombreRemate ?? "").trim();
+  if (name) return name;
+  return "Sin nombre";
 }
 
 function mapPortalEstadoToTasaciones(estado: PortalEstado): string {
@@ -95,22 +92,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Estado inválido." }, { status: 400 });
   }
 
-  const numeroFromTitle = extractNumeroRemate(rawTitulo);
-  const numeroFromDescription = extractNumeroRemate(rawDescripcion);
-  const numeroRemate = normalizeNumeroRemate(numeroFromTitle || numeroFromDescription || rawTitulo);
-  if (!numeroRemate) return NextResponse.json({ ok: false, error: "Número de remate inválido." }, { status: 400 });
-
-  const descripcion = stripLeadingRemateNumber(rawDescripcion);
-  const portalTitle = buildPortalTitle(numeroRemate, descripcion);
-  const startIso = startsAt ?? new Date(new Date(endsAt).getTime() - 24 * 60 * 60 * 1000).toISOString();
-
   const { data: portalRow, error: portalFetchError } = await admin
     .from("portal_remates")
-    .select("id, tasaciones_remate_id")
+    .select("id, tasaciones_remate_id, source_event_number")
     .eq("id", remateId)
-    .maybeSingle<{ id: string | null; tasaciones_remate_id: string | null }>();
+    .maybeSingle<{ id: string | null; tasaciones_remate_id: string | null; source_event_number: string | null }>();
   if (portalFetchError) return NextResponse.json({ ok: false, error: portalFetchError.message }, { status: 500 });
   if (!portalRow?.id) return NextResponse.json({ ok: false, error: "Remate no encontrado." }, { status: 404 });
+
+  const numeroFromTitle = extractNumeroRemate(rawTitulo);
+  const numeroFromDescription = extractNumeroRemate(rawDescripcion);
+  const numeroRemate = normalizeNumeroRemate(
+    numeroFromTitle || numeroFromDescription || String(portalRow.source_event_number ?? ""),
+  );
+  if (!numeroRemate) return NextResponse.json({ ok: false, error: "No se pudo resolver número de remate oficial." }, { status: 400 });
+
+  const nombreRemate = stripLeadingRemateNumber(rawTitulo);
+  const descripcion = stripLeadingRemateNumber(rawDescripcion);
+  const portalTitle = buildPortalTitle(nombreRemate);
+  const startIso = startsAt ?? new Date(new Date(endsAt).getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   const { error: portalUpdateError } = await admin
     .from("portal_remates")
