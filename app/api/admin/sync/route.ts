@@ -60,28 +60,32 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const auth = await authorizeAdmin();
     if (!auth.ok) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: auth.status });
     const admin = createAdminClient();
     if (!admin) return NextResponse.json({ ok: false, error: "Falta cliente admin." }, { status: 500 });
 
+    const body = (await req.json().catch(() => ({}))) as { full?: boolean };
+    const fullSync = Boolean(body.full);
+    const bootstrapLimit = fullSync ? 5000 : 300;
+    const outboxLimit = fullSync ? 1200 : 400;
     const warnings: string[] = [];
 
-    const bootTas = await admin.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: 300 });
+    const bootTas = await admin.rpc("portal_integracion_bootstrap_desde_tasaciones", { p_limit: bootstrapLimit });
     if (bootTas.error && !isRetryableSyncError(bootTas.error.message)) {
       return NextResponse.json({ ok: false, error: formatApiError(bootTas.error.message, "Error bootstrap tasaciones.") }, { status: 500 });
     }
     if (bootTas.error) warnings.push(`bootstrap_tasaciones: ${formatApiError(bootTas.error.message, "timeout")}`);
 
-    const bootPortal = await admin.rpc("portal_integracion_bootstrap_desde_portal", { p_limit: 300 });
+    const bootPortal = await admin.rpc("portal_integracion_bootstrap_desde_portal", { p_limit: bootstrapLimit });
     if (bootPortal.error && !isRetryableSyncError(bootPortal.error.message)) {
       return NextResponse.json({ ok: false, error: formatApiError(bootPortal.error.message, "Error bootstrap portal.") }, { status: 500 });
     }
     if (bootPortal.error) warnings.push(`bootstrap_portal: ${formatApiError(bootPortal.error.message, "timeout")}`);
 
-    const processRes = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: 400 });
+    const processRes = await admin.rpc("portal_integracion_procesar_outbox", { p_limit: outboxLimit });
     if (processRes.error && !isRetryableSyncError(processRes.error.message)) {
       return NextResponse.json({ ok: false, error: formatApiError(processRes.error.message, "Error procesando outbox.") }, { status: 500 });
     }
@@ -92,6 +96,8 @@ export async function POST() {
 
     return NextResponse.json({
       ok: true,
+      full_sync: fullSync,
+      limits: { bootstrap: bootstrapLimit, outbox: outboxLimit },
       bootstrap_tasaciones: bootTas.data,
       bootstrap_portal: bootPortal.data,
       processed: processRes.data,

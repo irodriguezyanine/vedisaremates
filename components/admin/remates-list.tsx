@@ -361,11 +361,15 @@ export function RematesList() {
     await load();
   }
 
-  async function sincronizarAhora(silentDeadlock = false) {
+  async function sincronizarAhora(silentDeadlock = false, fullSync = false) {
     setErr(null);
     setSyncing(true);
     try {
-      const response = await fetch("/api/admin/sync", { method: "POST" });
+      const response = await fetch("/api/admin/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full: fullSync }),
+      });
       const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error ?? `Error HTTP ${response.status}`);
@@ -432,7 +436,7 @@ export function RematesList() {
           <button
             type="button"
             disabled={syncing}
-            onClick={() => void sincronizarAhora()}
+            onClick={() => void sincronizarAhora(false, true)}
             className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-60"
           >
             <IconArrowPath className={syncing ? "animate-spin" : ""} />
