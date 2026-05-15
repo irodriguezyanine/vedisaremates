@@ -241,13 +241,10 @@ export async function POST(request: Request) {
     : [];
   if (!userIds.length) return NextResponse.json({ ok: false, error: "sin_ids" }, { status: 400 });
 
-  const admin = createAdminClient();
-  if (!admin) return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
-
-  const { data: beforeRows } = await admin
-    .from("profiles")
-    .select("id, garantia_aprobada")
-    .in("id", userIds);
+  // Importante: la actualización de garantía debe ocurrir en el mismo contexto
+  // de base de datos de la sesión actual (supabase servidor), para evitar desalineaciones.
+  const { data: beforeRows, error: beforeErr } = await supabase.from("profiles").select("id, garantia_aprobada").in("id", userIds);
+  if (beforeErr) return NextResponse.json({ ok: false, error: beforeErr.message }, { status: 500 });
   const wasApproved = new Map<string, boolean>(
     ((beforeRows ?? []) as Array<{ id: string; garantia_aprobada: boolean | null }>).map((r) => [
       String(r.id),
@@ -256,7 +253,7 @@ export async function POST(request: Request) {
   );
 
   const nowIso = new Date().toISOString();
-  const { data, error } = await admin
+  const { data, error } = await supabase
     .from("profiles")
     .update({
       garantia_aprobada: garantiaAprobada,
@@ -273,6 +270,17 @@ export async function POST(request: Request) {
 
   let notified = 0;
   if (garantiaAprobada) {
+    const admin = createAdminClient();
+    if (!admin) {
+      return NextResponse.json({
+        ok: true,
+        updated: updatedIds.size,
+        failed: failedIds.length,
+        failedIds,
+        notified: 0,
+        note: "garantia_actualizada_sin_mail_por_falta_service_role",
+      });
+    }
     const newlyApprovedIds = [...updatedIds].filter((id) => !wasApproved.get(id));
     if (newlyApprovedIds.length > 0) {
       const siteOrigin = DEFAULT_SITE_ORIGIN;
