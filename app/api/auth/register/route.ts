@@ -77,6 +77,25 @@ function genericSuccess() {
   });
 }
 
+function enforceRematesRedirect(actionLink: string, siteOrigin: string): string {
+  try {
+    const url = new URL(actionLink);
+    const target = `${siteOrigin}/?verified=1`;
+    const currentRedirect =
+      url.searchParams.get("redirect_to") ??
+      url.searchParams.get("redirectTo") ??
+      url.searchParams.get("next");
+    if (!currentRedirect) return actionLink;
+    if (currentRedirect.startsWith(siteOrigin)) return actionLink;
+    if (url.searchParams.has("redirect_to")) url.searchParams.set("redirect_to", target);
+    if (url.searchParams.has("redirectTo")) url.searchParams.set("redirectTo", target);
+    if (url.searchParams.has("next")) url.searchParams.set("next", target);
+    return url.toString();
+  } catch {
+    return actionLink;
+  }
+}
+
 function buildVerificationMail({
   nombre,
   actionLink,
@@ -358,14 +377,15 @@ export async function POST(request: Request) {
     return genericSuccess();
   }
 
-  const actionLink = data?.properties?.action_link;
+  const rawActionLink = data?.properties?.action_link;
   const userId = data?.user?.id;
   if (userId) {
     await forceClienteRemateRole(admin, userId, nombre, apellido, username);
   }
-  if (!actionLink) {
+  if (!rawActionLink) {
     return genericSuccess();
   }
+  const actionLink = enforceRematesRedirect(rawActionLink, siteOrigin);
 
   const mail = buildVerificationMail({ nombre, actionLink, siteOrigin });
   const sent = await sendSesEmail({

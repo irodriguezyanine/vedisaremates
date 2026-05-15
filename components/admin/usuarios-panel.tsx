@@ -347,6 +347,7 @@ export function UsuariosPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkRole, setBulkRole] = useState("cliente-remate");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
@@ -1215,6 +1216,44 @@ export function UsuariosPanel() {
     }
   }
 
+  async function deleteSingleUser(row: ListaUsuarioRow) {
+    if (bulkBusy || deletingUserId) return;
+    const email = String(row.email ?? "").trim();
+    const ok = await confirm({
+      title: "Eliminar usuario",
+      message: `¿Eliminar la cuenta ${email || "sin correo"}?\n\nEsta acción elimina el usuario del sistema de autenticación y se reflejará en todas las plataformas conectadas.`,
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    setDeletingUserId(row.id);
+    setLoadErr(null);
+    setBulkMsg(null);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("Servicio no disponible");
+      const { data, error } = await supabase.rpc("portal_admin_delete_usuario", {
+        p_user_id: row.id,
+      });
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (error || !res?.ok) {
+        throw new Error(friendlyCreateError(res?.error || error?.message || "No se pudo eliminar el usuario."));
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
+      await load();
+    } catch (e: unknown) {
+      setLoadErr(friendlyCreateError(e instanceof Error ? e.message : "Error"));
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
+
   const missingDeploy = !isSupabaseConfigured();
 
   if (missingDeploy) {
@@ -1444,6 +1483,7 @@ export function UsuariosPanel() {
                     Alta <span className="text-[11px]">{sortIndicator("created_at")}</span>
                   </button>
                 </th>
+                <th className="px-4 py-2 font-medium text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -1499,11 +1539,27 @@ export function UsuariosPanel() {
                     </td>
                   ) : null}
                   <td className="px-4 py-2 text-neutral-500">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-CL") : "—"}</td>
+                  <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => void deleteSingleUser(u)}
+                      disabled={bulkBusy || deletingUserId === u.id}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-500/40 text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Eliminar usuario"
+                      aria-label="Eliminar usuario"
+                    >
+                      {deletingUserId === u.id ? (
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-200/30 border-t-red-200" />
+                      ) : (
+                        "✖"
+                      )}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!paginatedRows.length ? (
                 <tr>
-                  <td colSpan={activeTab === "cliente_remate" ? 6 : 4} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={activeTab === "cliente_remate" ? 7 : 5} className="px-4 py-6 text-center text-neutral-500">
                     No hay usuarios para mostrar con los filtros actuales.
                   </td>
                 </tr>

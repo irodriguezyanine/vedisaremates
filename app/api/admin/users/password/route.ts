@@ -78,7 +78,6 @@ export async function POST(request: Request) {
 
   const { error } = await admin.auth.admin.updateUserById(authUserId, {
     password,
-    email_confirm: true,
   });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 

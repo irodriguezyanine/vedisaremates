@@ -145,9 +145,14 @@ export async function POST(request: Request) {
     },
   });
 
-  if (error) return responseOk();
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "link_no_generado", detail: error.message },
+      { status: 500 },
+    );
+  }
   const actionLink = data?.properties?.action_link;
-  if (!actionLink) return responseOk();
+  if (!actionLink) return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
 
   const mail = buildMail(actionLink, siteOrigin);
   const sent = await sendSesEmail({
@@ -157,6 +162,11 @@ export async function POST(request: Request) {
     text: mail.text,
   });
 
-  if (!sent.ok) return NextResponse.json({ ok: false, error: "mail_no_enviado" }, { status: 502 });
+  if (!sent.ok) {
+    return NextResponse.json(
+      { ok: false, error: "mail_no_enviado", detail: sent.error },
+      { status: 502 },
+    );
+  }
   return responseOk();
 }

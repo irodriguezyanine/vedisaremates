@@ -72,6 +72,11 @@ export function LoginForm() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (!user?.email_confirmed_at) {
+        await supabase.auth.signOut();
+        setError("Tu correo aún no está verificado. Revisa tu bandeja y confirma tu cuenta antes de ingresar.");
+        return;
+      }
       if (user?.id) {
         const { data: profile } = await supabase
           .from("profiles")

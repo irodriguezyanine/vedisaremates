@@ -31,6 +31,16 @@ export function ForgotPasswordForm() {
           setError("Ya solicitaste muchos reenvíos. Espera unos minutos.");
           return;
         }
+        if (data?.error === "mail_no_enviado") {
+          setError(
+            "No pudimos enviar el correo de recuperación. Revisa la configuración de correo (SES/SMTP) e inténtalo nuevamente.",
+          );
+          return;
+        }
+        if (data?.error === "link_no_generado" || data?.error === "link_invalido") {
+          setError("No se pudo generar el enlace de recuperación. Intenta nuevamente en unos minutos.");
+          return;
+        }
         setError("No pudimos procesar tu solicitud en este momento.");
         return;
       }

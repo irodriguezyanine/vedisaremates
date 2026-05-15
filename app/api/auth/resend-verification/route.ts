@@ -33,6 +33,25 @@ function responseOk() {
   });
 }
 
+function enforceRematesRedirect(actionLink: string, siteOrigin: string): string {
+  try {
+    const url = new URL(actionLink);
+    const target = `${siteOrigin}/?verified=1`;
+    const currentRedirect =
+      url.searchParams.get("redirect_to") ??
+      url.searchParams.get("redirectTo") ??
+      url.searchParams.get("next");
+    if (!currentRedirect) return actionLink;
+    if (currentRedirect.startsWith(siteOrigin)) return actionLink;
+    if (url.searchParams.has("redirect_to")) url.searchParams.set("redirect_to", target);
+    if (url.searchParams.has("redirectTo")) url.searchParams.set("redirectTo", target);
+    if (url.searchParams.has("next")) url.searchParams.set("next", target);
+    return url.toString();
+  } catch {
+    return actionLink;
+  }
+}
+
 function buildMail(actionLink: string, siteOrigin: string) {
   const wa = `${SITE.whatsappHref}?text=${encodeURIComponent("Hola, quiero enviar mi comprobante de garantía para habilitar mi cuenta.")}`;
   const paymentLink = "https://www.tuu.cl/vedisaremates";
@@ -169,9 +188,17 @@ export async function POST(request: Request) {
     },
   });
 
-  if (error) return responseOk();
-  const actionLink = data?.properties?.action_link;
-  if (!actionLink) return responseOk();
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "link_no_generado", detail: error.message },
+      { status: 500 },
+    );
+  }
+  const rawActionLink = data?.properties?.action_link;
+  if (!rawActionLink) {
+    return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
+  }
+  const actionLink = enforceRematesRedirect(rawActionLink, siteOrigin);
 
   const mail = buildMail(actionLink, siteOrigin);
   const sent = await sendSesEmail({
@@ -180,6 +207,11 @@ export async function POST(request: Request) {
     html: mail.html,
     text: mail.text,
   });
-  if (!sent.ok) return NextResponse.json({ ok: false, error: "mail_no_enviado" }, { status: 502 });
+  if (!sent.ok) {
+    return NextResponse.json(
+      { ok: false, error: "mail_no_enviado", detail: sent.error },
+      { status: 502 },
+    );
+  }
   return responseOk();
 }

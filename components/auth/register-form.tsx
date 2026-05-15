@@ -110,6 +110,16 @@ export function RegisterForm() {
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
       if (!res.ok || !data?.ok) {
+        if (data?.error === "mail_no_enviado") {
+          setError(
+            "No pudimos enviar el correo de verificación. Revisa configuración de correo (SES/SMTP) e inténtalo nuevamente.",
+          );
+          return;
+        }
+        if (data?.error === "link_no_generado" || data?.error === "link_invalido") {
+          setError("No se pudo generar el enlace de verificación. Intenta nuevamente en unos minutos.");
+          return;
+        }
         if (data?.error === "demasiados_reintentos") {
           setError("Ya solicitaste muchos reenvíos. Espera unos minutos.");
           return;
