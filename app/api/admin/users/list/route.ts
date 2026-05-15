@@ -30,7 +30,7 @@ export async function GET() {
   if (admin) {
     const { data: profilesData, error: profilesError } = await admin
       .from("profiles")
-      .select("id, email, nombre, rol, created_at, must_change_password, garantia_aprobada")
+      .select("id, nombre, rol, created_at, must_change_password, garantia_aprobada")
       .order("created_at", { ascending: false })
       .limit(MAX_USERS);
     if (profilesError) return NextResponse.json({ ok: false, error: profilesError.message }, { status: 500 });
@@ -52,7 +52,7 @@ export async function GET() {
 
     const rows: ListaUsuarioRow[] = profileRows.map((p) => ({
       ...p,
-      email: authUsersById.get(String(p.id)) ?? p.email ?? null,
+      email: authUsersById.get(String(p.id)) ?? null,
     }));
     return NextResponse.json({ ok: true, rows });
   }

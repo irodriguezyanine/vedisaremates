@@ -25,7 +25,7 @@ BEGIN
   RETURN QUERY
   SELECT
     p.id,
-    COALESCE(NULLIF(trim(u.email), ''), NULLIF(trim(p.email), '')) AS email,
+    NULLIF(trim(u.email), '') AS email,
     p.nombre,
     p.rol,
     p.created_at,
