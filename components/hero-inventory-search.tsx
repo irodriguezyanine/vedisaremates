@@ -23,6 +23,18 @@ type SearchRow = {
   remateEstado: string | null;
 };
 
+const IMAGE_HINT_KEYS = [
+  "glo3d_thumbnail",
+  "glo3d_thumb",
+  "thumbnail_url",
+  "foto_principal",
+  "imagen_principal",
+  "image_url",
+  "imagen_url",
+  "photo_url",
+];
+const GLO3D_HINT_KEYS = ["glo3d", "glo_3d", "glo3d_url", "url_glo3d", "tour_360", "viewer_360"];
+
 function normalize(value: unknown): string {
   return String(value ?? "")
     .normalize("NFD")
@@ -73,6 +85,52 @@ function rowMatchesBoolFilter(row: InventarioAnyRow, keys: string[], filter: Boo
     return boolValue === wanted;
   }
   return false;
+}
+
+function isHttpUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function firstHttpUrl(value: unknown): string | null {
+  if (isHttpUrl(value)) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const hit = firstHttpUrl(item);
+      if (hit) return hit;
+    }
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      const hit = firstHttpUrl(v);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+function findUrlByHintKeys(row: InventarioAnyRow, hintKeys: string[]): string | null {
+  const entries = Object.entries(row);
+  for (const [key, value] of entries) {
+    const k = normalize(key);
+    if (!hintKeys.some((h) => k.includes(h))) continue;
+    const hit = firstHttpUrl(value);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function thumbnailUrl(row: InventarioAnyRow): string | null {
+  const hinted = findUrlByHintKeys(row, IMAGE_HINT_KEYS);
+  if (hinted) return hinted;
+
+  const fromImages = Array.isArray(row.imagenes) ? row.imagenes.find((v) => isHttpUrl(v)) : null;
+  if (fromImages) return fromImages;
+
+  return firstHttpUrl(row);
+}
+
+function glo3dUrl(row: InventarioAnyRow): string | null {
+  return findUrlByHintKeys(row, GLO3D_HINT_KEYS);
 }
 
 const MAX_FETCH = 4000;
@@ -297,25 +355,65 @@ export function HeroInventorySearch({
             </p>
           ) : null}
 
+          {searched && !loading && !visibleRows.length ? (
+            <div className="mt-4 rounded-xl border border-dashed border-[#365072] bg-[#0a1523] px-4 py-8 text-center">
+              <p className="text-sm font-semibold text-slate-200">No encontramos vehiculos con esos filtros.</p>
+              <p className="mt-1 text-xs text-slate-400">Prueba otra marca, patente o un rango de anio mas amplio.</p>
+            </div>
+          ) : null}
+
           {visibleRows.length ? (
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {visibleRows.map((row) => (
-                <article key={String(row.inventario.id)} className="rounded-lg border border-[#2a3a53] bg-[#0a1523] p-3">
-                  <p className="text-sm font-bold text-white">{String(row.inventario.patente ?? "Sin patente")}</p>
-                  <p className="mt-1 text-sm text-slate-200">
-                    {[row.inventario.marca, row.inventario.modelo].filter(Boolean).join(" ") || "Sin marca/modelo"}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Año: {String(row.inventario.ano ?? "—")} · Categoría: {String(row.inventario.categoria ?? "—")}
-                  </p>
-                  {row.remateId ? (
-                    <Link
-                      href={`/subastas/${row.remateId}`}
-                      className="mt-2 inline-flex rounded-md bg-[#33C7E3] px-3 py-1.5 text-xs font-bold text-[#0f1f2c] hover:brightness-105"
-                    >
-                      Ir a ofertar
-                    </Link>
-                  ) : null}
+                <article
+                  key={String(row.inventario.id)}
+                  className="overflow-hidden rounded-xl border border-[#2a3a53] bg-[#0a1523] shadow-[0_10px_30px_-20px_rgba(0,0,0,0.9)]"
+                >
+                  <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-[#2a3a53]">
+                    {thumbnailUrl(row.inventario) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbnailUrl(row.inventario) ?? ""}
+                        alt={`${String(row.inventario.marca ?? "")} ${String(row.inventario.modelo ?? "")}`.trim() || "Vehiculo"}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#15263a] to-[#0b1624] text-xs font-semibold text-slate-300">
+                        Sin miniatura
+                      </div>
+                    )}
+                    {glo3dUrl(row.inventario) ? (
+                      <a
+                        href={glo3dUrl(row.inventario) ?? "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute right-2 top-2 rounded-md bg-[#33C7E3] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0f1f2c]"
+                      >
+                        Glo3D
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-extrabold text-white">{String(row.inventario.patente ?? "Sin patente")}</p>
+                      <span className="rounded-md border border-[#365072] bg-[#0f2135] px-2 py-0.5 text-[11px] font-semibold text-slate-200">
+                        {String(row.inventario.ano ?? "—")}
+                      </span>
+                    </div>
+                    <p className="line-clamp-2 min-h-[38px] text-sm font-medium text-slate-200">
+                      {[row.inventario.marca, row.inventario.modelo].filter(Boolean).join(" ") || "Vehiculo disponible"}
+                    </p>
+                    {row.remateId ? (
+                      <Link
+                        href={`/subastas/${row.remateId}`}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-[#33C7E3] px-3 py-2 text-xs font-bold text-[#0f1f2c] transition hover:brightness-105"
+                      >
+                        Ir a ofertar
+                      </Link>
+                    ) : null}
+                  </div>
                 </article>
               ))}
             </div>
