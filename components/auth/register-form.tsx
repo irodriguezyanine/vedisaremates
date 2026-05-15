@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PasswordInput } from "@/components/auth/password-input";
 import { SITE } from "@/lib/site-config";
 
 function passwordStrength(password: string): { label: string; width: string; color: string } {
@@ -178,16 +179,14 @@ export function RegisterForm() {
             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
           />
         </label>
-        <label className="block text-sm font-medium text-neutral-700">
-          Contraseña (mín. 6 caracteres)
-          <input
-            type="password"
+        <div className="block text-sm font-medium text-neutral-700">
+          <PasswordInput
+            label="Contraseña (mín. 6 caracteres)"
             autoComplete="new-password"
             required
             minLength={6}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
+            onChange={setPassword}
           />
           <div className="mt-2">
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
@@ -195,19 +194,15 @@ export function RegisterForm() {
             </div>
             <p className="mt-1 text-xs text-neutral-500">Fortaleza: {passStrength.label}</p>
           </div>
-        </label>
-        <label className="block text-sm font-medium text-neutral-700">
-          Repetir contraseña
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={6}
-            value={password2}
-            onChange={(e) => setPassword2(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
-          />
-        </label>
+        </div>
+        <PasswordInput
+          label="Repetir contraseña"
+          autoComplete="new-password"
+          required
+          minLength={6}
+          value={password2}
+          onChange={setPassword2}
+        />
         <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-neutral-700">
           Al verificar tu correo, recuerda constituir tu garantía para habilitar participación en remates ({SITE.guaranteeAmountDisplay}).
           Puedes enviar comprobante por WhatsApp o a <strong>{SITE.pagosEmail}</strong>.

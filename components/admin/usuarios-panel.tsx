@@ -630,22 +630,12 @@ export function UsuariosPanel() {
       const newPassword = editModal.password.trim();
       if (newPassword.length > 0) {
         if (newPassword.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
-        const pub = getPublicSupabaseEnv();
-        if (!pub) throw new Error("Faltan variables de entorno del servidor");
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) throw new Error("Sesión caducada");
-        const resp = await fetch(`${pub.url}/functions/v1/update-user-password`, {
+        const resp = await fetch("/api/admin/users/password", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: pub.key,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: editModal.userId, password: newPassword }),
         });
-        const json = (await resp.json()) as { error?: string };
+        const json = (await resp.json().catch(() => ({}))) as { error?: string };
         if (!resp.ok || json.error) {
           throw new Error(friendlyCreateError(json.error || "Error al actualizar contraseña"));
         }
@@ -666,25 +656,12 @@ export function UsuariosPanel() {
     const fd = new FormData(ev.currentTarget);
     const password = String(fd.get("password") ?? "");
     try {
-      const supabase = createClient();
-      if (!supabase) throw new Error("Servicio no disponible");
-      const pub = getPublicSupabaseEnv();
-      if (!pub) throw new Error("Faltan variables de entorno del servidor");
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión caducada");
-
-      const res = await fetch(`${pub.url}/functions/v1/update-user-password`, {
+      const res = await fetch("/api/admin/users/password", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: pub.key,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: pwModal.userId, password }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok || json.error) throw new Error(friendlyCreateError(json.error || "Error al actualizar"));
       await markPasswordChangeRequired(pwModal.email);
       setPwModal(null);

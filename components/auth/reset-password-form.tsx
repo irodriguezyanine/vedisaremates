@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
+import { PasswordInput } from "@/components/auth/password-input";
 import { createClient } from "@/lib/supabase/client";
 
 export function ResetPasswordForm() {
@@ -116,30 +117,22 @@ export function ResetPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-      <label className="block text-sm font-medium text-neutral-700">
-        Nueva contraseña
-        <input
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={6}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
-        />
-      </label>
-      <label className="block text-sm font-medium text-neutral-700">
-        Repetir nueva contraseña
-        <input
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={6}
-          value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
-        />
-      </label>
+      <PasswordInput
+        label="Nueva contraseña"
+        autoComplete="new-password"
+        required
+        minLength={6}
+        value={password}
+        onChange={setPassword}
+      />
+      <PasswordInput
+        label="Repetir nueva contraseña"
+        autoComplete="new-password"
+        required
+        minLength={6}
+        value={password2}
+        onChange={setPassword2}
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
       <button

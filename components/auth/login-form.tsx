@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+import { PasswordInput } from "@/components/auth/password-input";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
@@ -89,17 +90,7 @@ export function LoginForm() {
           className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
         />
       </label>
-      <label className="block text-sm font-medium text-neutral-700">
-        Contraseña
-        <input
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900 shadow-sm focus:border-[#33C7E3] focus:outline-none focus:ring-1 focus:ring-[#33C7E3]"
-        />
-      </label>
+      <PasswordInput label="Contraseña" value={password} onChange={setPassword} required autoComplete="current-password" />
       <p className="-mt-1 text-right text-sm">
         <Link href="/recuperar-clave" className="font-semibold text-[#009ade] hover:underline">
           ¿Se te olvidó la contraseña?
