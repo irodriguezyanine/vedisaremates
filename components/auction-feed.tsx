@@ -12,6 +12,7 @@ import { catalogoHref } from "@/lib/site-config";
 
 type AuctionTab = "actuales" | "proximas" | "cerradas";
 type EstadoFiltro = "actual" | "upcoming" | "cerrado";
+const AUCTION_TAB_STORAGE_KEY = "home-auction-tab";
 
 const DEMO_LOTES = [
   {
@@ -355,9 +356,8 @@ function DemoRemateLotsStrip() {
 
 export function AuctionFeed() {
   const cat = catalogoHref();
-  // Mostramos "Próximas" por defecto para visibilizar remates recién sincronizados
-  // que aún no están en curso.
-  const [tab, setTab] = useState<AuctionTab>("proximas");
+  // Por defecto siempre "Actuales". Si el usuario cambia manualmente, persistimos su preferencia.
+  const [tab, setTab] = useState<AuctionTab>("actuales");
   const [sub, setSub] = useState<EstadoFiltro>("actual");
   const [bundle, setBundle] = useState<
     | { kind: "loading" }
@@ -366,6 +366,14 @@ export function AuctionFeed() {
   >({ kind: "loading" });
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(AUCTION_TAB_STORAGE_KEY);
+      if (saved === "actuales" || saved === "proximas" || saved === "cerradas") {
+        setTab(saved);
+      }
+    } catch {
+      // no-op
+    }
     async function pull() {
       if (!isSupabaseConfigured()) {
         setBundle({ kind: "demo" });
@@ -393,6 +401,14 @@ export function AuctionFeed() {
     }
     void pull();
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AUCTION_TAB_STORAGE_KEY, tab);
+    } catch {
+      // no-op
+    }
+  }, [tab]);
 
   const useDemo = bundle.kind === "demo";
   const liveRows = bundle.kind === "live" ? bundle.rows : [];
@@ -531,7 +547,7 @@ export function AuctionFeed() {
                         <span className="font-medium text-neutral-800">Administración → Remates y lotes</span>.
                       </>
                     )
-                  : "Son los mismos remates que gestionas en el panel administrativo y que los participantes ven en línea."}
+                  : "Encuentra aquí remates actuales, próximos y cerrados para seguir participando cuando quieras."}
             </p>
           </div>
           {useDemo ? (
@@ -594,13 +610,22 @@ export function AuctionFeed() {
           </div>
         ) : slicedLive.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/80 px-6 py-14 text-center">
-            <p className="text-neutral-700">
-              No hay remates en esta categoría aún. Crea o publica eventos desde{" "}
-              <strong className="font-semibold text-neutral-900">Administración → Remates y lotes</strong>.
+            <p className="text-neutral-800">
+              {tab === "actuales"
+                ? "Por ahora no hay subastas activas en este momento."
+                : tab === "proximas"
+                  ? "Aún no hay subastas próximas publicadas."
+                  : "Todavía no hay subastas cerradas para mostrar en el historial."}
             </p>
-            <Link href="/subastas" className="mt-4 inline-block font-bold text-[#009ade] hover:underline">
-              Abrir sala de subastas →
-            </Link>
+            <p className="mt-2 text-sm text-neutral-600">Te avisaremos en cuanto existan nuevas oportunidades para ofertar.</p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <Link href="/subastas" className="inline-block font-bold text-[#009ade] hover:underline">
+                Ir a sala de subastas →
+              </Link>
+              <Link href={cat} target="_blank" rel="noopener noreferrer" className="inline-block font-bold text-[#009ade] hover:underline">
+                Ver catálogo completo →
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="mx-auto flex max-w-5xl flex-col gap-7">
