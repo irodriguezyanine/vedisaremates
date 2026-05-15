@@ -52,6 +52,17 @@ type TasacionesRemateRow = {
   estado: string | null;
 };
 
+function normalizeDigits(value: string): string {
+  return value.replace(/\D/g, "").replace(/^0+/, "");
+}
+
+function extractEventNumberCandidate(title: string, sourceEventNumber: string): string {
+  const fromEvent = normalizeDigits(String(sourceEventNumber ?? ""));
+  if (fromEvent) return fromEvent;
+  const match = String(title ?? "").match(/#\s*([0-9]+)/);
+  return normalizeDigits(match?.[1] ?? "");
+}
+
 function buildPortalState(startsAtIso: string, endsAtIso: string, tasacionesState: string | null): "publicado" | "en_curso" | "cerrado" {
   const now = Date.now();
   const startMs = new Date(startsAtIso).getTime();
@@ -68,16 +79,24 @@ function buildPortalState(startsAtIso: string, endsAtIso: string, tasacionesStat
 async function reconcileTasacionesRematesMirror(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   maxRows: number,
-): Promise<{ mirrored: number; removed: number }> {
-  const sourceLimit = Math.max(1, Math.min(maxRows, 20000));
-  const { data: sourceRows, error: sourceError } = await admin
-    .from("remates")
-    .select("id, numero_remate, descripcion, fecha_hora_inicio, fecha_hora_cierre, fecha_hora_remate, estado")
-    .order("created_at", { ascending: false })
-    .limit(sourceLimit);
-  if (sourceError) throw new Error(`Error leyendo remates compartidos: ${sourceError.message}`);
+  strictCleanup: boolean,
+): Promise<{ mirrored: number; removed: number; linked: number; orphaned: number }> {
+  const sourceLimit = Math.max(1, Math.min(maxRows, 50000));
+  const pageSize = 1000;
+  const rows: TasacionesRemateRow[] = [];
+  for (let offset = 0; offset < sourceLimit; offset += pageSize) {
+    const upper = Math.min(sourceLimit - 1, offset + pageSize - 1);
+    const { data: sourceRows, error: sourceError } = await admin
+      .from("remates")
+      .select("id, numero_remate, descripcion, fecha_hora_inicio, fecha_hora_cierre, fecha_hora_remate, estado")
+      .order("created_at", { ascending: false })
+      .range(offset, upper);
+    if (sourceError) throw new Error(`Error leyendo remates compartidos: ${sourceError.message}`);
+    const chunk = (sourceRows ?? []) as TasacionesRemateRow[];
+    rows.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
 
-  const rows = (sourceRows ?? []) as TasacionesRemateRow[];
   const payload = rows
     .filter((row) => row?.id)
     .map((row) => {
@@ -100,23 +119,84 @@ async function reconcileTasacionesRematesMirror(
       };
     });
 
+  const sourceById = new Set(payload.map((row) => row.tasaciones_remate_id));
+  const sourceByNumber = new Map<string, string>();
+  for (const row of rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id) continue;
+    const key = normalizeDigits(String(row.numero_remate ?? ""));
+    if (!key) continue;
+    sourceByNumber.set(key, id);
+  }
+
   if (payload.length) {
     const { error: upsertError } = await admin.from("portal_remates").upsert(payload, { onConflict: "tasaciones_remate_id" });
     if (upsertError) throw new Error(`Error espejando remates en portal: ${upsertError.message}`);
   }
 
-  const sourceIds = new Set(payload.map((row) => row.tasaciones_remate_id));
-  const { data: portalTasRows, error: portalTasError } = await admin
-    .from("portal_remates")
-    .select("id, tasaciones_remate_id")
-    .eq("source_system", "tasaciones")
-    .not("tasaciones_remate_id", "is", null)
-    .limit(20000);
-  if (portalTasError) throw new Error(`Error leyendo espejo de portal: ${portalTasError.message}`);
+  const orphanCandidates: Array<{ id: string; eventNumber: string }> = [];
+  for (let offset = 0; offset < 50000; offset += pageSize) {
+    const upper = offset + pageSize - 1;
+    const { data: orphanChunk, error: orphanError } = await admin
+      .from("portal_remates")
+      .select("id, titulo, source_event_number")
+      .eq("source_system", "tasaciones")
+      .is("tasaciones_remate_id", null)
+      .range(offset, upper);
+    if (orphanError) throw new Error(`Error leyendo remates huérfanos de portal: ${orphanError.message}`);
+    const rowsChunk = (orphanChunk ?? []) as Array<{
+      id: string | null;
+      titulo: string | null;
+      source_event_number: string | null;
+    }>;
+    for (const row of rowsChunk) {
+      const id = String(row.id ?? "").trim();
+      if (!id) continue;
+      orphanCandidates.push({
+        id,
+        eventNumber: extractEventNumberCandidate(String(row.titulo ?? ""), String(row.source_event_number ?? "")),
+      });
+    }
+    if (rowsChunk.length < pageSize) break;
+  }
 
-  const stalePortalIds = ((portalTasRows ?? []) as Array<{ id: string | null; tasaciones_remate_id: string | null }>)
-    .filter((row) => row.id && row.tasaciones_remate_id && !sourceIds.has(String(row.tasaciones_remate_id)))
+  let linked = 0;
+  const unresolvedOrphans: string[] = [];
+  for (const orphan of orphanCandidates) {
+    const targetTasId = orphan.eventNumber ? sourceByNumber.get(orphan.eventNumber) : undefined;
+    if (targetTasId && sourceById.has(targetTasId)) {
+      const { error: linkError } = await admin
+        .from("portal_remates")
+        .update({ tasaciones_remate_id: targetTasId, source_event_number: orphan.eventNumber || null })
+        .eq("id", orphan.id);
+      if (linkError) throw new Error(`Error vinculando remate huérfano ${orphan.id}: ${linkError.message}`);
+      linked += 1;
+    } else {
+      unresolvedOrphans.push(orphan.id);
+    }
+  }
+
+  const portalRows: Array<{ id: string | null; tasaciones_remate_id: string | null }> = [];
+  for (let offset = 0; offset < 50000; offset += pageSize) {
+    const upper = offset + pageSize - 1;
+    const { data: portalChunk, error: portalTasError } = await admin
+      .from("portal_remates")
+      .select("id, tasaciones_remate_id")
+      .not("tasaciones_remate_id", "is", null)
+      .range(offset, upper);
+    if (portalTasError) throw new Error(`Error leyendo espejo de portal: ${portalTasError.message}`);
+    const rowsChunk = (portalChunk ?? []) as Array<{ id: string | null; tasaciones_remate_id: string | null }>;
+    portalRows.push(...rowsChunk);
+    if (rowsChunk.length < pageSize) break;
+  }
+
+  const stalePortalIds = portalRows
+    .filter((row) => row.id && row.tasaciones_remate_id && !sourceById.has(String(row.tasaciones_remate_id)))
     .map((row) => String(row.id));
+
+  if (strictCleanup && unresolvedOrphans.length) {
+    stalePortalIds.push(...unresolvedOrphans);
+  }
 
   let removed = 0;
   for (let i = 0; i < stalePortalIds.length; i += 200) {
@@ -126,7 +206,12 @@ async function reconcileTasacionesRematesMirror(
     removed += chunk.length;
   }
 
-  return { mirrored: payload.length, removed };
+  return {
+    mirrored: payload.length,
+    removed,
+    linked,
+    orphaned: unresolvedOrphans.length,
+  };
 }
 
 export async function GET() {
@@ -183,7 +268,7 @@ export async function POST(req: Request) {
 
     let mirror: { mirrored: number; removed: number } | null = null;
     try {
-      mirror = await reconcileTasacionesRematesMirror(admin, fullSync ? 10000 : 3000);
+      mirror = await reconcileTasacionesRematesMirror(admin, fullSync ? 50000 : 10000, fullSync);
     } catch (mirrorError) {
       const formatted = formatApiError(mirrorError, "No se pudo reconciliar espejo de remates.");
       if (fullSync) {
