@@ -381,12 +381,22 @@ export function UsuariosPanel() {
       setLoadErr("El acceso a datos no está configurado en este entorno.");
       return;
     }
-    const { data, error } = await supabase.rpc("listar_usuarios");
-    if (error) {
-      setLoadErr("No se pudo cargar el listado. Verifique permisos o vuelva a intentarlo.");
+    const listRes = await fetch("/api/admin/users/list", { cache: "no-store" });
+    const listJson = (await listRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      rows?: ListaUsuarioRow[];
+      error?: string;
+    };
+    if (!listRes.ok || !listJson.ok || !Array.isArray(listJson.rows)) {
+      const reason = normalize(String(listJson.error ?? ""));
+      if (reason.includes("forbidden") || reason.includes("unauthorized")) {
+        setLoadErr("No se pudo cargar el listado. Tu perfil no tiene permisos para esta sección.");
+      } else {
+        setLoadErr("No se pudo cargar el listado. Verifique permisos o vuelva a intentarlo.");
+      }
       return;
     }
-    const rows = (((data ?? []) as ListaUsuarioRow[]) || []).map((u) => ({ ...u }));
+    const rows = ((listJson.rows ?? []) as ListaUsuarioRow[]).map((u) => ({ ...u }));
     const ids = rows.map((u) => String(u.id ?? "").trim()).filter(Boolean);
     if (!ids.length) {
       setUsers(rows);
