@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
@@ -9,7 +10,9 @@ export default function RestablecerClavePage() {
         <h1 className="text-2xl font-bold text-neutral-900">Restablecer contraseña</h1>
         <p className="mt-2 text-neutral-600">Define una nueva contraseña para tu cuenta de VEDISA Remates.</p>
       </div>
-      <ResetPasswordForm />
+      <Suspense fallback={<p className="text-sm text-neutral-500">Validando enlace…</p>}>
+        <ResetPasswordForm />
+      </Suspense>
       <Link href="/ingreso" className="font-semibold text-[#33C7E3] hover:underline">
         ← Volver a ingreso
       </Link>

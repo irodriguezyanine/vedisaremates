@@ -24,11 +24,12 @@ export function ResetPasswordForm() {
   useEffect(() => {
     let cancelled = false;
     if (!supabase) return;
+    const client = supabase;
 
     async function verifySession() {
       try {
         if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
           if (exchangeError && !cancelled) {
             setError("El enlace de recuperación es inválido o ya expiró.");
           }
@@ -36,7 +37,7 @@ export function ResetPasswordForm() {
 
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await client.auth.getSession();
         if (!cancelled) setReady(Boolean(session));
       } finally {
         if (!cancelled) setVerifying(false);
@@ -45,7 +46,7 @@ export function ResetPasswordForm() {
 
     void verifySession();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: sub } = client.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         setReady(Boolean(session));
       }
