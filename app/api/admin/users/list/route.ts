@@ -25,7 +25,14 @@ export async function GET() {
   const role = String(profile?.rol ?? "").trim().toLowerCase();
   if (!isPrivilegedRole(role)) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
 
-  // Camino A (preferido): SERVICE_ROLE presente => ignora diferencias de RLS entre entornos.
+  // Camino A (preferido): usar el RPC del proyecto para respetar la lógica histórica
+  // de clasificación/filtrado de usuarios que espera el panel.
+  const { data: rpcRows, error: rpcError } = await supabase.rpc("listar_usuarios");
+  if (!rpcError && Array.isArray(rpcRows)) {
+    return NextResponse.json({ ok: true, rows: (rpcRows as ListaUsuarioRow[]) || [] });
+  }
+
+  // Camino B (fallback técnico): SERVICE_ROLE presente => evita caída total si el RPC falla.
   const admin = createAdminClient();
   if (admin) {
     const profileRows: ListaUsuarioRow[] = [];
@@ -61,13 +68,14 @@ export async function GET() {
       ...p,
       email: authUsersById.get(String(p.id)) ?? null,
     }));
-    return NextResponse.json({ ok: true, rows });
+    return NextResponse.json({
+      ok: true,
+      rows,
+      source: "fallback_admin_profiles",
+      note: rpcError?.message ?? null,
+    });
   }
 
-  // Camino B (fallback): RPC legacy del proyecto.
-  const { data, error } = await supabase.rpc("listar_usuarios");
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ok: true, rows: ((data ?? []) as ListaUsuarioRow[]) || [] });
+  return NextResponse.json({ ok: false, error: rpcError?.message ?? "listar_usuarios_no_disponible" }, { status: 500 });
 }
 
