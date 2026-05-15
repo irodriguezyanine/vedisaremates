@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -37,13 +36,12 @@ export async function POST(request: Request) {
     : [];
   if (!userIds.length) return NextResponse.json({ ok: true, rows: [] });
 
-  const admin = createAdminClient();
-  if (!admin) return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
-
   const allRows: Array<{ id: string; garantia_aprobada: boolean | null }> = [];
   for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
     const chunk = userIds.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await admin.from("profiles").select("id, garantia_aprobada").in("id", chunk);
+    // Usar el mismo contexto de sesión/base que el panel y la puja para evitar
+    // desalineaciones visuales de garantía entre admin y subastas.
+    const { data, error } = await supabase.from("profiles").select("id, garantia_aprobada").in("id", chunk);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     for (const row of (data ?? []) as Array<{ id: string; garantia_aprobada: boolean | null }>) {
       allRows.push(row);
