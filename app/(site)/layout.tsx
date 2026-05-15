@@ -14,6 +14,7 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
       data: { user },
     } = await supabase.auth.getUser();
     userId = user?.id ?? null;
+    const emailVerificado = Boolean(user?.email_confirmed_at);
 
     if (userId) {
       const { data: profile } = await supabase
@@ -23,7 +24,7 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
         .maybeSingle();
 
       const isAdmin = String(profile?.rol ?? "").toLowerCase() === "admin";
-      showGarantiaBanner = !isAdmin && profile?.garantia_aprobada !== true;
+      showGarantiaBanner = emailVerificado && !isAdmin && profile?.garantia_aprobada !== true;
     }
   }
 

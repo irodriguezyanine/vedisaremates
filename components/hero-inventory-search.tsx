@@ -8,6 +8,14 @@ import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type InventarioAnyRow = InventarioRow & Record<string, unknown>;
 type BoolFilter = "todos" | "si" | "no";
+type LoteJoinRow = {
+  inventario: InventarioAnyRow | InventarioAnyRow[] | null;
+  portal_remates: { estado?: string | null; titulo?: string | null; descripcion?: string | null } | Array<{
+    estado?: string | null;
+    titulo?: string | null;
+    descripcion?: string | null;
+  }> | null;
+};
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -34,6 +42,11 @@ function parseBoolish(value: unknown): boolean | null {
   return null;
 }
 
+function unwrapEmb<T>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null;
+  return Array.isArray(v) ? (v[0] ?? null) : v;
+}
+
 function rowMatchesText(row: InventarioAnyRow, query: string): boolean {
   const q = normalize(query);
   if (!q) return true;
@@ -56,7 +69,7 @@ function rowMatchesBoolFilter(row: InventarioAnyRow, keys: string[], filter: Boo
   return false;
 }
 
-const MAX_FETCH = 800;
+const MAX_FETCH = 4000;
 const MAX_RENDER = 12;
 
 export function HeroInventorySearch() {
@@ -105,30 +118,34 @@ export function HeroInventorySearch() {
 
     setLoading(true);
     try {
-      let query = sb.from("inventario").select("*").order("created_at", { ascending: false }).limit(MAX_FETCH);
       const searchToken = normalizeSearchToken(q);
-      if (searchToken.length >= 2) {
-        const ilike = `%${searchToken}%`;
-        // Filtro de servidor por columnas comunes; luego refinamos en cliente con "cualquier campo".
-        query = query.or(
-          [
-            `patente.ilike.${ilike}`,
-            `marca.ilike.${ilike}`,
-            `modelo.ilike.${ilike}`,
-            `descripcion.ilike.${ilike}`,
-            `categoria.ilike.${ilike}`,
-            `estado.ilike.${ilike}`,
-          ].join(","),
-        );
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await sb
+        .from("portal_remate_lotes")
+        .select(
+          `
+          inventario(*),
+          portal_remates(estado,titulo,descripcion)
+        `,
+        )
+        .order("created_at", { ascending: false })
+        .limit(MAX_FETCH);
       if (error) {
         setErr("No se pudo consultar inventario. Intenta nuevamente.");
         setRows([]);
         return;
       }
-      let result = ((data ?? []) as InventarioAnyRow[]) ?? [];
+
+      const byId = new Map<string, InventarioAnyRow>();
+      for (const raw of ((data ?? []) as LoteJoinRow[])) {
+        const remate = unwrapEmb(raw.portal_remates);
+        const estado = normalize(remate?.estado);
+        if (!["publicado", "en_curso", "cerrado"].includes(estado)) continue;
+        const inv = unwrapEmb(raw.inventario);
+        if (!inv?.id) continue;
+        if (!byId.has(String(inv.id))) byId.set(String(inv.id), inv);
+      }
+
+      let result = [...byId.values()];
 
       if (searchToken) result = result.filter((row) => rowMatchesText(row, searchToken));
       if (marca.trim()) result = result.filter((row) => normalize(row.marca).includes(normalize(marca)));
