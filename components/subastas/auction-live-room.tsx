@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
+import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
 import { formatClp } from "@/lib/format-clp";
 import type {
   InventarioRow,
@@ -125,6 +126,7 @@ export function AuctionLiveRoom({
   fichaDisplayConfig,
   initialActiveLoteId = null,
 }: Props) {
+  const { confirm, dialogElement } = useStyledDialogs();
   const searchParams = useSearchParams();
 
   const [remate, setRemate] = useState(initialRemate);
@@ -318,15 +320,23 @@ export function AuctionLiveRoom({
       `Mínimo sugerido: ${formatClp(minNext)}`,
       topForActive ? `Oferta líder actual: ${formatClp(topForActive.monto)}` : "Aún no hay oferta líder.",
     ].join("\n");
-    const confirmBid = window.confirm(summaryMsg);
+    const confirmBid = await confirm({
+      title: "Confirme su oferta",
+      message: summaryMsg.replace("Confirme su oferta\n\n", ""),
+      confirmText: "Confirmar oferta",
+      cancelText: "Cancelar",
+    });
     if (!confirmBid) {
       setBusy(false);
       return;
     }
     if (monto >= minNext * hiConfirmFactor) {
-      const ok = window.confirm(
-        `Tu oferta ${formatClp(monto)} es alta respecto del mínimo (${formatClp(minNext)}). ¿Confirmas enviarla?`,
-      );
+      const ok = await confirm({
+        title: "Oferta alta",
+        message: `Tu oferta ${formatClp(monto)} es alta respecto del mínimo (${formatClp(minNext)}).\n¿Confirmas enviarla?`,
+        confirmText: "Sí, enviar",
+        cancelText: "Revisar",
+      });
       if (!ok) {
         setBusy(false);
         return;
@@ -931,6 +941,7 @@ export function AuctionLiveRoom({
           ) : null}
         </div>
       )}
+      {dialogElement}
     </div>
   );
 }

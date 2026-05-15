@@ -5,6 +5,7 @@ import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useS
 import type { ListaUsuarioRow } from "@/lib/portal-types";
 import { ADMIN_CREATABLE_ROLES, formatRoleLabel } from "@/lib/role-labels";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
+import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
@@ -323,6 +324,7 @@ async function forceRoleByEmail(email: string, rol: string, sb = createClient())
 }
 
 export function UsuariosPanel() {
+  const { confirm, dialogElement } = useStyledDialogs();
   const [users, setUsers] = useState<ListaUsuarioRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -1194,7 +1196,14 @@ export function UsuariosPanel() {
 
   async function bulkDeleteSelected() {
     if (!selectedIds.size || bulkBusy) return;
-    if (!window.confirm(`¿Eliminar ${selectedIds.size} usuarios seleccionados? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirm({
+      title: "Eliminar usuarios",
+      message: `¿Eliminar ${selectedIds.size} usuarios seleccionados?\n\nEsta acción no se puede deshacer.`,
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBulkBusy(true);
     setBulkMsg(null);
     setLoadErr(null);
@@ -2016,6 +2025,7 @@ export function UsuariosPanel() {
           </div>
         </div>
       ) : null}
+      {dialogElement}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from
 
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
+import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 
@@ -153,6 +154,7 @@ function formatUiError(error: unknown, fallback: string): string {
 }
 
 export function RematesList() {
+  const { confirm, prompt, dialogElement } = useStyledDialogs();
   const [items, setItems] = useState<PortalRemateRow[]>([]);
   const [vehicleCountByRemate, setVehicleCountByRemate] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -299,9 +301,12 @@ export function RematesList() {
   }
 
   async function eliminarRemate(r: PortalRemateRow) {
-    const cerrarPrimero = window.confirm(
-      `¿Quieres cerrar y despublicar «${r.titulo}»? Recomendado para evitar pérdidas de sincronización.`,
-    );
+    const cerrarPrimero = await confirm({
+      title: "Confirmar acción",
+      message: `¿Quieres cerrar y despublicar «${r.titulo}»?\n\nRecomendado para evitar pérdidas de sincronización.`,
+      confirmText: "Cerrar y despublicar",
+      cancelText: "No, continuar",
+    });
     if (cerrarPrimero) {
       const sb = createClient();
       if (!sb) {
@@ -319,12 +324,26 @@ export function RematesList() {
       }
       return;
     }
-    const confirmDelete = window.confirm(
-      `Vas a eliminar permanentemente «${r.titulo}». ¿Confirmas borrado definitivo?`,
-    );
+    const confirmDelete = await confirm({
+      title: "Eliminar remate",
+      message: `Vas a eliminar permanentemente «${r.titulo}».\n¿Confirmas borrado definitivo?`,
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
     if (!confirmDelete) return;
-    const typed = window.prompt("Escribe ELIMINAR para confirmar el borrado permanente");
-    if (typed !== "ELIMINAR") return;
+    const typed = await prompt({
+      title: "Confirmación final",
+      message: "Escribe ELIMINAR para confirmar el borrado permanente.",
+      placeholder: "ELIMINAR",
+      confirmText: "Confirmar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (String(typed ?? "").trim().toUpperCase() !== "ELIMINAR") {
+      setErr("Confirmación inválida. Debes escribir ELIMINAR para borrar el remate.");
+      return;
+    }
 
     setErr(null);
     setDeletingId(r.id);
@@ -570,6 +589,7 @@ export function RematesList() {
           </button>
         </div>
       </div>
+      {dialogElement}
     </div>
   );
 }

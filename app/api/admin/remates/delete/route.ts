@@ -40,7 +40,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, removed: false, reason: "not_found" });
   }
 
-  const tasacionesRemateId = String(row.tasaciones_remate_id ?? "").trim();
+  let tasacionesRemateId = String(row.tasaciones_remate_id ?? "").trim();
+
+  // Fallback para datos históricos: inferir vínculo Tasaciones desde lotes vinculados.
+  if (!tasacionesRemateId) {
+    const { data: linkedLote } = await admin
+      .from("portal_remate_lotes")
+      .select("tasaciones_remate_item_id")
+      .eq("remate_id", remateId)
+      .not("tasaciones_remate_item_id", "is", null)
+      .limit(1)
+      .maybeSingle<{ tasaciones_remate_item_id: string | null }>();
+    const tasacionesItemId = String(linkedLote?.tasaciones_remate_item_id ?? "").trim();
+    if (tasacionesItemId) {
+      const { data: sharedItem } = await admin
+        .from("remates_items")
+        .select("remate_id")
+        .eq("id", tasacionesItemId)
+        .maybeSingle<{ remate_id: string | null }>();
+      tasacionesRemateId = String(sharedItem?.remate_id ?? "").trim();
+    }
+  }
 
   // Si está vinculado a tablas compartidas, eliminamos primero esos registros.
   if (tasacionesRemateId) {
@@ -79,7 +99,44 @@ export async function POST(req: Request) {
     }
   }
 
-  await admin.from("portal_remate_lotes").delete().eq("remate_id", remateId);
+  const { data: loteRows, error: lotesFetchError } = await admin
+    .from("portal_remate_lotes")
+    .select("id")
+    .eq("remate_id", remateId);
+  if (lotesFetchError) {
+    return NextResponse.json({ ok: false, error: `No se pudieron consultar lotes: ${lotesFetchError.message}` }, { status: 500 });
+  }
+  const loteIds = (loteRows ?? []).map((row) => String(row.id ?? "")).filter(Boolean);
+  if (loteIds.length) {
+    const { error: deleteOffersError } = await admin.from("portal_ofertas").delete().in("lote_id", loteIds);
+    if (deleteOffersError) {
+      return NextResponse.json(
+        { ok: false, error: `No se pudieron eliminar ofertas del remate: ${deleteOffersError.message}` },
+        { status: 500 },
+      );
+    }
+    const { error: deleteProxyError } = await admin.from("portal_proxy_bids").delete().in("lote_id", loteIds);
+    if (deleteProxyError) {
+      return NextResponse.json(
+        { ok: false, error: `No se pudieron eliminar pujas automáticas: ${deleteProxyError.message}` },
+        { status: 500 },
+      );
+    }
+    const { error: deleteFavoritesError } = await admin.from("portal_lote_favoritos").delete().in("lote_id", loteIds);
+    if (deleteFavoritesError) {
+      return NextResponse.json(
+        { ok: false, error: `No se pudieron eliminar favoritos vinculados: ${deleteFavoritesError.message}` },
+        { status: 500 },
+      );
+    }
+  }
+  const { error: deleteLotesError } = await admin.from("portal_remate_lotes").delete().eq("remate_id", remateId);
+  if (deleteLotesError) {
+    return NextResponse.json(
+      { ok: false, error: `No se pudieron eliminar lotes del remate: ${deleteLotesError.message}` },
+      { status: 500 },
+    );
+  }
   const { error: deletePortalError } = await admin.from("portal_remates").delete().eq("id", remateId);
   if (deletePortalError) {
     return NextResponse.json(

@@ -7,6 +7,7 @@ import { formatClp } from "@/lib/format-clp";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { firstGlo3dViewerUrl, preferredThumbnailUrl } from "@/lib/inventario-media";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
+import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
@@ -33,6 +34,7 @@ function escapedIlike(term: string) {
 }
 
 export function RemateEditor({ remateId }: { remateId: string }) {
+  const { confirm, dialogElement } = useStyledDialogs();
   const [remate, setRemate] = useState<PortalRemateRow | null>(null);
   const [lotes, setLotes] = useState<PortalRemateLoteRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -236,7 +238,14 @@ export function RemateEditor({ remateId }: { remateId: string }) {
   }
 
   async function removeLote(id: string) {
-    if (!window.confirm("¿Eliminar este lote?")) return;
+    const ok = await confirm({
+      title: "Eliminar lote",
+      message: "¿Eliminar este lote?",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    });
+    if (!ok) return;
     const sb = createClient();
     if (!sb) {
       setErr("Servicio de datos no disponible.");
@@ -761,6 +770,7 @@ export function RemateEditor({ remateId }: { remateId: string }) {
           </div>
         </div>
       ) : null}
+      {dialogElement}
     </div>
   );
 }
