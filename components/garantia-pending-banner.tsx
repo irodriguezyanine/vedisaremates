@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+
+import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   userId: string | null;
@@ -8,7 +11,43 @@ type Props = {
 };
 
 export function GarantiaPendingBanner({ userId, show }: Props) {
-  if (!show) return null;
+  const [visible, setVisible] = useState(show);
+
+  useEffect(() => {
+    setVisible(show);
+  }, [show]);
+
+  useEffect(() => {
+    if (!show || !userId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    if (!supabase) return;
+
+    const syncGarantiaState = async () => {
+      const { data, error } = await supabase.from("profiles").select("garantia_aprobada").eq("id", userId).maybeSingle();
+      if (cancelled || error) return;
+      if (data?.garantia_aprobada === true) {
+        setVisible(false);
+      }
+    };
+
+    void syncGarantiaState();
+    const intervalId = window.setInterval(() => {
+      void syncGarantiaState();
+    }, 20000);
+    const onFocus = () => {
+      void syncGarantiaState();
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [show, userId]);
+
+  if (!visible) return null;
 
   return (
     <section className="border-b border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50">
