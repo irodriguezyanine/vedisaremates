@@ -62,8 +62,12 @@ export function RegisterForm() {
           origin: typeof window !== "undefined" ? window.location.origin : "",
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+      const data = (await res.json()) as { ok?: boolean; error?: string; message?: string; detail?: string };
       if (!res.ok || !data?.ok) {
+        if (data?.error === "link_no_generado" || data?.error === "link_invalido") {
+          setError("No se pudo generar el enlace de verificación. Intenta nuevamente en unos minutos.");
+          return;
+        }
         const map: Record<string, string> = {
           email_invalido: "Correo inválido.",
           username_invalido:

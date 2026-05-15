@@ -77,6 +77,16 @@ function genericSuccess() {
   });
 }
 
+function shouldReturnNeutralSignupError(errorMessage: string): boolean {
+  const text = String(errorMessage ?? "").toLowerCase();
+  return (
+    text.includes("already registered") ||
+    text.includes("user already exists") ||
+    text.includes("email rate limit exceeded") ||
+    text.includes("for security purposes")
+  );
+}
+
 function enforceRematesRedirect(actionLink: string, siteOrigin: string): string {
   try {
     const url = new URL(actionLink);
@@ -373,8 +383,11 @@ export async function POST(request: Request) {
   });
 
   if (error) {
-    // Evita enumeración de cuentas: respuesta neutral.
-    return genericSuccess();
+    if (shouldReturnNeutralSignupError(error.message)) return genericSuccess();
+    return NextResponse.json(
+      { ok: false, error: "link_no_generado", detail: error.message },
+      { status: 500 },
+    );
   }
 
   const rawActionLink = data?.properties?.action_link;
@@ -383,7 +396,7 @@ export async function POST(request: Request) {
     await forceClienteRemateRole(admin, userId, nombre, apellido, username);
   }
   if (!rawActionLink) {
-    return genericSuccess();
+    return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
   }
   const actionLink = enforceRematesRedirect(rawActionLink, siteOrigin);
 
@@ -396,7 +409,10 @@ export async function POST(request: Request) {
   });
 
   if (!sent.ok) {
-    return NextResponse.json({ ok: false, error: "mail_no_enviado" }, { status: 502 });
+    return NextResponse.json(
+      { ok: false, error: "mail_no_enviado", detail: sent.error },
+      { status: 502 },
+    );
   }
 
   return genericSuccess();
