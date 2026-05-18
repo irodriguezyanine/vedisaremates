@@ -12,6 +12,18 @@ type Row = InventarioRow & Record<string, unknown>;
 
 const PAGE_SIZE = 1000;
 
+function formatPrecioInput(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  return `$${Math.max(0, Math.trunc(value)).toLocaleString("es-CL")}`;
+}
+
+function parsePrecioInput(raw: string): number | null {
+  const digits = String(raw ?? "").replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const n = Number.parseInt(digits, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function fetchAllInventarioRows(supabase: NonNullable<ReturnType<typeof createClient>>): Promise<Row[]> {
   const out: Row[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
@@ -202,17 +214,19 @@ export function InventarioPanel() {
                 <td className="whitespace-nowrap px-3 py-2 text-[#FFC600]">{formatClp(r.valor_minimo as number | null)}</td>
                 <td className="px-3 py-2">
                   <input
-                    type="number"
-                    defaultValue={r.precio_minimo_remate ?? ""}
+                    type="text"
+                    inputMode="numeric"
+                    defaultValue={formatPrecioInput(r.precio_minimo_remate)}
                     placeholder="Sin mínimo"
-                    min={0}
                     onBlur={(e) => {
                       const raw = e.target.value.trim();
-                      const value = raw === "" ? null : Number(raw);
-                      if (raw !== "") {
-                        if (value == null || !Number.isFinite(value) || value < 0) return;
+                      const value = parsePrecioInput(raw);
+                      if (raw !== "" && value == null) return;
+                      if (Number(r.precio_minimo_remate ?? -1) === Number(value ?? -1)) {
+                        e.target.value = formatPrecioInput(value);
+                        return;
                       }
-                      if (Number(r.precio_minimo_remate ?? -1) === Number(value ?? -1)) return;
+                      e.target.value = formatPrecioInput(value);
                       void updatePrecioMinimoRemate(String(r.id), value as number | null);
                     }}
                     className="w-36 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white disabled:opacity-60"
