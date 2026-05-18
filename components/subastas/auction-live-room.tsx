@@ -62,6 +62,28 @@ function isAdminLikeRole(role: string): boolean {
   );
 }
 
+function formatOfferUserName(
+  row: Pick<PortalOfertaRow, "user_id">,
+  namesById: Record<string, string>,
+): string {
+  const userId = String(row.user_id ?? "").trim();
+  if (!userId) return "Usuario";
+  const fromMap = String(namesById[userId] ?? "").trim();
+  if (fromMap) return fromMap;
+  return `Usuario ${userId.slice(0, 8)}`;
+}
+
+type OfferUserCard = {
+  id?: string | null;
+  email?: string | null;
+  username?: string | null;
+  nombre?: string | null;
+  apellido?: string | null;
+  rut?: string | null;
+  telefono?: string | null;
+  empresa?: string | null;
+};
+
 function formatCountdown(ms: number | null): string {
   if (ms == null) return "--:--:--";
   if (ms <= 0) return "00:00:00";
@@ -169,6 +191,11 @@ export function AuctionLiveRoom({
       : (initialLotes[0]?.id ?? null),
   );
   const [offersByLote, setOffersByLote] = useState<Record<string, PortalOfertaRow[]>>({});
+  const [offerUserNamesById, setOfferUserNamesById] = useState<Record<string, string>>({});
+  const [offerUserCardsById, setOfferUserCardsById] = useState<Record<string, OfferUserCard>>({});
+  const [openOfferUserId, setOpenOfferUserId] = useState<string | null>(null);
+  const [loadingOfferUserId, setLoadingOfferUserId] = useState<string | null>(null);
+  const [offerUserCardError, setOfferUserCardError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyProxy, setBusyProxy] = useState(false);
@@ -205,8 +232,82 @@ export function AuctionLiveRoom({
         map[row.lote_id]!.push(row);
       }
       setOffersByLote(map);
+
+      const userIds = [...new Set((data as PortalOfertaRow[]).map((row) => String(row.user_id ?? "").trim()).filter(Boolean))];
+      if (!userIds.length) return;
+
+      const { data: profileRows } = await sb.from("profiles").select("id,nombre,apellido").in("id", userIds);
+      if (!profileRows) return;
+
+      const resolved: Record<string, string> = {};
+      for (const profile of profileRows as Array<{ id?: string | null; nombre?: string | null; apellido?: string | null }>) {
+        const id = String(profile.id ?? "").trim();
+        if (!id) continue;
+        const nombre = String(profile.nombre ?? "").trim();
+        const apellido = String(profile.apellido ?? "").trim();
+        const fullName = [nombre, apellido].filter(Boolean).join(" ").trim();
+        if (fullName) {
+          resolved[id] = fullName;
+        }
+      }
+      if (Object.keys(resolved).length > 0) {
+        setOfferUserNamesById((prev) => ({ ...prev, ...resolved }));
+      }
     },
     [],
+  );
+
+  const loadOfferUserCard = useCallback(
+    async (userId: string) => {
+      const targetId = String(userId ?? "").trim();
+      if (!targetId) return;
+      if (offerUserCardsById[targetId]) return;
+
+      const sb = createClient();
+      if (!sb) return;
+
+      setOfferUserCardError(null);
+      setLoadingOfferUserId(targetId);
+      try {
+        const { data, error } = await sb.rpc("portal_admin_get_usuario_detalle", { p_user_id: targetId });
+        const res = data as
+          | {
+              ok?: boolean;
+              error?: string;
+              user?: {
+                id?: string | null;
+                email?: string | null;
+                username?: string | null;
+                nombre?: string | null;
+                apellido?: string | null;
+                rut?: string | null;
+                telefono?: string | null;
+                empresa?: string | null;
+              };
+            }
+          | null;
+        if (error || !res?.ok || !res.user) {
+          setOfferUserCardError("No pudimos cargar el detalle del usuario.");
+          return;
+        }
+        const parsed: OfferUserCard = {
+          id: res.user.id ?? null,
+          email: res.user.email ?? null,
+          username: res.user.username ?? null,
+          nombre: res.user.nombre ?? null,
+          apellido: res.user.apellido ?? null,
+          rut: res.user.rut ?? null,
+          telefono: res.user.telefono ?? null,
+          empresa: res.user.empresa ?? null,
+        };
+        setOfferUserCardsById((prev) => ({ ...prev, [targetId]: parsed }));
+      } catch {
+        setOfferUserCardError("No pudimos cargar el detalle del usuario.");
+      } finally {
+        setLoadingOfferUserId((curr) => (curr === targetId ? null : curr));
+      }
+    },
+    [offerUserCardsById],
   );
 
   useEffect(() => {
@@ -814,10 +915,7 @@ export function AuctionLiveRoom({
 
                   {viewerOffersOnlyMode ? (
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                      <h3 className="text-lg font-bold text-neutral-900">Ofertas recibidas</h3>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        Vista administrativa para este lote. Total: {listForActive.length}
-                      </p>
+                      <h3 className="text-lg font-bold text-neutral-900">Ofertas recibidas ({listForActive.length})</h3>
                       <ul className="mt-3 max-h-96 space-y-2 overflow-auto text-sm">
                         {listForActive.length === 0 ? (
                           <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
@@ -825,11 +923,66 @@ export function AuctionLiveRoom({
                           listForActive.map((o) => (
                             <li
                               key={o.id}
-                              className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-2 py-1"
+                              className="rounded-lg border border-neutral-100 px-2 py-1"
                             >
-                              <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
-                              <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
-                              <span className="text-[10px] text-neutral-400">oferta</span>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
+                                <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const targetId = String(o.user_id ?? "").trim();
+                                    if (!targetId) return;
+                                    setOfferUserCardError(null);
+                                    setOpenOfferUserId((curr) => (curr === targetId ? null : targetId));
+                                    void loadOfferUserCard(targetId);
+                                  }}
+                                  className="truncate text-[11px] font-semibold text-[#0f3d5c] underline decoration-dotted underline-offset-2 hover:text-[#009ade]"
+                                  title="Ver datos del cliente"
+                                >
+                                  {formatOfferUserName(o, offerUserNamesById)}
+                                </button>
+                              </div>
+                              {openOfferUserId === String(o.user_id ?? "").trim() ? (
+                                <div className="mt-2 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs text-neutral-700">
+                                  {loadingOfferUserId === String(o.user_id ?? "").trim() ? (
+                                    <p className="text-neutral-500">Cargando datos del cliente…</p>
+                                  ) : offerUserCardError ? (
+                                    <p className="text-rose-700">{offerUserCardError}</p>
+                                  ) : (
+                                    (() => {
+                                      const userId = String(o.user_id ?? "").trim();
+                                      const card = offerUserCardsById[userId];
+                                      const displayName =
+                                        [String(card?.nombre ?? "").trim(), String(card?.apellido ?? "").trim()]
+                                          .filter(Boolean)
+                                          .join(" ")
+                                          .trim() || null;
+                                      const fields = [
+                                        { label: "Nombre de usuario", value: String(card?.username ?? "").trim() || null },
+                                        { label: "Nombre y apellido", value: displayName },
+                                        { label: "RUT", value: String(card?.rut ?? "").trim() || null },
+                                        { label: "Mail", value: String(card?.email ?? "").trim() || null },
+                                        { label: "Teléfono", value: String(card?.telefono ?? "").trim() || null },
+                                        { label: "Empresa", value: String(card?.empresa ?? "").trim() || null },
+                                      ].filter((entry) => Boolean(entry.value));
+                                      if (!fields.length) {
+                                        return <p className="text-neutral-500">No hay datos adicionales para este usuario.</p>;
+                                      }
+                                      return (
+                                        <div className="grid gap-1">
+                                          {fields.map((entry) => (
+                                            <p key={entry.label}>
+                                              <span className="font-semibold text-neutral-900">{entry.label}:</span>{" "}
+                                              <span>{entry.value}</span>
+                                            </p>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()
+                                  )}
+                                </div>
+                              ) : null}
                             </li>
                           ))
                         )}

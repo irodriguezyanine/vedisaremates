@@ -2,8 +2,6 @@ import Link from "next/link";
 
 import { catalogoHref, SITE } from "@/lib/site-config";
 
-import { SocialShareBar } from "./social-share-bar";
-
 const link = "text-neutral-600 transition hover:text-[#009ade]";
 
 export function SiteFooter() {
@@ -11,8 +9,6 @@ export function SiteFooter() {
 
   return (
     <footer className="mt-auto border-t border-neutral-200 bg-[#f7f9fb] text-neutral-700">
-      <SocialShareBar />
-
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 text-sm sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
