@@ -1,5 +1,6 @@
 import { SiteFooter } from "@/components/site-footer";
 import { GarantiaPendingBanner } from "@/components/garantia-pending-banner";
+import { FloatingWhatsAppButton } from "@/components/floating-whatsapp-button";
 import { SiteHeader } from "@/components/site-header";
 import { SkipLink } from "@/components/skip-link";
 import { createClient } from "@/lib/supabase/server";
@@ -42,6 +43,7 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
         {children}
       </main>
       <SiteFooter />
+      <FloatingWhatsAppButton />
     </div>
   );
 }
