@@ -619,6 +619,9 @@ export function AuctionLiveRoom({
   const customQuick = Math.max(1, Math.min(20, Number(quickCustomIncrements) || 1));
   const viewerOffersOnlyMode =
     !!viewerId && isAdminLikeRole(viewerRole) && !isClienteRemateRole(viewerRole);
+  const viewerIsClienteRemate = !!viewerId && isClienteRemateRole(viewerRole);
+  const showOnlyOffersCount = !viewerId;
+  const showPublicOfferSummary = !viewerOffersOnlyMode;
 
   useEffect(() => {
     if (!soundEnabled || !isLastTenMinutes || countdownLive == null || countdownLive <= 0) return;
@@ -1124,7 +1127,34 @@ export function AuctionLiveRoom({
                     </div>
                   )}
 
-                  {roomView === "detallada" && !viewerOffersOnlyMode ? (
+                  {showPublicOfferSummary ? (
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-lg font-bold text-neutral-900">Resumen de ofertas</h3>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <p className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2">
+                          <span className="text-neutral-600">Cantidad de ofertas</span>
+                          <span className="font-bold text-neutral-900 tabular-nums">{listForActive.length}</span>
+                        </p>
+                        {!showOnlyOffersCount ? (
+                          <p className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2">
+                            <span className="text-neutral-600">
+                              {viewerIsClienteRemate ? "Oferta ganadora actual" : "Oferta líder actual"}
+                            </span>
+                            <span className="font-bold text-neutral-900">
+                              {topForActive ? formatClp(topForActive.monto) : "Sin ofertas"}
+                            </span>
+                          </p>
+                        ) : null}
+                      </div>
+                      {!viewerId ? (
+                        <p className="mt-3 text-xs text-neutral-500">
+                          Inicia sesión para ver más información y participar en el remate.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {roomView === "detallada" && viewerOffersOnlyMode ? (
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
                   <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">

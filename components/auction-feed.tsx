@@ -13,7 +13,6 @@ import { ShareIconMenuButton } from "@/components/share-icon-menu-button";
 
 type AuctionTab = "actuales" | "proximas" | "cerradas";
 type EstadoFiltro = "actual" | "upcoming" | "cerrado";
-const AUCTION_TAB_STORAGE_KEY = "home-auction-tab";
 
 const DEMO_LOTES = [
   {
@@ -357,7 +356,7 @@ function DemoRemateLotsStrip() {
 
 export function AuctionFeed() {
   const cat = catalogoHref();
-  // Por defecto siempre "Actuales". Si el usuario cambia manualmente, persistimos su preferencia.
+  // Siempre iniciar en "Actuales" para evitar abrir el historial por preferencia previa.
   const [tab, setTab] = useState<AuctionTab>("actuales");
   const [sub, setSub] = useState<EstadoFiltro>("actual");
   const [bundle, setBundle] = useState<
@@ -367,14 +366,6 @@ export function AuctionFeed() {
   >({ kind: "loading" });
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(AUCTION_TAB_STORAGE_KEY);
-      if (saved === "actuales" || saved === "proximas" || saved === "cerradas") {
-        setTab(saved);
-      }
-    } catch {
-      // no-op
-    }
     async function pull() {
       if (!isSupabaseConfigured()) {
         setBundle({ kind: "demo" });
@@ -402,14 +393,6 @@ export function AuctionFeed() {
     }
     void pull();
   }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(AUCTION_TAB_STORAGE_KEY, tab);
-    } catch {
-      // no-op
-    }
-  }, [tab]);
 
   const useDemo = bundle.kind === "demo";
   const liveRows = bundle.kind === "live" ? bundle.rows : [];

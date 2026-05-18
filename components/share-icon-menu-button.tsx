@@ -103,7 +103,7 @@ export function ShareIconMenuButton({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-300 bg-white text-neutral-700 transition hover:border-[#009ade] hover:text-[#009ade]"
+        className="inline-flex items-center gap-2 rounded-md border border-[#23354f] bg-[#1a2332] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#252f3f] hover:border-[#2d415f]"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={buttonLabel}
@@ -112,6 +112,7 @@ export function ShareIconMenuButton({
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
           <path d="M16 8a3 3 0 1 0-2.83-4H13a3 3 0 0 0 .17 1L8.91 7.13a3 3 0 1 0 0 3.74l4.26 2.12A3 3 0 1 0 14 11a3 3 0 0 0-.83.12L8.91 9a3 3 0 0 0 0-2.02l4.26-2.13A3 3 0 0 0 16 8Z" />
         </svg>
+        <span className="leading-none">Compartir</span>
       </button>
       {open ? (
         <div
