@@ -10,6 +10,8 @@ export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
+  const tokenHash = searchParams.get("token_hash");
+  const recoveryType = searchParams.get("type");
 
   const supabase = useMemo(() => createClient(), []);
   const envUnavailable = !supabase;
@@ -27,19 +29,65 @@ export function ResetPasswordForm() {
     if (!supabase) return;
     const client = supabase;
 
+    const getHashParams = () => {
+      if (typeof window === "undefined") return new URLSearchParams();
+      const raw = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+      return new URLSearchParams(raw);
+    };
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
     async function verifySession() {
       try {
+        let flowError: string | null = null;
+
         if (code) {
           const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
-          if (exchangeError && !cancelled) {
-            setError("El enlace de recuperación es inválido o ya expiró.");
+          if (exchangeError) {
+            flowError = "El enlace de recuperación es inválido o ya expiró.";
+          }
+        } else if (tokenHash && recoveryType === "recovery") {
+          const { error: otpError } = await client.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+          if (otpError) {
+            flowError = "El enlace de recuperación es inválido o ya expiró.";
+          }
+        } else {
+          const hashParams = getHashParams();
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          if (accessToken && refreshToken) {
+            const { error: setSessionError } = await client.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (setSessionError) {
+              flowError = "El enlace de recuperación es inválido o ya expiró.";
+            }
           }
         }
 
-        const {
-          data: { session },
-        } = await client.auth.getSession();
-        if (!cancelled) setReady(Boolean(session));
+        let sessionReady = false;
+        for (let i = 0; i < 4; i += 1) {
+          const {
+            data: { session },
+          } = await client.auth.getSession();
+          if (session) {
+            sessionReady = true;
+            break;
+          }
+          if (i < 3) await sleep(250);
+        }
+
+        if (!cancelled) {
+          setReady(sessionReady);
+          if (!sessionReady && flowError) setError(flowError);
+        }
       } finally {
         if (!cancelled) setVerifying(false);
       }
@@ -57,7 +105,7 @@ export function ResetPasswordForm() {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [code, supabase]);
+  }, [code, tokenHash, recoveryType, supabase]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
