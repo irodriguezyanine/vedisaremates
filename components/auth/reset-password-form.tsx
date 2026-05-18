@@ -12,6 +12,8 @@ export function ResetPasswordForm() {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const recoveryType = searchParams.get("type");
+  const queryAccessToken = searchParams.get("access_token");
+  const queryRefreshToken = searchParams.get("refresh_token");
 
   const supabase = useMemo(() => createClient(), []);
   const envUnavailable = !supabase;
@@ -47,6 +49,14 @@ export function ResetPasswordForm() {
         if (code) {
           const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
           if (exchangeError) {
+            flowError = "El enlace de recuperación es inválido o ya expiró.";
+          }
+        } else if (queryAccessToken && queryRefreshToken) {
+          const { error: setSessionError } = await client.auth.setSession({
+            access_token: queryAccessToken,
+            refresh_token: queryRefreshToken,
+          });
+          if (setSessionError) {
             flowError = "El enlace de recuperación es inválido o ya expiró.";
           }
         } else if (tokenHash && recoveryType === "recovery") {
@@ -105,7 +115,7 @@ export function ResetPasswordForm() {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [code, tokenHash, recoveryType, supabase]);
+  }, [code, tokenHash, recoveryType, queryAccessToken, queryRefreshToken, supabase]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -129,7 +139,16 @@ export function ResetPasswordForm() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
-        setError("No pudimos actualizar tu contraseña. Solicita un nuevo enlace.");
+        const raw = String(updateError.message ?? "").toLowerCase();
+        if (raw.includes("same") || raw.includes("different from the old") || raw.includes("diferente")) {
+          setError("Tu nueva contraseña debe ser distinta a la anterior.");
+        } else if (raw.includes("weak") || raw.includes("strength") || raw.includes("insegura")) {
+          setError("La contraseña es demasiado débil. Usa una combinación más robusta.");
+        } else if (raw.includes("session") || raw.includes("jwt") || raw.includes("token")) {
+          setError("La sesión de recuperación expiró. Solicita un nuevo enlace.");
+        } else {
+          setError("No pudimos actualizar tu contraseña. Solicita un nuevo enlace.");
+        }
         return;
       }
       setMessage("Contraseña actualizada con éxito. Te redirigimos a tu cuenta.");
