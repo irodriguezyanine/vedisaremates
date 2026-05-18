@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ShareIconMenuButton } from "@/components/share-icon-menu-button";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { PortalRemateRecomendadoRow, PortalRemateRow } from "@/lib/portal-types";
 import { fetchRemateThumbnailMap } from "@/lib/remate-cover-thumbnails";
@@ -85,7 +86,7 @@ export default async function SubastasIndexPage() {
           const thumb = thumbMap[r.id];
 
           return (
-            <li key={r.id}>
+            <li key={r.id} className="relative">
               <Link
                 href={`/subastas/${r.id}`}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition hover:border-[#33C7E3]/60 hover:shadow-md sm:flex-row sm:items-stretch"
@@ -111,9 +112,9 @@ export default async function SubastasIndexPage() {
                       <h2 className="text-xl font-bold text-neutral-900 group-hover:text-[#009ade]">{r.titulo}</h2>
                       <p className="mt-2 line-clamp-2 text-sm text-neutral-600">{r.descripcion}</p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-[#e8f4fc] px-3 py-1 text-xs font-bold text-[#1a2c4e]">
-                      {estadoLabel(r.estado)}
-                    </span>
+                      <span className="shrink-0 rounded-full bg-[#e8f4fc] px-3 py-1 text-xs font-bold text-[#1a2c4e]">
+                        {estadoLabel(r.estado)}
+                      </span>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-xs text-neutral-500">
                     <p>
@@ -126,6 +127,14 @@ export default async function SubastasIndexPage() {
                   </div>
                 </div>
               </Link>
+              <div className="absolute right-4 top-4 z-10">
+                <ShareIconMenuButton
+                  shareUrl={`/subastas/${r.id}`}
+                  title={r.titulo}
+                  text={`Revisa este remate en VEDISA Remates: ${r.titulo}`}
+                  buttonLabel="Compartir remate"
+                />
+              </div>
             </li>
           );
         })}

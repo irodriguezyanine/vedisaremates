@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ShareIconMenuButton } from "@/components/share-icon-menu-button";
 import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carousel";
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
@@ -29,6 +30,36 @@ function formatClDateTime(iso: string): string {
 
 function formatClTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-CL", TZ_CHILE);
+}
+
+function formatSecondsLabel(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  if (safe === 0) return "0 segundos";
+  if (safe % 60 === 0) {
+    const mins = safe / 60;
+    return mins === 1 ? "1 minuto" : `${mins} minutos`;
+  }
+  return safe === 1 ? "1 segundo" : `${safe} segundos`;
+}
+
+function normalizeRole(role: string): string {
+  return String(role ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s_-]+/g, "");
+}
+
+function isClienteRemateRole(role: string): boolean {
+  const value = normalizeRole(role);
+  return value.includes("clienteremate");
+}
+
+function isAdminLikeRole(role: string): boolean {
+  const value = normalizeRole(role);
+  return ["admin", "administrador", "superadmin", "sac", "staff", "operador"].some((token) =>
+    value.includes(token),
+  );
 }
 
 function formatCountdown(ms: number | null): string {
@@ -418,7 +449,12 @@ export function AuctionLiveRoom({
       setRemate((prev) => ({ ...prev, ends_at: res.ends_at_extendido as string }));
     }
     await loadOffers(lotes.map((l) => l.id));
-    setMsg(res.ends_at_extendido ? "¡Oferta registrada! El cierre se extendió 2 minutos." : "¡Oferta registrada!");
+    const extendSeconds = Math.max(0, Number(cfg?.anti_sniping_extend_seconds ?? 90));
+    setMsg(
+      res.ends_at_extendido
+        ? `¡Oferta registrada! El cierre se extendió ${formatSecondsLabel(extendSeconds)}.`
+        : "¡Oferta registrada!",
+    );
     setBusy(false);
   }
 
@@ -480,6 +516,8 @@ export function AuctionLiveRoom({
   const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
   const bidMsg = msg ? formatBidMessage(msg) : null;
   const customQuick = Math.max(1, Math.min(20, Number(quickCustomIncrements) || 1));
+  const viewerOffersOnlyMode =
+    !!viewerId && isAdminLikeRole(viewerRole) && !isClienteRemateRole(viewerRole);
 
   useEffect(() => {
     if (!soundEnabled || !isLastTenMinutes || countdownLive == null || countdownLive <= 0) return;
@@ -656,12 +694,21 @@ export function AuctionLiveRoom({
           {active ? (
             <>
               <div className="space-y-1 border-b border-neutral-100 pb-4">
-                <h2 className="text-pretty text-2xl font-black tracking-tight text-neutral-900 sm:text-3xl">
-                  {active.inventario
-                    ? [active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") ||
-                      (active.titulo ?? "Vehículo")
-                    : (active.titulo ?? "Detalle del lote")}
-                </h2>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="text-pretty min-w-0 flex-1 text-2xl font-black tracking-tight text-neutral-900 sm:text-3xl">
+                    {active.inventario
+                      ? [active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") ||
+                        (active.titulo ?? "Vehículo")
+                      : (active.titulo ?? "Detalle del lote")}
+                  </h2>
+                  <ShareIconMenuButton
+                    shareUrl={`/subastas/${remate.id}?lote=${encodeURIComponent(active.id)}`}
+                    title={active.titulo ?? "Lote en remate"}
+                    text={`Mira este lote en VEDISA Remates: ${active.titulo ?? "Lote"}`}
+                    buttonLabel="Compartir lote"
+                    menuAlign="right"
+                  />
+                </div>
                 {active.inventario?.patente || active.inventario?.ano ? (
                   <p className="text-sm text-neutral-500">
                     {[active.inventario?.patente, active.inventario?.ano ? String(active.inventario.ano) : null]
@@ -716,7 +763,7 @@ export function AuctionLiveRoom({
                   </div>
                 </div>
 
-                <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+                <aside className="flex min-w-0 flex-col gap-4 md:sticky md:top-20 md:self-start">
                   {viewerId ? (
                     <div
                       className={`rounded-2xl border p-4 shadow-sm ${
@@ -765,141 +812,166 @@ export function AuctionLiveRoom({
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                    <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
-                    {!canBidNow ? (
-                      <p className="mt-2 text-sm text-neutral-600">
-                        {!remateAbierto
-                          ? "Este remate aún no está habilitado para ofertar."
-                          : !lotCanBid
-                            ? "Este lote está pausado/cerrado y no recibe ofertas."
-                          : countdownLive !== null && countdownLive <= 0
-                            ? "El remate ya cerró según la fecha de fin."
-                            : tick === null
-                              ? "Cargando estado del remate…"
-                              : !viewerId
-                                ? "Inicie sesión para ofertar."
-                                : remate.starts_at && new Date(remate.starts_at).getTime() > tick
-                                  ? "Esperando la hora de inicio."
-                                  : "No puede ofertar en este momento."}
+                  {viewerOffersOnlyMode ? (
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-lg font-bold text-neutral-900">Ofertas recibidas</h3>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Vista administrativa para este lote. Total: {listForActive.length}
                       </p>
-                    ) : (
-                      <>
-                        {!viewerHasGarantiaLive ? (
-                          <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            Si tu garantía fue aprobada recientemente, puedes intentar ofertar. La validación final se realiza al enviar la puja.
-                          </p>
-                        ) : null}
-                        {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
-                          <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            Últimos minutos: una nueva oferta puede extender el cierre automáticamente.
-                          </p>
-                        ) : null}
-                        <label className="mt-3 block text-sm text-neutral-600">
-                          Monto
-                          <input
-                            value={amount}
-                            onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
-                            inputMode="numeric"
-                            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                            placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
-                          />
-                        </label>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setQuickBid(1)}
-                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                          >
-                            Oferta mínima ({formatClp(minNext)})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setQuickBid(2)}
-                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                          >
-                            + 1 incremento
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setQuickBid(3)}
-                            className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                          >
-                            + 2 incrementos
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setQuickBid(customQuick)}
-                            className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
-                          >
-                            + {customQuick - 1} incrementos (personalizado)
-                          </button>
-                        </div>
-                        <label className="mt-2 block text-xs text-neutral-600">
-                          Oferta rápida personalizada (cantidad de incrementos)
-                          <input
-                            value={quickCustomIncrements}
-                            onChange={(e) => setQuickCustomIncrements(e.target.value)}
-                            inputMode="numeric"
-                            className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                            placeholder="Ej: 4"
-                          />
-                        </label>
-                        <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-600">
-                          <input
-                            type="checkbox"
-                            checked={soundEnabled}
-                            onChange={(e) => setSoundEnabled(e.target.checked)}
-                            className="h-4 w-4 rounded border-neutral-300 text-[#009ade] focus:ring-[#009ade]"
-                          />
-                          Activar alerta sonora en últimos minutos
-                        </label>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void placeBid()}
-                          className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
-                        >
-                          {busy ? "Enviando…" : "Confirmar oferta"}
-                        </button>
-                        <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                          <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
-                          <div className="mt-2 flex gap-2">
+                      <ul className="mt-3 max-h-96 space-y-2 overflow-auto text-sm">
+                        {listForActive.length === 0 ? (
+                          <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
+                        ) : (
+                          listForActive.map((o) => (
+                            <li
+                              key={o.id}
+                              className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-2 py-1"
+                            >
+                              <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
+                              <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
+                              <span className="text-[10px] text-neutral-400">oferta</span>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                      <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
+                      {!canBidNow ? (
+                        <p className="mt-2 text-sm text-neutral-600">
+                          {!remateAbierto
+                            ? "Este remate aún no está habilitado para ofertar."
+                            : !lotCanBid
+                              ? "Este lote está pausado/cerrado y no recibe ofertas."
+                            : countdownLive !== null && countdownLive <= 0
+                              ? "El remate ya cerró según la fecha de fin."
+                              : tick === null
+                                ? "Cargando estado del remate…"
+                                : !viewerId
+                                  ? "Inicie sesión para ofertar."
+                                  : remate.starts_at && new Date(remate.starts_at).getTime() > tick
+                                    ? "Esperando la hora de inicio."
+                                    : "No puede ofertar en este momento."}
+                        </p>
+                      ) : (
+                        <>
+                          {!viewerHasGarantiaLive ? (
+                            <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                              Si tu garantía fue aprobada recientemente, puedes intentar ofertar. La validación final se realiza al enviar la puja.
+                            </p>
+                          ) : null}
+                          {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
+                            <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                              Últimos minutos: una nueva oferta puede extender el cierre automáticamente.
+                            </p>
+                          ) : null}
+                          <label className="mt-3 block text-sm text-neutral-600">
+                            Monto
                             <input
-                              value={proxyMax}
-                              onChange={(e) => setProxyMax(formatCurrencyInput(e.target.value))}
+                              value={amount}
+                              onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
                               inputMode="numeric"
-                              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                              placeholder="$25.000.000"
+                              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                              placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
                             />
+                          </label>
+                          <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               type="button"
-                              disabled={busyProxy}
-                              onClick={() => void setProxyBid()}
-                              className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                              onClick={() => setQuickBid(1)}
+                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
                             >
-                              {busyProxy ? "Guardando…" : "Activar"}
+                              Oferta mínima ({formatClp(minNext)})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuickBid(2)}
+                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                            >
+                              + 1 incremento
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuickBid(3)}
+                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                            >
+                              + 2 incrementos
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuickBid(customQuick)}
+                              className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
+                            >
+                              + {customQuick - 1} incrementos (personalizado)
                             </button>
                           </div>
-                        </div>
-                      </>
-                    )}
-                  {bidMsg ? (
-                    <div
-                      className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
-                        bidMsg.tone === "success"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                          : bidMsg.tone === "error"
-                            ? "border-rose-200 bg-rose-50 text-rose-700"
-                            : "border-sky-200 bg-sky-50 text-sky-700"
-                      }`}
-                    >
-                      {bidMsg.text}
+                          <label className="mt-2 block text-xs text-neutral-600">
+                            Oferta rápida personalizada (cantidad de incrementos)
+                            <input
+                              value={quickCustomIncrements}
+                              onChange={(e) => setQuickCustomIncrements(e.target.value)}
+                              inputMode="numeric"
+                              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                              placeholder="Ej: 4"
+                            />
+                          </label>
+                          <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-600">
+                            <input
+                              type="checkbox"
+                              checked={soundEnabled}
+                              onChange={(e) => setSoundEnabled(e.target.checked)}
+                              className="h-4 w-4 rounded border-neutral-300 text-[#009ade] focus:ring-[#009ade]"
+                            />
+                            Activar alerta sonora en últimos minutos
+                          </label>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void placeBid()}
+                            className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
+                          >
+                            {busy ? "Enviando…" : "Confirmar oferta"}
+                          </button>
+                          <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                            <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
+                            <div className="mt-2 flex gap-2">
+                              <input
+                                value={proxyMax}
+                                onChange={(e) => setProxyMax(formatCurrencyInput(e.target.value))}
+                                inputMode="numeric"
+                                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                                placeholder="$25.000.000"
+                              />
+                              <button
+                                type="button"
+                                disabled={busyProxy}
+                                onClick={() => void setProxyBid()}
+                                className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                              >
+                                {busyProxy ? "Guardando…" : "Activar"}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    {bidMsg ? (
+                      <div
+                        className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                          bidMsg.tone === "success"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : bidMsg.tone === "error"
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : "border-sky-200 bg-sky-50 text-sky-700"
+                        }`}
+                      >
+                        {bidMsg.text}
+                      </div>
+                    ) : null}
                     </div>
-                  ) : null}
-                  </div>
+                  )}
 
-                  {roomView === "detallada" ? (
+                  {roomView === "detallada" && !viewerOffersOnlyMode ? (
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                   <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
                   <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">

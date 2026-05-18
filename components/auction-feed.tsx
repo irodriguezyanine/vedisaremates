@@ -9,6 +9,7 @@ import { fetchRemateCarouselSlidesMap, type RemateCarouselSlide } from "@/lib/re
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 import { catalogoHref } from "@/lib/site-config";
+import { ShareIconMenuButton } from "@/components/share-icon-menu-button";
 
 type AuctionTab = "actuales" | "proximas" | "cerradas";
 type EstadoFiltro = "actual" | "upcoming" | "cerrado";
@@ -588,7 +589,15 @@ export function AuctionFeed() {
                 <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{lote.titulo}</h3>
-                    {estadoBadge(lote.estado)}
+                    <div className="flex items-center gap-2">
+                      <ShareIconMenuButton
+                        shareUrl="/subastas"
+                        title={lote.titulo}
+                        text={`Revisa este remate en VEDISA Remates: ${lote.titulo}`}
+                        buttonLabel="Compartir remate"
+                      />
+                      {estadoBadge(lote.estado)}
+                    </div>
                   </div>
                   <p className="mt-2 text-sm text-neutral-600">{lote.subtitulo}</p>
                   {lote.countdown ? (
@@ -643,7 +652,15 @@ export function AuctionFeed() {
                   <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{tituloLimpio}</h3>
-                      {badgeForSlice(slice, r.estado)}
+                      <div className="flex items-center gap-2">
+                        <ShareIconMenuButton
+                          shareUrl={`/subastas/${r.id}`}
+                          title={tituloLimpio}
+                          text={`Revisa este remate en VEDISA Remates: ${tituloLimpio}`}
+                          buttonLabel="Compartir remate"
+                        />
+                        {badgeForSlice(slice, r.estado)}
+                      </div>
                     </div>
                     <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{descripcionLimpia}</p>
                     {cd ? (

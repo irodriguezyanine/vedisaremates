@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.portal_remates_config (
   id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   anti_sniping_enabled BOOLEAN NOT NULL DEFAULT true,
   anti_sniping_window_seconds INT NOT NULL DEFAULT 120 CHECK (anti_sniping_window_seconds >= 0),
-  anti_sniping_extend_seconds INT NOT NULL DEFAULT 120 CHECK (anti_sniping_extend_seconds >= 0),
+  anti_sniping_extend_seconds INT NOT NULL DEFAULT 90 CHECK (anti_sniping_extend_seconds >= 0),
   high_bid_confirm_multiplier NUMERIC NOT NULL DEFAULT 3 CHECK (high_bid_confirm_multiplier >= 1),
   max_bids_per_minute INT NOT NULL DEFAULT 25 CHECK (max_bids_per_minute >= 1),
   suspicious_raise_multiplier NUMERIC NOT NULL DEFAULT 5 CHECK (suspicious_raise_multiplier >= 1),
@@ -484,7 +484,7 @@ BEGIN
     v_cfg.id := 1;
     v_cfg.anti_sniping_enabled := true;
     v_cfg.anti_sniping_window_seconds := 120;
-    v_cfg.anti_sniping_extend_seconds := 120;
+    v_cfg.anti_sniping_extend_seconds := 90;
     v_cfg.high_bid_confirm_multiplier := 3;
     v_cfg.max_bids_per_minute := 25;
     v_cfg.suspicious_raise_multiplier := 5;

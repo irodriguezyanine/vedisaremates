@@ -33,7 +33,7 @@ const PK_FINE = "\u001f";
 const DEFAULT_REMATE_CFG = {
   anti_sniping_enabled: true,
   anti_sniping_window_seconds: 120,
-  anti_sniping_extend_seconds: 120,
+  anti_sniping_extend_seconds: 90,
   high_bid_confirm_multiplier: 3,
   max_bids_per_minute: 25,
   suspicious_raise_multiplier: 5,
@@ -1350,7 +1350,7 @@ export function PersonalizarPanel() {
                   }}
                   className="mt-1 w-full rounded border border-white/15 bg-black/35 px-3 py-2 text-white"
                 />
-                <p className="mt-1 text-[11px] text-neutral-500">Para “2 minutos”, usa 120.</p>
+                <p className="mt-1 text-[11px] text-neutral-500">Para “90 segundos”, usa 90.</p>
               </label>
               <label className="text-sm">
                 <span className="text-neutral-400">Confirmación oferta alta (x mínimo)</span>
