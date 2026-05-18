@@ -27,7 +27,9 @@ export default async function SiteGroupLayout({ children }: { children: React.Re
       if (!profileError && profile) {
         const rol = String(profile.rol ?? "").toLowerCase();
         const isPrivileged = ["admin", "sac"].includes(rol);
-        showGarantiaBanner = emailVerificado && !isPrivileged && profile.garantia_aprobada === false;
+        // Mostrar banner siempre que la garantía NO esté aprobada (false o null),
+        // pero solo para usuarios verificados y no privilegiados.
+        showGarantiaBanner = emailVerificado && !isPrivileged && profile.garantia_aprobada !== true;
       } else {
         showGarantiaBanner = false;
       }

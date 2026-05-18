@@ -201,44 +201,44 @@ export function SiteHeader() {
 
       {mobileOpen ? (
         <div id="mobile-nav" className="border-t border-white/10 bg-[#141c28] lg:hidden">
-          <div className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-4">
-            <Link href="/" className="rounded-md px-3 py-3 text-white/90 hover:bg-white/5" onClick={closeMobile}>
+          <div className="mx-auto flex max-h-[calc(100dvh-64px)] max-w-7xl flex-col gap-1 overflow-y-auto px-3 py-2.5">
+            <div className="mb-1 rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+              <HeaderAuth onNavigate={closeMobile} />
+            </div>
+
+            <Link href="/" className="rounded-md px-3 py-2.5 text-white/90 hover:bg-white/5" onClick={closeMobile}>
               Inicio
             </Link>
-            <NavVerMenuContent variant="mobile" onNavigate={closeMobile} />
             <Link
               href={cat}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md px-3 py-3 hover:bg-white/5"
+              className="rounded-md px-3 py-2.5 hover:bg-white/5"
               onClick={closeMobile}
             >
               Catálogo
             </Link>
-            <Link href="/subastas" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/subastas" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Subastas en vivo
             </Link>
-            <Link href="/como-participar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/como-participar" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Cómo participar
             </Link>
-            <Link href="/faq" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/faq" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Ayuda / FAQ
             </Link>
-            <Link href="/contacto" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/contacto" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Contacto
             </Link>
-            <Link href="/acerca" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/acerca" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Acerca de
             </Link>
-            <Link href="/terminos" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/terminos" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Términos
             </Link>
-            <Link href="/buscar" className="rounded-md px-3 py-3 hover:bg-white/5" onClick={closeMobile}>
+            <Link href="/buscar" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Búsqueda avanzada
             </Link>
-            <div className="mt-2 border-t border-white/10 pt-4">
-              <HeaderAuth onNavigate={closeMobile} />
-            </div>
           </div>
         </div>
       ) : null}
