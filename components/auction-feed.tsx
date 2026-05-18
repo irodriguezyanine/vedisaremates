@@ -50,20 +50,20 @@ const SUB_LABEL: Record<EstadoFiltro, string> = {
 function estadoBadge(estado: (typeof DEMO_LOTES)[number]["estado"]) {
   if (estado === "abierta") {
     return (
-      <span className="rounded-md bg-emerald-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
         Licitación abierta
       </span>
     );
   }
   if (estado === "finales") {
     return (
-      <span className="rounded-md bg-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-neutral-900 ring-2 ring-amber-300/80">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-amber-400 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-neutral-900 ring-2 ring-amber-300/80">
         Ofertas finales
       </span>
     );
   }
   return (
-    <span className="rounded-md bg-neutral-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+    <span className="inline-flex min-h-10 items-center rounded-lg bg-neutral-500 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white">
       Cerrada
     </span>
   );
@@ -72,27 +72,27 @@ function estadoBadge(estado: (typeof DEMO_LOTES)[number]["estado"]) {
 function badgeForSlice(slice: RemateFeedSlice, remateEstado: PortalRemateRow["estado"]) {
   if (slice === "cerrada") {
     return (
-      <span className="rounded-md bg-neutral-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-neutral-500 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white">
         Cerrada
       </span>
     );
   }
   if (slice === "proxima") {
     return (
-      <span className="rounded-md bg-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-neutral-900 ring-2 ring-amber-300/80">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-amber-400 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-neutral-900 ring-2 ring-amber-300/80">
         Próximo inicio
       </span>
     );
   }
   if (remateEstado === "en_curso") {
     return (
-      <span className="rounded-md bg-emerald-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
         En curso
       </span>
     );
   }
   return (
-    <span className="rounded-md bg-sky-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+    <span className="inline-flex min-h-10 items-center rounded-lg bg-sky-600 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white">
       Publicado
     </span>
   );
@@ -452,7 +452,12 @@ export function AuctionFeed() {
   }, [sub, tab, useDemo, bundle.kind]);
 
   const renderLiveSubtitle = useCallback((r: PortalRemateRow) => {
-    if (r.descripcion?.trim()) return r.descripcion.trim().slice(0, 280);
+    const descripcion = sanitizeEventText(r.descripcion, 240);
+    if (descripcion) {
+      const tituloNorm = normalizeEventTextKey(sanitizeEventText(r.titulo, 160));
+      const descripcionNorm = normalizeEventTextKey(descripcion);
+      if (descripcionNorm && descripcionNorm !== tituloNorm) return descripcion;
+    }
     return "Consulta la ficha y las condiciones en la sala oficial antes de ofertar.";
   }, []);
 
@@ -584,8 +589,9 @@ export function AuctionFeed() {
                   </div>
                   <p className="mt-2 text-sm text-neutral-600">{lote.subtitulo}</p>
                   {lote.countdown ? (
-                    <p className="mt-3 text-xs font-medium text-red-700">
-                      Cierra en: <span className="tabular-nums font-bold">{lote.countdown}</span>
+                    <p className="mt-3 inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                      <span className="mr-1.5">Cierre en</span>
+                      <span className="tabular-nums font-extrabold">{lote.countdown}</span>
                     </p>
                   ) : (
                     <p className="mt-3 text-xs text-neutral-500">Verifica la ficha y las condiciones antes de ofertar.</p>
@@ -635,7 +641,7 @@ export function AuctionFeed() {
                   <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{tituloLimpio}</h3>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <ShareIconMenuButton
                           shareUrl={`/subastas/${r.id}`}
                           title={tituloLimpio}
@@ -647,8 +653,9 @@ export function AuctionFeed() {
                     </div>
                     <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{descripcionLimpia}</p>
                     {cd ? (
-                      <p className="mt-3 text-xs font-medium text-red-700">
-                        Cierra en: <span className="tabular-nums font-bold">{cd}</span>
+                      <p className="mt-3 inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                        <span className="mr-1.5">Cierre en</span>
+                        <span className="tabular-nums font-extrabold">{cd}</span>
                       </p>
                     ) : (
                       <p className="mt-3 text-xs text-neutral-500">
