@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { firstGlo3dViewerUrl, getInventarioStaticImageUrls, preferredThumbnailUrl } from "@/lib/inventario-media";
 import type { InventarioRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
@@ -119,18 +120,53 @@ function findUrlByHintKeys(row: InventarioAnyRow, hintKeys: string[]): string | 
   return null;
 }
 
-function thumbnailUrl(row: InventarioAnyRow): string | null {
+function thumbnailCandidates(row: InventarioAnyRow): string[] {
+  const candidates: string[] = [];
+  for (const u of getInventarioStaticImageUrls(row)) {
+    if (!candidates.includes(u)) candidates.push(u);
+  }
+  const preferred = preferredThumbnailUrl(row);
+  if (preferred && !candidates.includes(preferred)) candidates.unshift(preferred);
   const hinted = findUrlByHintKeys(row, IMAGE_HINT_KEYS);
-  if (hinted) return hinted;
-
-  const fromImages = Array.isArray(row.imagenes) ? row.imagenes.find((v) => isHttpUrl(v)) : null;
-  if (fromImages) return fromImages;
-
-  return firstHttpUrl(row);
+  if (hinted && !candidates.includes(hinted)) candidates.push(hinted);
+  const fallback = firstHttpUrl(row);
+  if (fallback && !candidates.includes(fallback)) candidates.push(fallback);
+  return candidates;
 }
 
 function glo3dUrl(row: InventarioAnyRow): string | null {
-  return findUrlByHintKeys(row, GLO3D_HINT_KEYS);
+  return firstGlo3dViewerUrl(row) ?? findUrlByHintKeys(row, GLO3D_HINT_KEYS);
+}
+
+function SearchCardImage({ inventario }: { inventario: InventarioAnyRow }) {
+  const candidates = useMemo(() => thumbnailCandidates(inventario), [inventario]);
+  const [index, setIndex] = useState(0);
+  const src = candidates[index] ?? null;
+
+  useEffect(() => {
+    setIndex(0);
+  }, [inventario.id, candidates.length]);
+
+  if (!src) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#15263a] to-[#0b1624] text-xs font-semibold text-slate-300">
+        Sin miniatura
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={`${String(inventario.marca ?? "")} ${String(inventario.modelo ?? "")}`.trim() || "Vehiculo"}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => {
+        setIndex((prev) => prev + 1);
+      }}
+    />
+  );
 }
 
 const MAX_FETCH = 4000;
@@ -370,19 +406,7 @@ export function HeroInventorySearch({
                   className="overflow-hidden rounded-xl border border-[#2a3a53] bg-[#0a1523] shadow-[0_10px_30px_-20px_rgba(0,0,0,0.9)]"
                 >
                   <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-[#2a3a53]">
-                    {thumbnailUrl(row.inventario) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={thumbnailUrl(row.inventario) ?? ""}
-                        alt={`${String(row.inventario.marca ?? "")} ${String(row.inventario.modelo ?? "")}`.trim() || "Vehiculo"}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#15263a] to-[#0b1624] text-xs font-semibold text-slate-300">
-                        Sin miniatura
-                      </div>
-                    )}
+                    <SearchCardImage inventario={row.inventario} />
                     {glo3dUrl(row.inventario) ? (
                       <a
                         href={glo3dUrl(row.inventario) ?? "#"}
