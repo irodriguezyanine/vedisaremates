@@ -45,6 +45,7 @@ export type PortalRemateLoteRow = {
   titulo: string | null;
   descripcion: string | null;
   precio_base: number;
+  precio_minimo_remate?: number | null;
   incremento_minimo: number;
   estado: "pendiente" | "activo" | "pausado" | "adjudicado" | "vendido" | "anulado";
   precio_reserva?: number | null;
@@ -91,6 +92,7 @@ export type InventarioRow = {
   estado?: string | null;
   empresa?: string | null;
   valor_minimo?: number | null;
+  precio_minimo_remate?: number | null;
   valor_esperado?: number | null;
   imagenes?: string[] | null;
   descripcion?: string | null;

@@ -212,12 +212,14 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       const titulo =
         [inv.marca, inv.modelo, inv.patente].filter(Boolean).join(" · ") || inv.patente || "Lote";
       const base = Number(inv.valor_minimo ?? 0) || 0;
+      const precioMinimoRemate = Number(inv.precio_minimo_remate ?? base) || base;
       const row = {
         remate_id: remateId,
         inventario_id: inv.id,
         titulo,
         orden: nextOrden,
         precio_base: base,
+        precio_minimo_remate: precioMinimoRemate,
         incremento_minimo: 50000,
       };
       nextOrden += 1;
@@ -265,6 +267,7 @@ export function RemateEditor({ remateId }: { remateId: string }) {
     const payload: Record<string, unknown> = {};
     if (patch.estado !== undefined) payload.estado = patch.estado;
     if (patch.precio_reserva !== undefined) payload.precio_reserva = patch.precio_reserva;
+    if (patch.precio_minimo_remate !== undefined) payload.precio_minimo_remate = patch.precio_minimo_remate;
     const { error } = await sb.from("portal_remate_lotes").update(payload).eq("id", loteId);
     setSavingLoteId(null);
     if (error) {
@@ -474,55 +477,86 @@ export function RemateEditor({ remateId }: { remateId: string }) {
 
       <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">
         <h2 className="text-lg font-bold text-white">Lotes ({lotes.length})</h2>
-        <ul className="mt-4 space-y-3">
-          {lotes.map((l) => (
-            <li key={l.id} className="flex flex-col gap-2 rounded border border-white/10 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="font-semibold text-white">{l.titulo ?? "Lote"}</p>
-                <p className="text-xs text-neutral-500">
-                  Base {formatClp(l.precio_base)} · incremento mín. {formatClp(l.incremento_minimo)} · reserva{" "}
-                  {l.precio_reserva != null ? formatClp(l.precio_reserva) : "sin definir"}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                <select
-                  value={l.estado}
-                  onChange={(e) =>
-                    void updateLoteMeta(l.id, {
-                      estado: e.target.value as PortalRemateLoteRow["estado"],
-                    })
-                  }
-                  className="rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
-                  disabled={savingLoteId === l.id}
-                >
-                  <option value="pendiente">pendiente</option>
-                  <option value="activo">activo</option>
-                  <option value="pausado">pausado</option>
-                  <option value="adjudicado">adjudicado</option>
-                  <option value="vendido">vendido</option>
-                  <option value="anulado">anulado</option>
-                </select>
-                <input
-                  type="number"
-                  defaultValue={l.precio_reserva ?? ""}
-                  placeholder="Reserva"
-                  onBlur={(e) => {
-                    const raw = e.target.value.trim();
-                    const value = raw === "" ? null : Number(raw);
-                    if (raw !== "" && !Number.isFinite(value)) return;
-                    if (Number(l.precio_reserva ?? -1) === Number(value ?? -1)) return;
-                    void updateLoteMeta(l.id, { precio_reserva: value as number | null });
-                  }}
-                  className="w-28 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
-                  disabled={savingLoteId === l.id}
-                />
-                <button type="button" className="text-xs text-red-300 hover:underline" onClick={() => void removeLote(l.id)}>
-                  Quitar lote
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+          <table className="min-w-[980px] w-full border-collapse text-left text-sm">
+            <thead className="bg-black/25 text-neutral-400">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Lote</th>
+                <th className="px-3 py-2 font-semibold">Base</th>
+                <th className="px-3 py-2 font-semibold">Precio mínimo remate</th>
+                <th className="px-3 py-2 font-semibold">Incremento mín.</th>
+                <th className="px-3 py-2 font-semibold">Reserva</th>
+                <th className="px-3 py-2 font-semibold">Estado</th>
+                <th className="px-3 py-2 font-semibold">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lotes.map((l) => (
+                <tr key={l.id} className="border-t border-white/10 text-neutral-200">
+                  <td className="px-3 py-2 font-semibold">{l.titulo ?? "Lote"}</td>
+                  <td className="px-3 py-2 text-[#FFC600]">{formatClp(l.precio_base)}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      defaultValue={l.precio_minimo_remate ?? l.precio_base}
+                      placeholder="Precio mínimo"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const value = raw === "" ? null : Number(raw);
+                        if (raw !== "" && (!Number.isFinite(value) || Number(value) < 0)) return;
+                        if (Number(l.precio_minimo_remate ?? l.precio_base ?? -1) === Number(value ?? -1)) return;
+                        void updateLoteMeta(l.id, { precio_minimo_remate: value as number | null });
+                      }}
+                      className="w-40 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
+                      disabled={savingLoteId === l.id}
+                    />
+                  </td>
+                  <td className="px-3 py-2">{formatClp(l.incremento_minimo)}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      defaultValue={l.precio_reserva ?? ""}
+                      placeholder="Reserva"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const value = raw === "" ? null : Number(raw);
+                        if (raw !== "" && !Number.isFinite(value)) return;
+                        if (Number(l.precio_reserva ?? -1) === Number(value ?? -1)) return;
+                        void updateLoteMeta(l.id, { precio_reserva: value as number | null });
+                      }}
+                      className="w-28 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
+                      disabled={savingLoteId === l.id}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={l.estado}
+                      onChange={(e) =>
+                        void updateLoteMeta(l.id, {
+                          estado: e.target.value as PortalRemateLoteRow["estado"],
+                        })
+                      }
+                      className="rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white"
+                      disabled={savingLoteId === l.id}
+                    >
+                      <option value="pendiente">pendiente</option>
+                      <option value="activo">activo</option>
+                      <option value="pausado">pausado</option>
+                      <option value="adjudicado">adjudicado</option>
+                      <option value="vendido">vendido</option>
+                      <option value="anulado">anulado</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <button type="button" className="text-xs text-red-300 hover:underline" onClick={() => void removeLote(l.id)}>
+                      Quitar lote
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="rounded-xl border border-white/10 bg-[#141c28] p-5">

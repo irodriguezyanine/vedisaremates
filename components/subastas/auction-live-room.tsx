@@ -74,6 +74,7 @@ function formatBidMessage(raw: string): { text: string; tone: BidMsgTone } {
     remate_no_esta_en_curso: "El remate no está habilitado para ofertar.",
     remate_ya_finalizo: "Este remate ya finalizó.",
     remate_aun_no_inicia: "El remate aún no inicia.",
+    monto_menor_al_precio_minimo_remate: "La oferta está por debajo del precio mínimo remate.",
     debes_iniciar_sesion: "Debes iniciar sesión para ofertar.",
     remate_no_disponible: "El remate no está disponible en este momento.",
     lote_no_existe: "El lote seleccionado no existe.",
@@ -315,10 +316,11 @@ export function AuctionLiveRoom({
 
   const minNext = useMemo(() => {
     if (!active) return 0;
+    const floor = Number(active.precio_minimo_remate ?? 0) || 0;
     const list = offersByLote[active.id] ?? [];
     const max = list.length ? list[0]!.monto : null;
-    if (max === null) return Number(active.precio_base) || 0;
-    return max + Number(active.incremento_minimo);
+    if (max === null) return Math.max(Number(active.precio_base) || 0, floor);
+    return Math.max(max + Number(active.incremento_minimo), floor);
   }, [active, offersByLote]);
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
   const topForActive = listForActive[0] ?? null;
@@ -753,6 +755,10 @@ export function AuctionLiveRoom({
                     <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Precios del lote</p>
                     <p className="mt-2 text-2xl font-black tabular-nums text-neutral-900">{formatClp(active.precio_base)}</p>
                     <p className="mt-1 text-xs text-neutral-600">Precio base publicado</p>
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Precio mínimo remate</p>
+                      <p className="mt-1 text-sm font-bold text-slate-800">{formatClp(active.precio_minimo_remate ?? active.precio_base)}</p>
+                    </div>
                     <div className="mt-4 border-t border-neutral-100 pt-4">
                       <p className="text-sm font-semibold text-neutral-700">Siguiente oferta mínima</p>
                       <p className="mt-1 text-xl font-bold tabular-nums text-[#0f3d5c]">{formatClp(minNext)}</p>

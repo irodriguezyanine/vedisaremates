@@ -56,6 +56,7 @@ function IconArrowPath(props: SVGProps<SVGSVGElement>) {
 const ICON_BTN =
   "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-50";
 const PAGE_SIZE = 5;
+const SHOW_SYNC_RETRY_BUTTON = false;
 
 type TipoVistaEvento = "remate" | "venta_directa";
 type EstadoFiltro = "todos" | "abierto" | "cerrado";
@@ -433,15 +434,17 @@ export function RematesList() {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={syncing}
-            onClick={() => void sincronizarAhora(false, true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-60"
-          >
-            <IconArrowPath className={syncing ? "animate-spin" : ""} />
-            {syncing ? "Sincronizando..." : "Sincronizar ahora"}
-          </button>
+          {SHOW_SYNC_RETRY_BUTTON ? (
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => void sincronizarAhora(false, true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-60"
+            >
+              <IconArrowPath className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Sincronizando..." : "Sincronizar ahora"}
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={loadingList || syncing}

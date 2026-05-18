@@ -31,6 +31,7 @@ async function fetchAllInventarioRows(supabase: NonNullable<ReturnType<typeof cr
 export function InventarioPanel() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingPrecioMinimoId, setSavingPrecioMinimoId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
@@ -58,6 +59,23 @@ export function InventarioPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function updatePrecioMinimoRemate(id: string, value: number | null) {
+    const supabase = createClient();
+    if (!supabase) {
+      setErr("Servicio de datos no disponible.");
+      return;
+    }
+    setSavingPrecioMinimoId(id);
+    setErr(null);
+    const { error } = await supabase.from("inventario").update({ precio_minimo_remate: value }).eq("id", id);
+    setSavingPrecioMinimoId(null);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, precio_minimo_remate: value } : row)));
+  }
 
   const estadosUnicos = useMemo(() => {
     const s = new Set<string>();
@@ -163,7 +181,7 @@ export function InventarioPanel() {
               <th className="px-3 py-2 font-medium">Vehículo</th>
               <th className="px-3 py-2 font-medium hidden md:table-cell">Categoría</th>
               <th className="px-3 py-2 font-medium">Valor ref.</th>
-              <th className="hidden px-3 py-2 font-medium lg:table-cell">UUID</th>
+              <th className="px-3 py-2 font-medium">Precio mínimo remate</th>
             </tr>
           </thead>
           <tbody>
@@ -182,8 +200,24 @@ export function InventarioPanel() {
                 </td>
                 <td className="hidden px-3 py-2 text-neutral-400 md:table-cell">{String(r.categoria ?? "—")}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-[#FFC600]">{formatClp(r.valor_minimo as number | null)}</td>
-                <td className="hidden max-w-[100px] truncate px-3 py-2 font-mono text-[10px] text-neutral-500 lg:table-cell" title={r.id}>
-                  {r.id}
+                <td className="px-3 py-2">
+                  <input
+                    type="number"
+                    defaultValue={r.precio_minimo_remate ?? ""}
+                    placeholder="Sin mínimo"
+                    min={0}
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      const value = raw === "" ? null : Number(raw);
+                      if (raw !== "") {
+                        if (value == null || !Number.isFinite(value) || value < 0) return;
+                      }
+                      if (Number(r.precio_minimo_remate ?? -1) === Number(value ?? -1)) return;
+                      void updatePrecioMinimoRemate(String(r.id), value as number | null);
+                    }}
+                    className="w-36 rounded border border-white/15 bg-black/35 px-2 py-1 text-xs text-white disabled:opacity-60"
+                    disabled={savingPrecioMinimoId === String(r.id)}
+                  />
                 </td>
               </tr>
             ))}
