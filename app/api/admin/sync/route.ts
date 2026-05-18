@@ -89,6 +89,9 @@ async function reconcileTasacionesRematesMirror(
     const { data: sourceRows, error: sourceError } = await admin
       .from("remates")
       .select("id, numero_remate, descripcion, fecha_hora_inicio, fecha_hora_cierre, fecha_hora_remate, estado")
+      // Priorizar remates recientemente editados para que cambios de fecha/hora
+      // (aunque el remate sea antiguo) entren en la ventana de sync normal.
+      .order("updated_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(offset, upper);
     if (sourceError) throw new Error(`Error leyendo remates compartidos: ${sourceError.message}`);
