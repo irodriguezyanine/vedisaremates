@@ -358,62 +358,73 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
   }
 
-  const { data: existingUsername } = await admin
-    .from("profiles")
-    .select("id")
-    .ilike("username", username)
-    .limit(1);
-  if ((existingUsername ?? []).length > 0) {
-    return NextResponse.json({ ok: false, error: "username_duplicado" }, { status: 400 });
-  }
+  try {
+    const { data: existingUsername, error: usernameQueryError } = await admin
+      .from("profiles")
+      .select("id")
+      .ilike("username", username)
+      .limit(1);
+    if (usernameQueryError) {
+      console.error("[auth/register] username check failed", usernameQueryError.message);
+    }
+    if ((existingUsername ?? []).length > 0) {
+      return NextResponse.json({ ok: false, error: "username_duplicado" }, { status: 400 });
+    }
 
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "signup",
-    email,
-    password,
-    options: {
-      redirectTo,
-      data: {
-        nombre: nombre || undefined,
-        apellido: apellido || undefined,
-        username: username || undefined,
-        registration_channel: "web",
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "signup",
+      email,
+      password,
+      options: {
+        redirectTo,
+        data: {
+          nombre: nombre || undefined,
+          apellido: apellido || undefined,
+          username: username || undefined,
+          registration_channel: "web",
+        },
       },
-    },
-  });
+    });
 
-  if (error) {
-    if (shouldReturnNeutralSignupError(error.message)) return genericSuccess();
-    return NextResponse.json(
-      { ok: false, error: "link_no_generado", detail: error.message },
-      { status: 500 },
-    );
+    if (error) {
+      if (shouldReturnNeutralSignupError(error.message)) return genericSuccess();
+      console.error("[auth/register] generateLink failed", error.message);
+      return NextResponse.json(
+        { ok: false, error: "link_no_generado", detail: error.message },
+        { status: 500 },
+      );
+    }
+
+    const rawActionLink = data?.properties?.action_link;
+    const userId = data?.user?.id;
+    if (userId) {
+      await forceClienteRemateRole(admin, userId, nombre, apellido, username);
+    }
+    if (!rawActionLink) {
+      return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
+    }
+    const actionLink = enforceRematesRedirect(rawActionLink, siteOrigin);
+
+    const mail = buildVerificationMail({ nombre, actionLink, siteOrigin });
+    const sent = await sendSesEmail({
+      to: email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+
+    if (!sent.ok) {
+      console.error("[auth/register] SES send failed", sent.error);
+      return NextResponse.json(
+        { ok: false, error: "mail_no_enviado", detail: sent.error },
+        { status: 502 },
+      );
+    }
+
+    return genericSuccess();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "error_desconocido";
+    console.error("[auth/register] unexpected failure", detail);
+    return NextResponse.json({ ok: false, error: "registro_no_disponible", detail }, { status: 503 });
   }
-
-  const rawActionLink = data?.properties?.action_link;
-  const userId = data?.user?.id;
-  if (userId) {
-    await forceClienteRemateRole(admin, userId, nombre, apellido, username);
-  }
-  if (!rawActionLink) {
-    return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
-  }
-  const actionLink = enforceRematesRedirect(rawActionLink, siteOrigin);
-
-  const mail = buildVerificationMail({ nombre, actionLink, siteOrigin });
-  const sent = await sendSesEmail({
-    to: email,
-    subject: mail.subject,
-    html: mail.html,
-    text: mail.text,
-  });
-
-  if (!sent.ok) {
-    return NextResponse.json(
-      { ok: false, error: "mail_no_enviado", detail: sent.error },
-      { status: 502 },
-    );
-  }
-
-  return genericSuccess();
 }
