@@ -726,7 +726,7 @@ export function HeroInventorySearch({
                 return (
                   <article
                     key={String(row.inventario.id)}
-                    className="overflow-hidden rounded-xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_8px_18px_rgba(73,46,26,0.12)]"
+                    className="flex h-full flex-col overflow-hidden rounded-xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_8px_18px_rgba(73,46,26,0.12)]"
                   >
                     <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-[#dfd4c7]">
                       <SearchCardImage inventario={row.inventario} />
@@ -742,46 +742,54 @@ export function HeroInventorySearch({
                       ) : null}
                     </div>
 
-                    <div className="space-y-2.5 p-3">
-                      <h3 className="line-clamp-2 text-[0.98rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
-                      <p className="line-clamp-2 text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
+                    <div className="flex flex-1 flex-col p-3">
+                      <div className="space-y-2.5">
+                        <h3 className="line-clamp-2 text-[0.98rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
+                        <p className="line-clamp-2 text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
 
-                      {specs.length > 0 ? (
-                        <div className="rounded-lg border border-amber-200/70 bg-[#fdfaf5] p-2.5">
-                          <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-xs text-[#4f5a66]">
-                            {specs.map((spec) => (
-                              <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
-                                <SpecIcon icon={spec.icon} />
-                                <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
-                                  {spec.label}
-                                </span>
-                              </div>
-                            ))}
+                        {specs.length > 0 ? (
+                          <div className="rounded-lg border border-amber-200/70 bg-[#fdfaf5] p-2.5">
+                            <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-xs text-[#4f5a66]">
+                              {specs.map((spec) => (
+                                <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
+                                  <SpecIcon icon={spec.icon} />
+                                  <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
+                                    {spec.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ) : null}
-
-                      <div className="flex flex-wrap gap-1.5 text-[11px] text-[#604734]">
-                        {lotLabel ? <span className="rounded-full border border-amber-300/60 bg-[#f4ebe2] px-2.5 py-1">{lotLabel}</span> : null}
-                        {categoryLabel ? (
-                          <span className="rounded-full border border-amber-300/70 bg-[#eddccf] px-2.5 py-1 font-semibold">{categoryLabel}</span>
                         ) : null}
                       </div>
 
-                      {priceLabel ? (
-                        <div className="border-t border-amber-200/70 pt-2.5">
-                          <p className="text-[1.45rem] font-extrabold tracking-tight text-[#673b1f]">{priceLabel}</p>
+                      <div className="mt-auto space-y-2.5 pt-2.5">
+                        <div className="min-h-[24px]">
+                          <div className="flex flex-wrap gap-1.5 text-[11px] text-[#604734]">
+                            {lotLabel ? <span className="rounded-full border border-amber-300/60 bg-[#f4ebe2] px-2.5 py-1">{lotLabel}</span> : null}
+                            {categoryLabel ? (
+                              <span className="rounded-full border border-amber-300/70 bg-[#eddccf] px-2.5 py-1 font-semibold">{categoryLabel}</span>
+                            ) : null}
+                          </div>
                         </div>
-                      ) : null}
 
-                      {row.remateId ? (
-                        <Link
-                          href={`/subastas/${row.remateId}`}
-                          className="inline-flex w-full items-center justify-center rounded-lg bg-[#66cceb] px-3 py-2 text-xs font-bold text-[#0f1f2c] transition hover:brightness-105"
-                        >
-                          Ir a ofertar
-                        </Link>
-                      ) : null}
+                        <div className="border-t border-amber-200/70 pt-2.5">
+                          <p className="min-h-[34px] text-[1.45rem] font-extrabold tracking-tight text-[#673b1f]">
+                            {priceLabel ?? " "}
+                          </p>
+                        </div>
+
+                        {row.remateId ? (
+                          <Link
+                            href={`/subastas/${row.remateId}`}
+                            className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-[#66cceb] px-3 py-2 text-xs font-bold text-[#0f1f2c] transition hover:brightness-105"
+                          >
+                            Ir a ofertar
+                          </Link>
+                        ) : (
+                          <div className="h-9 w-full" />
+                        )}
+                      </div>
                     </div>
                   </article>
                 );

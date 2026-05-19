@@ -122,6 +122,9 @@ const THUMB_VISIBLE = 4;
 
 const EMPTY_SLIDES: RemateCarouselSlide[] = [];
 
+type SpecIconName = "km" | "year" | "fuel" | "gear" | "engineTest" | "movementTest" | "keys" | "traction" | "airbags";
+type LotSpec = { key: string; label: string; icon: SpecIconName; wide?: boolean };
+
 function normalizeEventTextKey(value: string): string {
   return value
     .toLowerCase()
@@ -166,6 +169,196 @@ function sanitizeEventText(value: string | null | undefined, maxLen = 180): stri
   return merged.length > maxLen ? `${merged.slice(0, maxLen - 1).trim()}…` : merged;
 }
 
+type RawEntry = { key: string; path: string; value: unknown };
+
+function normalizeKeyToken(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\s\-.]+/g, "_")
+    .trim();
+}
+
+function collectRawEntries(input: unknown, parentPath = ""): RawEntry[] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return [];
+  const source = input as Record<string, unknown>;
+  const entries: RawEntry[] = [];
+  for (const [rawKey, rawValue] of Object.entries(source)) {
+    const key = normalizeKeyToken(rawKey);
+    const path = parentPath ? `${parentPath}.${key}` : key;
+    entries.push({ key, path, value: rawValue });
+    if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      entries.push(...collectRawEntries(rawValue, path));
+    }
+  }
+  return entries;
+}
+
+function asDisplayValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "si" : "no";
+  return null;
+}
+
+function getFirstRawValue(entries: RawEntry[], keys: string[]): string | null {
+  const aliases = keys.map(normalizeKeyToken);
+  for (const alias of aliases) {
+    const exact = entries.find((e) => e.path === alias || e.key === alias);
+    const exactValue = asDisplayValue(exact?.value);
+    if (exactValue) return exactValue;
+    const match = entries.find((e) => e.path.includes(alias) || alias.includes(e.key));
+    const matchValue = asDisplayValue(match?.value);
+    if (matchValue) return matchValue;
+  }
+  return null;
+}
+
+function normalizeMileage(value: string | null): string | null {
+  if (!value) return null;
+  const compact = value.trim();
+  if (!compact) return null;
+  const digits = compact.replace(/[^\d]/g, "");
+  if (!digits) return compact;
+  return `${Number(digits).toLocaleString("es-CL")} kms.`;
+}
+
+function normalizeBinaryStatus(value: string | null): "yes" | "no" | "unknown" | null {
+  if (!value) return null;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!normalized) return null;
+  if (["si", "s", "yes", "y", "true", "1", "arranca", "se mueve", "se desplaza"].includes(normalized)) return "yes";
+  if (["no", "n", "false", "0", "no arranca", "no se mueve", "no se desplaza"].includes(normalized)) return "no";
+  return "unknown";
+}
+
+function statusLabel(value: string | null, opts: { yes: string; no?: string }): string | null {
+  if (!value) return null;
+  const status = normalizeBinaryStatus(value);
+  if (status === "yes") return opts.yes;
+  if (status === "no") return opts.no ?? `SIN ${opts.yes}`;
+  const cleaned = value.trim();
+  return cleaned ? cleaned.toUpperCase() : null;
+}
+
+function buildLotSpecs(slide: RemateCarouselSlide): LotSpec[] {
+  const inv = (slide.inventario ?? {}) as Record<string, unknown>;
+  const entries = collectRawEntries(inv);
+  const mileage = normalizeMileage(getFirstRawValue(entries, ["kilometraje", "km", "kms", "odometro", "odómetro"]));
+  const year = getFirstRawValue(entries, ["ano", "anio", "year"]);
+  const fuel = getFirstRawValue(entries, ["combustible", "fuel", "tipo_combustible"]);
+  const transmission = getFirstRawValue(entries, ["transmision", "transmisión", "caja", "transmission", "tipo_caja"]);
+  const motor = statusLabel(getFirstRawValue(entries, ["prueba_motor", "motor_arranca", "arranca", "motor_funciona"]), {
+    yes: "MOTOR ARRANCA",
+    no: "MOTOR NO ARRANCA",
+  });
+  const movement = statusLabel(getFirstRawValue(entries, ["prueba_desplazamiento", "se_desplaza", "desplaza", "movimiento"]), {
+    yes: "SE DESPLAZA",
+    no: "NO SE DESPLAZA",
+  });
+  const keys = statusLabel(getFirstRawValue(entries, ["llaves", "keys", "has_keys", "tiene_llaves", "con_llaves"]), {
+    yes: "CON LLAVES",
+    no: "SIN LLAVES",
+  });
+  const traction = getFirstRawValue(entries, ["traccion", "traction", "4x4"]);
+  const airbags = getFirstRawValue(entries, ["estado_airbags", "airbags", "eda", "airbag"]);
+
+  const specs: LotSpec[] = [];
+  if (mileage) specs.push({ key: "km", label: mileage, icon: "km" });
+  if (year) specs.push({ key: "year", label: year, icon: "year" });
+  if (fuel) specs.push({ key: "fuel", label: fuel.toUpperCase(), icon: "fuel" });
+  if (transmission) specs.push({ key: "gear", label: transmission.toUpperCase(), icon: "gear" });
+  if (motor) specs.push({ key: "engineTest", label: motor, icon: "engineTest", wide: true });
+  if (movement) specs.push({ key: "movementTest", label: movement, icon: "movementTest", wide: true });
+  if (keys) specs.push({ key: "keys", label: keys, icon: "keys", wide: true });
+  if (traction) specs.push({ key: "traction", label: `TRACCION ${traction.toUpperCase()}`, icon: "traction", wide: true });
+  if (airbags) specs.push({ key: "airbags", label: `AIRBAGS: ${airbags.toUpperCase()}`, icon: "airbags", wide: true });
+  return specs.slice(0, 8);
+}
+
+function formatLotPrice(value: number | null): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return `$${value.toLocaleString("es-CL")}`;
+}
+
+function lotTitle(slide: RemateCarouselSlide): string {
+  const inv = (slide.inventario ?? {}) as Record<string, unknown>;
+  const marca = String(inv.marca ?? "").trim();
+  const modelo = String(inv.modelo ?? "").trim();
+  const ano = String(inv.ano ?? "").trim();
+  return [marca, modelo, ano].filter(Boolean).join(" ") || "Vehículo disponible";
+}
+
+function lotCategory(slide: RemateCarouselSlide): string | null {
+  const inv = (slide.inventario ?? {}) as Record<string, unknown>;
+  const cat = String(inv.categoria ?? "").trim();
+  return cat ? `Categoría: ${cat}` : null;
+}
+
+function SpecIcon({ icon }: { icon: SpecIconName }) {
+  if (icon === "km")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="10" cy="10" r="6.8" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M10 10 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="10" cy="10" r="1.1" fill="currentColor" />
+      </svg>
+    );
+  if (icon === "year")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <rect x="3.5" y="4.5" width="13" height="11.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M6.5 3.5v2M13.5 3.5v2M3.5 8h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "fuel")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M4.5 4.5h6v11h-6z" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M10.5 7h1.8l1.4 1.6v4.4a1.7 1.7 0 0 0 3.4 0V9.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "engineTest")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <rect x="3.5" y="7" width="9.8" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M13.3 8.4h2.2M13.3 11.6h2.2M6.4 7V5.4M10.4 7V5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "movementTest")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M4 10h9.8M10.8 6l3.5 4-3.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "keys")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="7" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M9.5 10h6M13.5 10v1.8M15.5 10v1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "traction")
+    return (
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="6" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="14" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M5.5 12h9l-1-3.2H7.1L5.5 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <circle cx="8.2" cy="7" r="2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M4.8 14.8c.4-2 1.9-3.4 3.9-3.7M10.8 12.2h4.4M13 9.5v5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function RemateLotsStrip({
   slides,
   remateId,
@@ -176,34 +369,32 @@ function RemateLotsStrip({
   altBase: string;
 }) {
   const n = slides.length;
-  const [start, setStart] = useState(0);
-
   const slidesStableKey = useMemo(() => slides.map((s) => s.loteId).join("|"), [slides]);
-
-  useEffect(() => {
-    setStart(0);
-  }, [slidesStableKey]);
-
   const maxStart = Math.max(0, n - THUMB_VISIBLE);
-
-  useEffect(() => {
-    if (start > maxStart) setStart(maxStart);
-  }, [start, maxStart]);
+  const [carouselState, setCarouselState] = useState<{ key: string; start: number }>({
+    key: slidesStableKey,
+    start: 0,
+  });
+  const start = carouselState.key === slidesStableKey ? Math.min(carouselState.start, maxStart) : 0;
 
   useEffect(() => {
     if (n <= THUMB_VISIBLE) return;
     const id = window.setInterval(() => {
-      setStart((s) => (s >= maxStart ? 0 : s + 1));
+      setCarouselState((prev) => {
+        const current = prev.key === slidesStableKey ? Math.min(prev.start, maxStart) : 0;
+        return { key: slidesStableKey, start: current >= maxStart ? 0 : current + 1 };
+      });
     }, 5200);
     return () => window.clearInterval(id);
-  }, [n, maxStart]);
+  }, [n, maxStart, slidesStableKey]);
 
   function go(delta: number) {
-    setStart((s) => {
-      const next = s + delta;
-      if (next < 0) return maxStart;
-      if (next > maxStart) return 0;
-      return next;
+    setCarouselState((prev) => {
+      const current = prev.key === slidesStableKey ? Math.min(prev.start, maxStart) : 0;
+      const next = current + delta;
+      if (next < 0) return { key: slidesStableKey, start: maxStart };
+      if (next > maxStart) return { key: slidesStableKey, start: 0 };
+      return { key: slidesStableKey, start: next };
     });
   }
 
@@ -224,6 +415,76 @@ function RemateLotsStrip({
     return `/subastas/${remateId}?lote=${encodeURIComponent(loteId)}`;
   }
 
+  function LotCard({
+    slide,
+    idx,
+    loading,
+  }: {
+    slide: RemateCarouselSlide;
+    idx: number;
+    loading: "lazy" | "eager";
+  }) {
+    const specs = buildLotSpecs(slide);
+    const category = lotCategory(slide);
+    const price = formatLotPrice(slide.precio);
+    const href = thumbHref(slide.loteId);
+    return (
+      <article className="flex h-full flex-col overflow-hidden rounded-lg border border-[#dfd4c7] bg-[#fcfaf7] shadow-[0_6px_14px_rgba(73,46,26,0.12)]">
+        <div className="relative aspect-[16/10] overflow-hidden border-b border-[#dfd4c7]">
+          <Link
+            href={href}
+            className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
+            aria-label={`Ver detalle del lote ${idx + 1} en la sala`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slide.url}
+              alt={`${altBase} — foto del lote ${idx + 1}`}
+              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/thumb:scale-[1.02]"
+              loading={loading}
+            />
+          </Link>
+        </div>
+        <div className="flex flex-1 flex-col p-2.5">
+          <h4 className="line-clamp-2 text-[0.86rem] font-extrabold tracking-tight text-[#2f1f14]">{lotTitle(slide)}</h4>
+          {specs.length > 0 ? (
+            <div className="mt-2 rounded-md border border-amber-200/70 bg-[#fdfaf5] p-2">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs text-[#4f5a66]">
+                {specs.map((spec) => (
+                  <div key={spec.key} className={`flex items-center gap-1.5 ${spec.wide ? "col-span-2" : ""}`}>
+                    <SpecIcon icon={spec.icon} />
+                    <span className={`${spec.wide ? "text-[0.65rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
+                      {spec.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-auto space-y-2 pt-2">
+            <div className="min-h-[22px]">
+              {category ? (
+                <span className="inline-flex rounded-full border border-amber-300/70 bg-[#eddccf] px-2 py-0.5 text-[10px] font-semibold text-[#604734]">
+                  {category}
+                </span>
+              ) : null}
+            </div>
+            <div className="border-t border-amber-200/70 pt-2">
+              <p className="min-h-[30px] text-[1.2rem] font-extrabold tracking-tight text-[#673b1f]">{price ?? " "}</p>
+            </div>
+            <Link
+              href={href}
+              className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-[#66cceb] px-3 py-2 text-[11px] font-bold text-[#0f1f2c] transition hover:brightness-105"
+            >
+              Ir a ofertar
+            </Link>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   if (n < THUMB_VISIBLE) {
     return (
       <div
@@ -231,21 +492,7 @@ function RemateLotsStrip({
         style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
       >
         {slides.map((s, i) => (
-          <div key={s.loteId} className="relative aspect-[16/10] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
-            <Link
-              href={thumbHref(s.loteId)}
-              className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
-              aria-label={`Ver detalle del lote ${i + 1} en la sala`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={s.url}
-                alt={`${altBase} — foto del lote ${i + 1}`}
-                className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/thumb:scale-[1.02]"
-                loading={i === 0 ? "eager" : "lazy"}
-              />
-            </Link>
-          </div>
+          <LotCard key={s.loteId} slide={s} idx={i} loading={i === 0 ? "eager" : "lazy"} />
         ))}
       </div>
     );
@@ -260,24 +507,12 @@ function RemateLotsStrip({
           return (
             <div
               key={slide ? `thumb-${slide.loteId}-${globalIdx}` : `thumb-pad-${globalIdx}`}
-              className="relative aspect-[16/10] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner"
+              className="h-full"
             >
               {slide ? (
-                <Link
-                  href={thumbHref(slide.loteId)}
-                  className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
-                  aria-label={`Ver detalle del lote ${globalIdx + 1} en la sala`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={slide.url}
-                    alt={`${altBase} — foto del lote ${globalIdx + 1}`}
-                    className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/thumb:scale-[1.02]"
-                    loading={i === 0 && start === 0 ? "eager" : "lazy"}
-                  />
-                </Link>
+                <LotCard slide={slide} idx={globalIdx} loading={i === 0 && start === 0 ? "eager" : "lazy"} />
               ) : (
-                <div className="absolute inset-0 bg-neutral-200/70" aria-hidden />
+                <div className="h-full rounded-lg border border-neutral-200 bg-neutral-100/70" aria-hidden />
               )}
             </div>
           );
@@ -402,7 +637,7 @@ export function AuctionFeed() {
   }, []);
 
   const useDemo = bundle.kind === "demo";
-  const liveRows = bundle.kind === "live" ? bundle.rows : [];
+  const liveRows = useMemo(() => (bundle.kind === "live" ? bundle.rows : []), [bundle]);
   const liveError = bundle.kind === "live" ? bundle.err : null;
   const [, setTick] = useState(0);
   const [carouselMap, setCarouselMap] = useState<Record<string, RemateCarouselSlide[]>>({});
@@ -411,15 +646,9 @@ export function AuctionFeed() {
     bundle.kind === "live" ? [...bundle.rows].map((r) => r.id).sort().join(",") : "";
 
   useEffect(() => {
-    if (bundle.kind !== "live") {
-      setCarouselMap({});
-      return;
-    }
-    const ids = bundle.rows.map((r) => r.id);
-    if (!ids.length) {
-      setCarouselMap({});
-      return;
-    }
+    if (bundle.kind !== "live") return;
+    const ids = liveRows.map((r) => r.id);
+    if (!ids.length) return;
 
     let cancelled = false;
 
@@ -429,16 +658,14 @@ export function AuctionFeed() {
       try {
         const m = await fetchRemateCarouselSlidesMap(sb, ids);
         if (!cancelled) setCarouselMap(m);
-      } catch {
-        if (!cancelled) setCarouselMap({});
-      }
+      } catch {}
     }
 
     void loadCarousels();
     return () => {
       cancelled = true;
     };
-  }, [bundle.kind, liveIdsKey]);
+  }, [bundle.kind, liveIdsKey, liveRows]);
 
   useEffect(() => {
     if (useDemo || bundle.kind === "loading") return;

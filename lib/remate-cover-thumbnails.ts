@@ -8,12 +8,16 @@ type LoteMini = {
   remate_id: string;
   orden: number;
   inventario_id: string | null;
+  precio_base?: number | null;
+  precio_minimo_remate?: number | null;
 };
 
 export type RemateCarouselSlide = {
   /** Lote público enlazado a la miniatura */
   loteId: string;
   url: string;
+  precio: number | null;
+  inventario: (InventarioRow & Record<string, unknown>) | null;
 };
 
 /**
@@ -28,7 +32,7 @@ export async function fetchRemateThumbnailMap(
 
   const { data: lotesData, error: e1 } = await supabase
     .from("portal_remate_lotes")
-    .select("id, remate_id, orden, inventario_id")
+    .select("id, remate_id, orden, inventario_id, precio_base, precio_minimo_remate")
     .in("remate_id", remateIds)
     .order("orden", { ascending: true });
 
@@ -81,12 +85,20 @@ export async function fetchRemateCarouselSlidesMap(
   if (e1 || !lotesData?.length) return out;
 
   const lotes = lotesData as LoteMini[];
-  const lotesPorRemate = new Map<string, { loteId: string; inventarioId: string }[]>();
+  const lotesPorRemate = new Map<
+    string,
+    { loteId: string; inventarioId: string; precioBase: number | null; precioMinimoRemate: number | null }[]
+  >();
 
   for (const row of lotes) {
     if (!row.remate_id || !row.inventario_id) continue;
     const list = lotesPorRemate.get(row.remate_id) ?? [];
-    list.push({ loteId: row.id, inventarioId: row.inventario_id });
+    list.push({
+      loteId: row.id,
+      inventarioId: row.inventario_id,
+      precioBase: typeof row.precio_base === "number" ? row.precio_base : null,
+      precioMinimoRemate: typeof row.precio_minimo_remate === "number" ? row.precio_minimo_remate : null,
+    });
     lotesPorRemate.set(row.remate_id, list);
   }
 
@@ -98,17 +110,24 @@ export async function fetchRemateCarouselSlidesMap(
   if (e2 || !invRows?.length) return out;
 
   const thumbByInv = new Map<string, string | null>();
+  const invById = new Map<string, InventarioRow & Record<string, unknown>>();
   for (const row of invRows as (InventarioRow & Record<string, unknown>)[]) {
     thumbByInv.set(row.id, preferredThumbnailUrl(row));
+    invById.set(row.id, row);
   }
 
   for (const remateId of remateIds) {
     const chain = lotesPorRemate.get(remateId) ?? [];
     const slides: RemateCarouselSlide[] = [];
-    for (const { loteId, inventarioId } of chain) {
+    for (const { loteId, inventarioId, precioBase, precioMinimoRemate } of chain) {
       const u = thumbByInv.get(inventarioId);
       if (!u) continue;
-      slides.push({ loteId, url: u });
+      slides.push({
+        loteId,
+        url: u,
+        precio: precioMinimoRemate ?? precioBase ?? null,
+        inventario: invById.get(inventarioId) ?? null,
+      });
     }
     out[remateId] = slides;
   }
