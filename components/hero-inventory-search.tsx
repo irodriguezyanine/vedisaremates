@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { firstGlo3dViewerUrl, getInventarioStaticImageUrls, preferredThumbnailUrl } from "@/lib/inventario-media";
+import { getInventarioStaticImageUrls, preferredThumbnailUrl } from "@/lib/inventario-media";
 import type { InventarioRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
@@ -55,7 +55,6 @@ const IMAGE_HINT_KEYS = [
   "imagen_url",
   "photo_url",
 ];
-const GLO3D_HINT_KEYS = ["glo3d", "glo_3d", "glo3d_url", "url_glo3d", "tour_360", "viewer_360"];
 
 function normalize(value: unknown): string {
   return String(value ?? "")
@@ -153,10 +152,6 @@ function thumbnailCandidates(row: InventarioAnyRow): string[] {
   const fallback = firstHttpUrl(row);
   if (fallback && !candidates.includes(fallback)) candidates.push(fallback);
   return candidates;
-}
-
-function glo3dUrl(row: InventarioAnyRow): string | null {
-  return firstGlo3dViewerUrl(row) ?? findUrlByHintKeys(row, GLO3D_HINT_KEYS);
 }
 
 type RawEntry = {
@@ -721,7 +716,6 @@ export function HeroInventorySearch({
                 const lotLabel = vehicleLotLabel(row.inventario);
                 const categoryLabel = vehicleCategoryLabel(row.inventario);
                 const priceLabel = formatClpFromUnknown(row.inventario.precio_minimo_remate ?? row.inventario.valor_minimo);
-                const glo3d = glo3dUrl(row.inventario);
 
                 return (
                   <article
@@ -730,22 +724,16 @@ export function HeroInventorySearch({
                   >
                     <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-[#d6e5f4]">
                       <SearchCardImage inventario={row.inventario} />
-                      {glo3d ? (
-                        <a
-                          href={glo3d}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="absolute right-2 top-2 rounded-md bg-[#6fd0ef] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0f1f2c]"
-                        >
-                          Glo3D
-                        </a>
-                      ) : null}
                     </div>
 
                     <div className="flex flex-1 flex-col p-3">
                       <div className="space-y-2.5">
-                        <h3 className="line-clamp-2 text-[0.98rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
-                        <p className="line-clamp-2 text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
+                        <div className="min-h-[104px]">
+                          <h3 className="line-clamp-2 min-h-[52px] text-[0.98rem] font-extrabold tracking-tight text-[#2f1f14]">
+                            {vehicleTitle(row.inventario)}
+                          </h3>
+                          <p className="line-clamp-2 min-h-[44px] text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
+                        </div>
 
                         {specs.length > 0 ? (
                           <div className="rounded-lg border border-sky-200/80 bg-[#f3f9ff] p-2.5">
