@@ -352,6 +352,33 @@ async function fallbackSignupWithPublicClient({
   return { ok: true };
 }
 
+async function resendVerificationWithPublicClient({
+  email,
+  redirectTo,
+}: {
+  email: string;
+  redirectTo: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const env = getPublicSupabaseEnv();
+  if (!env) return { ok: false, error: "supabase_public_no_configurado" };
+
+  const supabase = createSupabaseClient(env.url, env.key, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: redirectTo },
+  });
+
+  if (error) {
+    if (shouldReturnNeutralSignupError(error.message)) return { ok: true };
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   if (pruneAndCount(ipHits, ip, IP_WINDOW_MS) >= IP_LIMIT) {
@@ -480,18 +507,14 @@ export async function POST(request: Request) {
     });
 
     if (!sent.ok) {
-      const fallback = await fallbackSignupWithPublicClient({
+      const resend = await resendVerificationWithPublicClient({
         email,
-        password,
-        nombre,
-        apellido,
-        username,
         redirectTo,
       });
-      if (fallback.ok) return genericSuccess();
+      if (resend.ok) return genericSuccess();
       console.error("[auth/register] SES send failed", sent.error);
       return NextResponse.json(
-        { ok: false, error: "mail_no_enviado", detail: `${sent.error} | fallback:${fallback.error}` },
+        { ok: false, error: "mail_no_enviado", detail: `${sent.error} | resend:${resend.error}` },
         { status: 502 },
       );
     }
