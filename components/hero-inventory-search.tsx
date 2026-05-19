@@ -509,7 +509,6 @@ export function HeroInventorySearch({
   const [rows, setRows] = useState<SearchRow[]>([]);
   const [searched, setSearched] = useState(false);
 
-  const visibleRows = useMemo(() => rows.slice(0, MAX_RENDER), [rows]);
   const hasAnyFilter =
     Boolean(q.trim()) ||
     Boolean(marca.trim()) ||
@@ -518,6 +517,7 @@ export function HeroInventorySearch({
     Boolean(yearTo.trim()) ||
     operativo !== "todos" ||
     motorArranca !== "todos";
+  const visibleRows = useMemo(() => (hasAnyFilter ? rows.slice(0, MAX_RENDER) : []), [hasAnyFilter, rows]);
 
   useEffect(() => {
     onSearchActiveChange?.(hasAnyFilter);

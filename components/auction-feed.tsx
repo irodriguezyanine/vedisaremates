@@ -170,6 +170,11 @@ function sanitizeEventText(value: string | null | undefined, maxLen = 180): stri
   return merged.length > maxLen ? `${merged.slice(0, maxLen - 1).trim()}…` : merged;
 }
 
+function formatRemateDateTime(iso: string | null | undefined): string {
+  if (!iso) return "No definido";
+  return new Date(iso).toLocaleString("es-CL");
+}
+
 type RawEntry = { key: string; path: string; value: unknown };
 
 function normalizeKeyToken(value: string): string {
@@ -843,6 +848,9 @@ export function AuctionFeed() {
                   </div>
                   <p className="mt-2 line-clamp-1 text-sm font-medium text-neutral-600">{lote.subtitulo}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                      Inicio: Programado
+                    </span>
                     <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
                       Lotes disponibles: 12
                     </span>
@@ -920,6 +928,9 @@ export function AuctionFeed() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-700 sm:text-xs">
+                        Inicio: {formatRemateDateTime(r.starts_at)}
+                      </span>
                       <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-700 sm:text-xs">
                         Lotes disponibles: {slides.length}
                       </span>

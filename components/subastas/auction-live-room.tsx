@@ -24,7 +24,8 @@ type Lote = PortalRemateLoteRow & { inventario: InventarioRow | null };
 
 const TZ_CHILE = { timeZone: "America/Santiago" } satisfies Intl.DateTimeFormatOptions;
 
-function formatClDateTime(iso: string): string {
+function formatClDateTime(iso: string | null): string {
+  if (!iso) return "No definido";
   return new Date(iso).toLocaleString("es-CL", TZ_CHILE);
 }
 
@@ -110,6 +111,22 @@ function parseCurrencyInput(raw: string): number {
   const digits = sanitizeCurrencyInput(raw);
   if (!digits) return 0;
   return Number.parseInt(digits, 10);
+}
+
+function incrementoAutomaticoPorRango(precioReferencia: number): number {
+  const v = Number.isFinite(precioReferencia) ? Math.max(0, precioReferencia) : 0;
+  if (v <= 100000) return 10000;
+  if (v <= 1000000) return 50000;
+  if (v <= 4000000) return 100000;
+  if (v <= 8000000) return 200000;
+  if (v <= 15000000) return 300000;
+  return 400000;
+}
+
+function incrementoPorLote(lote: Pick<PortalRemateLoteRow, "precio_base" | "precio_minimo_remate"> | null): number {
+  if (!lote) return 10000;
+  const referencia = Math.max(Number(lote.precio_minimo_remate ?? 0), Number(lote.precio_base ?? 0), 0);
+  return incrementoAutomaticoPorRango(referencia);
 }
 
 type BidMsgTone = "success" | "error" | "info";
@@ -451,8 +468,9 @@ export function AuctionLiveRoom({
     const floor = Number(active.precio_minimo_remate ?? 0) || 0;
     const list = offersByLote[active.id] ?? [];
     const max = list.length ? list[0]!.monto : null;
+    const incremento = incrementoPorLote(active);
     if (max === null) return Math.max(Number(active.precio_base) || 0, floor);
-    return Math.max(max + Number(active.incremento_minimo), floor);
+    return Math.max(max + incremento, floor);
   }, [active, offersByLote]);
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
   const topForActive = listForActive[0] ?? null;
@@ -651,7 +669,7 @@ export function AuctionLiveRoom({
 
   function setQuickBid(multiplier: number) {
     const safeMult = Math.max(1, Math.round(multiplier));
-    const next = minNext + Number(active?.incremento_minimo ?? 0) * (safeMult - 1);
+    const next = minNext + incrementoPorLote(active) * (safeMult - 1);
     setAmount(formatCurrencyInput(String(Math.max(minNext, next))));
   }
 
@@ -733,7 +751,7 @@ export function AuctionLiveRoom({
           </div>
         </div>
         <div className="w-full shrink-0 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm shadow-sm lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div className="flex min-w-[8.5rem] shrink-0 flex-col leading-tight">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</span>
               <span className="text-base font-bold capitalize text-neutral-900">
@@ -742,10 +760,19 @@ export function AuctionLiveRoom({
             </div>
             <span className="hidden h-8 w-px shrink-0 bg-neutral-200 sm:block" aria-hidden />
             <div className="min-w-0 flex-1 leading-tight">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Inicio</span>
+              <p className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                {formatClDateTime(remate.starts_at)}
+              </p>
+            </div>
+            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 sm:block" aria-hidden />
+            <div className="min-w-0 flex-1 leading-tight">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Cierra</span>
-              <p
-                className={`text-xs font-medium ${countdownLive !== null && countdownLive <= 0 ? "text-red-600" : "text-emerald-700"}`}
-              >
+              <p className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${
+                countdownLive !== null && countdownLive <= 0
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}>
                 {countdownLive !== null && countdownLive <= 0
                   ? "Este remate ya cerró según la fecha configurada."
                   : remate.ends_at
@@ -1198,7 +1225,7 @@ export function AuctionLiveRoom({
                       if (!row) return null;
                       const inv = row.inventario;
                       const currentMax = (offersByLote[id]?.[0]?.monto ?? null) as number | null;
-                      const nextMin = currentMax == null ? Number(row.precio_base) : currentMax + Number(row.incremento_minimo);
+                      const nextMin = currentMax == null ? Number(row.precio_base) : currentMax + incrementoPorLote(row);
                       return (
                         <article key={id} className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
                           <p className="line-clamp-2 text-sm font-bold text-neutral-900">

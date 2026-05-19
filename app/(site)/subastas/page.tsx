@@ -16,6 +16,11 @@ function estadoLabel(e: PortalRemateRow["estado"]) {
   return map[e] ?? e;
 }
 
+function formatRemateDateTime(iso: string | null): string {
+  if (!iso) return "No definido";
+  return new Date(iso).toLocaleString("es-CL");
+}
+
 export default async function SubastasIndexPage() {
   const supabase = await createClient();
 
@@ -65,8 +70,8 @@ export default async function SubastasIndexPage() {
           <p className="mt-1 text-sm font-semibold text-neutral-900">{recomendado.titulo}</p>
           <p className="mt-0.5 text-xs text-neutral-600">{recomendado.motivo}</p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
-            <span>
-              Cierre: <strong>{new Date(recomendado.ends_at).toLocaleString("es-CL")}</strong>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+              Cierre: <strong>{formatRemateDateTime(recomendado.ends_at)}</strong>
             </span>
             <Link href={`/subastas/${recomendado.remate_id}`} className="font-bold text-[#009ade] hover:underline">
               Ver recomendado →
@@ -117,12 +122,14 @@ export default async function SubastasIndexPage() {
                       </span>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-xs text-neutral-500">
-                    <p>
-                      Cierre:{" "}
-                      <span className="font-semibold text-neutral-800">
-                        {new Date(r.ends_at).toLocaleString("es-CL")}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                        Inicio: <strong>{formatRemateDateTime(r.starts_at)}</strong>
                       </span>
-                    </p>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                        Cierre: <strong>{formatRemateDateTime(r.ends_at)}</strong>
+                      </span>
+                    </div>
                     <span className="font-bold text-[#009ade] group-hover:underline">Entrar a la sala →</span>
                   </div>
                 </div>
