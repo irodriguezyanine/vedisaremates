@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 import { sendSesEmail } from "@/lib/mail/ses";
 import { SITE } from "@/lib/site-config";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPublicSupabaseEnv } from "@/lib/supabase/public-env";
 
 export const runtime = "nodejs";
 
@@ -307,6 +309,49 @@ async function forceClienteRemateRole(
   }
 }
 
+async function fallbackSignupWithPublicClient({
+  email,
+  password,
+  nombre,
+  apellido,
+  username,
+  redirectTo,
+}: {
+  email: string;
+  password: string;
+  nombre: string;
+  apellido: string;
+  username: string;
+  redirectTo: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const env = getPublicSupabaseEnv();
+  if (!env) return { ok: false, error: "supabase_public_no_configurado" };
+
+  const supabase = createSupabaseClient(env.url, env.key, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: redirectTo,
+      data: {
+        nombre: nombre || undefined,
+        apellido: apellido || undefined,
+        username: username || undefined,
+        registration_channel: "web_fallback",
+      },
+    },
+  });
+
+  if (error) {
+    if (shouldReturnNeutralSignupError(error.message)) return { ok: true };
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 export async function POST(request: Request) {
   const ip = getClientIp(request);
   if (pruneAndCount(ipHits, ip, IP_WINDOW_MS) >= IP_LIMIT) {
@@ -355,7 +400,19 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   if (!admin) {
-    return NextResponse.json({ ok: false, error: "auth_admin_no_configurado" }, { status: 500 });
+    const fallback = await fallbackSignupWithPublicClient({
+      email,
+      password,
+      nombre,
+      apellido,
+      username,
+      redirectTo,
+    });
+    if (fallback.ok) return genericSuccess();
+    return NextResponse.json(
+      { ok: false, error: "auth_admin_no_configurado", detail: fallback.error },
+      { status: 500 },
+    );
   }
 
   try {
@@ -388,9 +445,18 @@ export async function POST(request: Request) {
 
     if (error) {
       if (shouldReturnNeutralSignupError(error.message)) return genericSuccess();
+      const fallback = await fallbackSignupWithPublicClient({
+        email,
+        password,
+        nombre,
+        apellido,
+        username,
+        redirectTo,
+      });
+      if (fallback.ok) return genericSuccess();
       console.error("[auth/register] generateLink failed", error.message);
       return NextResponse.json(
-        { ok: false, error: "link_no_generado", detail: error.message },
+        { ok: false, error: "link_no_generado", detail: `${error.message} | fallback:${fallback.error}` },
         { status: 500 },
       );
     }
@@ -414,9 +480,18 @@ export async function POST(request: Request) {
     });
 
     if (!sent.ok) {
+      const fallback = await fallbackSignupWithPublicClient({
+        email,
+        password,
+        nombre,
+        apellido,
+        username,
+        redirectTo,
+      });
+      if (fallback.ok) return genericSuccess();
       console.error("[auth/register] SES send failed", sent.error);
       return NextResponse.json(
-        { ok: false, error: "mail_no_enviado", detail: sent.error },
+        { ok: false, error: "mail_no_enviado", detail: `${sent.error} | fallback:${fallback.error}` },
         { status: 502 },
       );
     }
