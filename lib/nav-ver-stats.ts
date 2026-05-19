@@ -10,6 +10,7 @@ const REMATES_ESTADOS_PUBLICOS = ["publicado", "en_curso", "cerrado"] as const;
 /** Columnas mínimas de inventario dentro del embed desde `portal_remate_lotes`. */
 const INVENTARIO_EN_LOTE_SELECT =
   "id,created_at,patente,marca,modelo,ano,categoria,estado,empresa,valor_minimo,valor_esperado";
+const INVENTARIO_EN_LOTE_SELECT_CATEGORIA = "id,categoria";
 
 /** Bucket por valor exacto de `inventario.categoria` (respeta cómo viene en la base). */
 export type InventarioCategoriaBucket = {
@@ -64,6 +65,27 @@ function inventarioCuadraFiltroCategoria(catRaw: unknown, filtro: ListaFiltroInv
 export function etiquetaCategoriaHumana(raw: string | null): string {
   if (!raw?.trim()) return "Sin categoría";
   const s = raw.trim();
+  const normalized = s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_\s]+/g, " ")
+    .trim();
+
+  const alias: Record<string, string> = {
+    vehiculo_liviano: "Vehículo liviano",
+    "vehiculo liviano": "Vehículo liviano",
+    liviano: "Vehículo liviano",
+    vehiculo_pesado: "Vehículo pesado",
+    "vehiculo pesado": "Vehículo pesado",
+    pesado: "Vehículo pesado",
+    chatarra: "Chatarra",
+    maquinaria: "Maquinaria",
+    moto: "Motocicleta",
+    motocicleta: "Motocicleta",
+  };
+  if (alias[normalized]) return alias[normalized];
+
   return s
     .split(/[\s_/]+/)
     .filter(Boolean)
@@ -83,16 +105,32 @@ export async function obtenerBucketsCategoriaInventario(
   const conteo = new Map<string | null, number>();
 
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("portal_remate_lotes")
       .select(
         `
         inventario_id,
-        inventario ( ${INVENTARIO_EN_LOTE_SELECT} ),
+        inventario ( ${INVENTARIO_EN_LOTE_SELECT_CATEGORIA} ),
         portal_remates ( estado )
       `,
       )
       .range(from, from + PAGE_SIZE - 1);
+
+    // Fallback defensivo por compatibilidad de esquema.
+    if (error) {
+      const retry = await supabase
+        .from("portal_remate_lotes")
+        .select(
+          `
+          inventario_id,
+          inventario ( id, categoria ),
+          portal_remates ( estado )
+        `,
+        )
+        .range(from, from + PAGE_SIZE - 1);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) throw error;
     const filasCrudas = (data ?? []) as Record<string, unknown>[];

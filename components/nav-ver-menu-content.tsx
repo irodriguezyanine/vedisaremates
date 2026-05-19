@@ -121,36 +121,32 @@ export function NavVerMenuContent({ onNavigate, variant = "dropdown" }: Props) {
         Inventario por categoría
       </p>
       <p className={`${pad} pt-0 ${subtle} -mt-1 leading-snug`}>
-        Solo vehículos en lotes de subastas publicadas, en curso o cerradas.
+        Vehículos disponibles por tipo según lotes publicados, en curso o cerrados.
       </p>
-      {loading ? (
-        <p className={`${pad} ${subtle}`}>Cargando…</p>
-      ) : err ? (
-        <p className={`${pad} text-xs text-amber-700 dark:text-amber-200`}>{err}</p>
-      ) : buckets.length === 0 ? (
-        <p className={`${pad} ${subtle}`}>
-          Aún no hay lotes cargados en subastas visibles para el público.
-        </p>
-      ) : (
-        buckets.map((b) => (
-          <Link
-            key={b.valor ?? "__sin__"}
-            href={hrefBuscarPorCategoria(b)}
-            role="menuitem"
-            className={itemClass}
-            onClick={onNavigate}
-          >
-            <span className={variant === "dropdown" ? "truncate text-neutral-800" : "truncate"} title={b.etiqueta}>
-              {b.etiqueta}
-            </span>
-            <span
-              className={`shrink-0 tabular-nums ${variant === "dropdown" ? "font-semibold text-neutral-700" : "text-neutral-400"}`}
+      {loading ? <p className={`${pad} ${subtle}`}>Cargando…</p> : null}
+      {!loading && buckets.length > 0
+        ? buckets.map((b) => (
+            <Link
+              key={b.valor ?? "__sin__"}
+              href={hrefBuscarPorCategoria(b)}
+              role="menuitem"
+              className={itemClass}
+              onClick={onNavigate}
             >
-              {b.cantidad}
-            </span>
-          </Link>
-        ))
-      )}
+              <span className={variant === "dropdown" ? "truncate text-neutral-800" : "truncate"} title={b.etiqueta}>
+                {b.etiqueta}
+              </span>
+              <span
+                className={`shrink-0 tabular-nums ${variant === "dropdown" ? "font-semibold text-neutral-700" : "text-neutral-400"}`}
+              >
+                {b.cantidad}
+              </span>
+            </Link>
+          ))
+        : null}
+      {!loading && !err && buckets.length === 0 ? (
+        <p className={`${pad} ${subtle}`}>Aún no hay categorías disponibles en subastas visibles.</p>
+      ) : null}
     </div>
   );
 }

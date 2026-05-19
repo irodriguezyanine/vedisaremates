@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getInventarioStaticImageUrls, preferredThumbnailUrl } from "@/lib/inventario-media";
+import { etiquetaCategoriaHumana } from "@/lib/nav-ver-stats";
 import type { InventarioRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
@@ -371,7 +372,7 @@ function vehicleLotLabel(row: InventarioAnyRow): string | null {
 function vehicleCategoryLabel(row: InventarioAnyRow): string | null {
   const cat = String(row.categoria ?? "").trim();
   if (!cat) return null;
-  return `Categoría: ${cat}`;
+  return `Categoría: ${etiquetaCategoriaHumana(cat)}`;
 }
 
 function SpecIcon({ icon }: { icon: SpecIconName }) {

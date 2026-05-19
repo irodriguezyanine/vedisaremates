@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PortalRemateRow } from "@/lib/portal-types";
 import { classifyRemateForFeed, countdownLabelFromEndsAt, type RemateFeedSlice } from "@/lib/portal-remate-feed";
 import { fetchRemateCarouselSlidesMap, type RemateCarouselSlide } from "@/lib/remate-cover-thumbnails";
+import { etiquetaCategoriaHumana } from "@/lib/nav-ver-stats";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
 import { catalogoHref } from "@/lib/site-config";
@@ -297,7 +298,7 @@ function lotTitle(slide: RemateCarouselSlide): string {
 function lotCategory(slide: RemateCarouselSlide): string | null {
   const inv = (slide.inventario ?? {}) as Record<string, unknown>;
   const cat = String(inv.categoria ?? "").trim();
-  return cat ? `Categoría: ${cat}` : null;
+  return cat ? `Categoría: ${etiquetaCategoriaHumana(cat)}` : null;
 }
 
 function SpecIcon({ icon }: { icon: SpecIconName }) {
