@@ -24,6 +24,27 @@ type SearchRow = {
   remateEstado: string | null;
 };
 
+type SpecIconName =
+  | "km"
+  | "year"
+  | "fuel"
+  | "gear"
+  | "engineTest"
+  | "movementTest"
+  | "conditioned"
+  | "singleOwner"
+  | "airConditioning"
+  | "keys"
+  | "traction"
+  | "airbags";
+
+type SearchSpec = {
+  key: string;
+  label: string;
+  icon: SpecIconName;
+  wide?: boolean;
+};
+
 const IMAGE_HINT_KEYS = [
   "glo3d_thumbnail",
   "glo3d_thumb",
@@ -138,14 +159,221 @@ function glo3dUrl(row: InventarioAnyRow): string | null {
   return firstGlo3dViewerUrl(row) ?? findUrlByHintKeys(row, GLO3D_HINT_KEYS);
 }
 
+function getFirstRawValue(raw: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function normalizeMileage(value: string | null): string | null {
+  if (!value) return null;
+  const compact = value.trim();
+  if (!compact) return null;
+  const digits = compact.replace(/[^\d]/g, "");
+  if (!digits) return compact;
+  return `${Number(digits).toLocaleString("es-CL")} kms.`;
+}
+
+function normalizeBinaryStatus(value: string | null): "yes" | "no" | "unknown" | null {
+  if (!value) return null;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (!normalized) return null;
+  if (["si", "yes", "true", "1", "arranca", "se mueve", "se desplaza"].includes(normalized)) return "yes";
+  if (["no", "false", "0", "no arranca", "no se mueve", "no se desplaza"].includes(normalized)) return "no";
+  return "unknown";
+}
+
+function getMotorTestLabel(value: string | null): string | null {
+  const status = normalizeBinaryStatus(value);
+  if (!status) return null;
+  if (status === "yes") return "MOTOR ARRANCA";
+  if (status === "no") return "MOTOR NO ARRANCA";
+  return value?.trim().toUpperCase() ?? null;
+}
+
+function getMovementTestLabel(value: string | null): string | null {
+  const status = normalizeBinaryStatus(value);
+  if (!status) return null;
+  if (status === "yes") return "SE DESPLAZA";
+  if (status === "no") return "NO SE DESPLAZA";
+  return value?.trim().toUpperCase() ?? null;
+}
+
+function isAffirmativeStatus(value: string | null): boolean {
+  return normalizeBinaryStatus(value) === "yes";
+}
+
+function getVehicleSpecs(row: InventarioAnyRow): SearchSpec[] {
+  const raw = row as Record<string, unknown>;
+  const mileage = normalizeMileage(
+    getFirstRawValue(raw, ["kilometraje", "km", "kms", "odometro", "odómetro", "glo3d.kilometraje"]),
+  );
+  const year = getFirstRawValue(raw, ["ano", "anio", "year", "glo3d.year"]);
+  const fuel = getFirstRawValue(raw, ["combustible", "fuel", "glo3d.combustible"]);
+  const transmission = getFirstRawValue(raw, ["transmision", "transmisión", "caja", "transmission", "glo3d.transmision"]);
+  const motorTestRaw = getFirstRawValue(raw, ["prueba_motor", "pdm", "pruebaMotor", "motor_test", "glo3d.prueba_motor"]);
+  const movementTestRaw = getFirstRawValue(raw, [
+    "prueba_desplazamiento",
+    "pdd",
+    "pruebaDesplazamiento",
+    "movement_test",
+    "glo3d.prueba_desplazamiento",
+  ]);
+  const conditionedRaw = getFirstRawValue(raw, ["condicionado", "glo3d.condicionado"]);
+  const singleOwnerRaw = getFirstRawValue(raw, ["unico_propietario", "single_owner", "one_owner", "glo3d.unico_propietario"]);
+  const airConditioningRaw = getFirstRawValue(raw, ["aire_acondicionado", "air_conditioning", "has_ac", "ac", "glo3d.aire_acondicionado"]);
+  const keysRaw = getFirstRawValue(raw, ["llaves", "keys", "has_keys", "tiene_llaves", "glo3d.llaves"]);
+  const tractionRaw = getFirstRawValue(raw, ["traccion", "traction", "glo3d.traccion"]);
+  const airbagsRaw = getFirstRawValue(raw, ["estado_airbags", "airbags", "eda", "glo3d.estado_airbags"]);
+  const motorTest = getMotorTestLabel(motorTestRaw);
+  const movementTest = getMovementTestLabel(movementTestRaw);
+
+  const specs: SearchSpec[] = [];
+  if (mileage) specs.push({ key: "km", label: mileage, icon: "km" });
+  if (year) specs.push({ key: "year", label: year, icon: "year" });
+  if (fuel) specs.push({ key: "fuel", label: fuel.toUpperCase(), icon: "fuel" });
+  if (transmission) specs.push({ key: "gear", label: transmission.toUpperCase(), icon: "gear" });
+  if (motorTest) specs.push({ key: "engineTest", label: motorTest, icon: "engineTest", wide: true });
+  if (movementTest) specs.push({ key: "movementTest", label: movementTest, icon: "movementTest", wide: true });
+  if (isAffirmativeStatus(conditionedRaw)) specs.push({ key: "conditioned", label: "ACONDICIONADO", icon: "conditioned", wide: true });
+  if (isAffirmativeStatus(singleOwnerRaw)) specs.push({ key: "singleOwner", label: "UNICO DUEÑO", icon: "singleOwner", wide: true });
+  if (isAffirmativeStatus(airConditioningRaw))
+    specs.push({ key: "airConditioning", label: "AIRE ACONDICIONADO", icon: "airConditioning", wide: true });
+  if (isAffirmativeStatus(keysRaw)) specs.push({ key: "keys", label: "CON LLAVES", icon: "keys", wide: true });
+  if (tractionRaw) specs.push({ key: "traction", label: `TRACCION ${tractionRaw.toUpperCase()}`, icon: "traction", wide: true });
+  if (airbagsRaw) specs.push({ key: "airbags", label: `AIRBAGS: ${airbagsRaw.toUpperCase()}`, icon: "airbags", wide: true });
+  return specs.slice(0, 10);
+}
+
+function formatClpFromUnknown(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return `$${value.toLocaleString("es-CL")}`;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value.replace(/[^\d-]/g, ""));
+    if (Number.isFinite(n)) return `$${n.toLocaleString("es-CL")}`;
+  }
+  return null;
+}
+
+function vehicleTitle(row: InventarioAnyRow): string {
+  const marca = String(row.marca ?? "").trim();
+  const modelo = String(row.modelo ?? "").trim();
+  const version = String(row.version ?? "").trim();
+  const ano = String(row.ano ?? "").trim();
+  const text = [marca, modelo, version, ano].filter(Boolean).join(" ");
+  return text ? `VEDISA Remates - ${text}` : "VEDISA Remates - Vehículo disponible";
+}
+
+function vehicleDescription(row: InventarioAnyRow): string {
+  const descripcion = String(row.descripcion ?? "").replace(/\s+/g, " ").trim();
+  if (descripcion) return descripcion.toUpperCase();
+  const fallback = [String(row.marca ?? ""), String(row.modelo ?? "")].filter(Boolean).join(" ").trim();
+  return fallback ? `${fallback.toUpperCase()} DISPONIBLE PARA OFERTAR` : "VEHÍCULO DISPONIBLE PARA OFERTAR";
+}
+
+function vehicleLotLabel(row: InventarioAnyRow): string | null {
+  const lot = getFirstRawValue(row as Record<string, unknown>, ["csv_lote", "lote", "lot", "numero_lote"]);
+  return lot ? `Lote ${lot}` : null;
+}
+
+function vehicleCategoryLabel(row: InventarioAnyRow): string | null {
+  const cat = String(row.categoria ?? "").trim();
+  if (!cat) return null;
+  return `Categoría: ${cat}`;
+}
+
+function SpecIcon({ icon }: { icon: SpecIconName }) {
+  if (icon === "km")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="10" cy="10" r="6.8" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M10 10 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="10" cy="10" r="1.1" fill="currentColor" />
+      </svg>
+    );
+  if (icon === "year")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <rect x="3.5" y="4.5" width="13" height="11.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M6.5 3.5v2M13.5 3.5v2M3.5 8h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "fuel")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M4.5 4.5h6v11h-6z" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M10.5 7h1.8l1.4 1.6v4.4a1.7 1.7 0 0 0 3.4 0V9.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "engineTest")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <rect x="3.5" y="7" width="9.8" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M13.3 8.4h2.2M13.3 11.6h2.2M6.4 7V5.4M10.4 7V5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "movementTest")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M4 10h9.8M10.8 6l3.5 4-3.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "conditioned")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M4.2 10.2h11.6M10.5 4.4c2.8.2 5 2.5 5 5.3 0 2.9-2.3 5.3-5.3 5.3-2.8 0-5.1-2.2-5.3-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "singleOwner")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="10" cy="6.5" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M5 15.3c.6-2.1 2.5-3.6 5-3.6s4.4 1.5 5 3.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "airConditioning")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <path d="M5 6.5h10M10 4.5v2M7.2 10.2l2.8-1.7 2.8 1.7M10 8.5V15.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "keys")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="7" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M9.5 10h6M13.5 10v1.8M15.5 10v1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  if (icon === "traction")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="6" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
+        <circle cx="14" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M5.5 12h9l-1-3.2H7.1L5.5 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    );
+  if (icon === "airbags")
+    return (
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+        <circle cx="8.2" cy="7" r="2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M4.8 14.8c.4-2 1.9-3.4 3.9-3.7M10.8 12.2h4.4M13 9.5v5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  return null;
+}
+
 function SearchCardImage({ inventario }: { inventario: InventarioAnyRow }) {
   const candidates = useMemo(() => thumbnailCandidates(inventario), [inventario]);
-  const [index, setIndex] = useState(0);
+  const sourceKey = `${String(inventario.id ?? "")}:${candidates.join("|")}`;
+  const [state, setState] = useState<{ key: string; index: number }>({ key: sourceKey, index: 0 });
+  const index = state.key === sourceKey ? state.index : 0;
   const src = candidates[index] ?? null;
-
-  useEffect(() => {
-    setIndex(0);
-  }, [inventario.id, candidates.length]);
 
   if (!src) {
     return (
@@ -163,7 +391,10 @@ function SearchCardImage({ inventario }: { inventario: InventarioAnyRow }) {
       className="h-full w-full object-cover"
       loading="lazy"
       onError={() => {
-        setIndex((prev) => prev + 1);
+        setState((prev) => {
+          const nextIndex = prev.key === sourceKey ? prev.index + 1 : 1;
+          return { key: sourceKey, index: nextIndex };
+        });
       }}
     />
   );
@@ -293,13 +524,7 @@ export function HeroInventorySearch({
   }, [categoria, hasAnyFilter, marca, motorArranca, operativo, q, yearFrom, yearTo]);
 
   useEffect(() => {
-    if (!hasAnyFilter) {
-      setRows([]);
-      setSearched(false);
-      setErr(null);
-      setLoading(false);
-      return;
-    }
+    if (!hasAnyFilter) return;
     const timer = window.setTimeout(() => {
       void searchInventory();
     }, 250);
@@ -384,14 +609,14 @@ export function HeroInventorySearch({
           ) : null}
 
           {err ? <p className="mt-3 text-sm text-red-300">{err}</p> : null}
-          {searched && !loading ? (
+          {hasAnyFilter && searched && !loading ? (
             <p className="mt-3 text-xs text-slate-400">
               Resultados: {rows.length} {rows.length === 1 ? "vehículo" : "vehículos"}.
               {rows.length > MAX_RENDER ? ` Mostrando los primeros ${MAX_RENDER}.` : ""}
             </p>
           ) : null}
 
-          {searched && !loading && !visibleRows.length ? (
+          {hasAnyFilter && searched && !loading && !visibleRows.length ? (
             <div className="mt-4 rounded-xl border border-dashed border-[#365072] bg-[#0a1523] px-4 py-8 text-center">
               <p className="text-sm font-semibold text-slate-200">No encontramos vehiculos con esos filtros.</p>
               <p className="mt-1 text-xs text-slate-400">Prueba otra marca, patente o un rango de anio mas amplio.</p>
@@ -399,47 +624,77 @@ export function HeroInventorySearch({
           ) : null}
 
           {visibleRows.length ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {visibleRows.map((row) => (
-                <article
-                  key={String(row.inventario.id)}
-                  className="overflow-hidden rounded-xl border border-[#2a3a53] bg-[#0a1523] shadow-[0_10px_30px_-20px_rgba(0,0,0,0.9)]"
-                >
-                  <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-[#2a3a53]">
-                    <SearchCardImage inventario={row.inventario} />
-                    {glo3dUrl(row.inventario) ? (
-                      <a
-                        href={glo3dUrl(row.inventario) ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute right-2 top-2 rounded-md bg-[#33C7E3] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0f1f2c]"
-                      >
-                        Glo3D
-                      </a>
-                    ) : null}
-                  </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+              {visibleRows.map((row) => {
+                const specs = getVehicleSpecs(row.inventario);
+                const lotLabel = vehicleLotLabel(row.inventario);
+                const categoryLabel = vehicleCategoryLabel(row.inventario);
+                const priceLabel = formatClpFromUnknown(row.inventario.precio_minimo_remate ?? row.inventario.valor_minimo);
+                const glo3d = glo3dUrl(row.inventario);
 
-                  <div className="space-y-2 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-extrabold text-white">{String(row.inventario.patente ?? "Sin patente")}</p>
-                      <span className="rounded-md border border-[#365072] bg-[#0f2135] px-2 py-0.5 text-[11px] font-semibold text-slate-200">
-                        {String(row.inventario.ano ?? "—")}
-                      </span>
+                return (
+                  <article
+                    key={String(row.inventario.id)}
+                    className="overflow-hidden rounded-2xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_12px_24px_rgba(73,46,26,0.12)]"
+                  >
+                    <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-[#dfd4c7]">
+                      <SearchCardImage inventario={row.inventario} />
+                      {glo3d ? (
+                        <a
+                          href={glo3d}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute right-2 top-2 rounded-md bg-[#6fd0ef] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0f1f2c]"
+                        >
+                          Glo3D
+                        </a>
+                      ) : null}
                     </div>
-                    <p className="line-clamp-2 min-h-[38px] text-sm font-medium text-slate-200">
-                      {[row.inventario.marca, row.inventario.modelo].filter(Boolean).join(" ") || "Vehiculo disponible"}
-                    </p>
-                    {row.remateId ? (
-                      <Link
-                        href={`/subastas/${row.remateId}`}
-                        className="inline-flex w-full items-center justify-center rounded-lg bg-[#33C7E3] px-3 py-2 text-xs font-bold text-[#0f1f2c] transition hover:brightness-105"
-                      >
-                        Ir a ofertar
-                      </Link>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+
+                    <div className="space-y-3 p-4">
+                      <h3 className="line-clamp-2 text-[1.15rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
+                      <p className="line-clamp-3 text-[0.9rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
+
+                      {specs.length > 0 ? (
+                        <div className="rounded-xl border border-amber-200/70 bg-[#fdfaf5] p-3">
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-[#4f5a66]">
+                            {specs.map((spec) => (
+                              <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
+                                <SpecIcon icon={spec.icon} />
+                                <span className={`${spec.wide ? "text-xs font-semibold uppercase" : "truncate"} text-[#5a616d]`}>
+                                  {spec.label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-2 text-xs text-[#604734]">
+                        {lotLabel ? <span className="rounded-full border border-amber-300/60 bg-[#f4ebe2] px-2.5 py-1">{lotLabel}</span> : null}
+                        {categoryLabel ? (
+                          <span className="rounded-full border border-amber-300/70 bg-[#eddccf] px-2.5 py-1 font-semibold">{categoryLabel}</span>
+                        ) : null}
+                      </div>
+
+                      {priceLabel ? (
+                        <div className="border-t border-amber-200/70 pt-3">
+                          <p className="text-[1.7rem] font-extrabold tracking-tight text-[#673b1f]">{priceLabel}</p>
+                        </div>
+                      ) : null}
+
+                      {row.remateId ? (
+                        <Link
+                          href={`/subastas/${row.remateId}`}
+                          className="inline-flex w-full items-center justify-center rounded-xl bg-[#66cceb] px-3 py-2 text-sm font-bold text-[#0f1f2c] transition hover:brightness-105"
+                        >
+                          Ir a ofertar
+                        </Link>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           ) : null}
         </div>
