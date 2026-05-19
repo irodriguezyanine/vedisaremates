@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { buildMailShell, formatClp, toPlainText } from "@/lib/mail/templates";
 import { sendSesEmail } from "@/lib/mail/ses";
+import { SITE } from "@/lib/site-config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,16 +51,73 @@ async function getPrefsForUser(admin: NonNullable<ReturnType<typeof createAdminC
 async function buildLoteContext(admin: NonNullable<ReturnType<typeof createAdminClient>>, loteId: string) {
   const { data } = await admin
     .from("portal_remate_lotes")
-    .select("id, titulo, remate_id, portal_remates(titulo)")
+    .select("id, titulo, remate_id, inventario(patente,marca,modelo), portal_remates(titulo)")
     .eq("id", loteId)
     .maybeSingle();
   const row = (data ?? {}) as Record<string, unknown>;
   const remate = Array.isArray(row.portal_remates) ? row.portal_remates[0] : row.portal_remates;
+  const inv = Array.isArray(row.inventario) ? row.inventario[0] : row.inventario;
+  const iv = (inv ?? {}) as Record<string, unknown>;
+  const patente = String(iv.patente ?? "").trim().toUpperCase();
+  const marca = String(iv.marca ?? "").trim();
+  const modelo = String(iv.modelo ?? "").trim();
+  const inventarioFicha = [patente, marca, modelo].filter(Boolean).join(" · ");
   return {
     loteTitulo: String(row.titulo ?? "Lote").trim() || "Lote",
     remateId: String(row.remate_id ?? "").trim(),
     remateTitulo: String((remate as Record<string, unknown> | null)?.titulo ?? "Subasta").trim() || "Subasta",
+    inventarioFicha: inventarioFicha || null,
   };
+}
+
+function buildBidMail({
+  title,
+  subtitle,
+  intro,
+  remateTitulo,
+  loteTitulo,
+  loteFicha,
+  monto,
+  salaHref,
+  ctaLabel,
+  siteOrigin,
+}: {
+  title: string;
+  subtitle: string;
+  intro: string;
+  remateTitulo: string;
+  loteTitulo: string;
+  loteFicha?: string | null;
+  monto?: number;
+  salaHref: string;
+  ctaLabel: string;
+  siteOrigin: string;
+}) {
+  const contentHtml = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dbe7f2;background:#f8fbff;border-radius:10px;">
+      <tr>
+        <td style="padding:14px;">
+          <p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>Remate:</strong> ${remateTitulo}</p>
+          <p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>Lote:</strong> ${loteTitulo}</p>
+          ${loteFicha ? `<p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>Vehículo:</strong> ${loteFicha}</p>` : ""}
+          ${typeof monto === "number" ? `<p style="margin:0;font-size:15px;color:#0f3d5c;font-weight:800;"><strong>Monto:</strong> ${formatClp(monto)}</p>` : ""}
+        </td>
+      </tr>
+    </table>
+    <p style="margin:14px 0 0;font-size:12px;color:#64748b;">
+      Si necesitas ayuda para ofertar, escríbenos por WhatsApp: <a href="${SITE.whatsappHref}" style="color:#0369a1;font-weight:700;text-decoration:none;">${SITE.contactPhoneDisplay}</a>
+    </p>
+  `;
+  const html = buildMailShell({
+    siteOrigin,
+    title,
+    subtitle,
+    intro,
+    primaryCta: { label: ctaLabel, href: salaHref },
+    contentHtml,
+  });
+  const text = toPlainText(html);
+  return { html, text };
 }
 
 export async function POST(request: Request) {
@@ -107,20 +166,18 @@ export async function POST(request: Request) {
         await sendSesEmail({
           to: meEmail,
           subject: `Oferta confirmada · ${ctx.remateTitulo}`,
-          text: `Tu oferta fue registrada.\n\nRemate: ${ctx.remateTitulo}\nLote: ${ctx.loteTitulo}\nMonto: $${Math.round(bidAmount)}\nSala: ${salaHref}`,
-          html: `
-            <div style="font-family:Arial,sans-serif;padding:20px;background:#f3f7fb;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #dbe7f2;border-radius:12px;overflow:hidden;">
-                <tr><td style="padding:16px 18px;background:#0f3d5c;color:#fff;font-size:22px;font-weight:800;">Oferta confirmada</td></tr>
-                <tr><td style="padding:18px;">
-                  <p style="margin:0 0 10px;color:#334155;">Tu puja se registró correctamente.</p>
-                  <p style="margin:0 0 6px;"><strong>Remate:</strong> ${ctx.remateTitulo}</p>
-                  <p style="margin:0 0 6px;"><strong>Lote:</strong> ${ctx.loteTitulo}</p>
-                  <p style="margin:0 0 12px;"><strong>Monto:</strong> $${Math.round(bidAmount)}</p>
-                  <a href="${salaHref}" style="display:inline-block;background:#009ade;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:700;">Ver sala</a>
-                </td></tr>
-              </table>
-            </div>`,
+          ...buildBidMail({
+            title: "Oferta confirmada",
+            subtitle: "Tu puja quedó registrada correctamente",
+            intro: "Recibimos tu oferta y ya se encuentra participando en la subasta.",
+            remateTitulo: ctx.remateTitulo,
+            loteTitulo: ctx.loteTitulo,
+            loteFicha: ctx.inventarioFicha,
+            monto: bidAmount,
+            salaHref,
+            ctaLabel: "Ver sala",
+            siteOrigin,
+          }),
         });
       }
     }
@@ -136,19 +193,17 @@ export async function POST(request: Request) {
           await sendSesEmail({
             to: prevEmail,
             subject: `Tu oferta fue superada · ${ctx.remateTitulo}`,
-            text: `Otro usuario superó tu oferta.\n\nRemate: ${ctx.remateTitulo}\nLote: ${ctx.loteTitulo}\nSala: ${salaHref}`,
-            html: `
-              <div style="font-family:Arial,sans-serif;padding:20px;background:#f3f7fb;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #dbe7f2;border-radius:12px;overflow:hidden;">
-                  <tr><td style="padding:16px 18px;background:#0f3d5c;color:#fff;font-size:22px;font-weight:800;">Oferta superada</td></tr>
-                  <tr><td style="padding:18px;">
-                    <p style="margin:0 0 10px;color:#334155;">Un nuevo postor superó tu oferta.</p>
-                    <p style="margin:0 0 6px;"><strong>Remate:</strong> ${ctx.remateTitulo}</p>
-                    <p style="margin:0 0 12px;"><strong>Lote:</strong> ${ctx.loteTitulo}</p>
-                    <a href="${salaHref}" style="display:inline-block;background:#009ade;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:700;">Volver a la sala</a>
-                  </td></tr>
-                </table>
-              </div>`,
+            ...buildBidMail({
+              title: "Oferta superada",
+              subtitle: "Otro usuario quedó como mejor postor",
+              intro: "Puedes volver a la sala y realizar una nueva oferta si deseas seguir participando.",
+              remateTitulo: ctx.remateTitulo,
+              loteTitulo: ctx.loteTitulo,
+              loteFicha: ctx.inventarioFicha,
+              salaHref,
+              ctaLabel: "Volver a la sala",
+              siteOrigin,
+            }),
           });
         }
       }
@@ -178,19 +233,17 @@ export async function POST(request: Request) {
     await sendSesEmail({
       to: email,
       subject: `Oferta aceptada · ${ctx.remateTitulo}`,
-      text: `¡Tu oferta fue aceptada!\n\nRemate: ${ctx.remateTitulo}\nLote: ${ctx.loteTitulo}\nRevisa el detalle en tu cuenta o en la sala: ${salaHref}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;padding:20px;background:#f3f7fb;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #dbe7f2;border-radius:12px;overflow:hidden;">
-            <tr><td style="padding:16px 18px;background:#0f3d5c;color:#fff;font-size:22px;font-weight:800;">Oferta aceptada</td></tr>
-            <tr><td style="padding:18px;">
-              <p style="margin:0 0 10px;color:#334155;">Tu oferta fue aceptada en la subasta.</p>
-              <p style="margin:0 0 6px;"><strong>Remate:</strong> ${ctx.remateTitulo}</p>
-              <p style="margin:0 0 12px;"><strong>Lote:</strong> ${ctx.loteTitulo}</p>
-              <a href="${salaHref}" style="display:inline-block;background:#009ade;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:700;">Ir a la sala</a>
-            </td></tr>
-          </table>
-        </div>`,
+      ...buildBidMail({
+        title: "Oferta aceptada",
+        subtitle: "Tu oferta fue aceptada para este lote",
+        intro: "Revisa el detalle y próximos pasos en la sala del remate.",
+        remateTitulo: ctx.remateTitulo,
+        loteTitulo: ctx.loteTitulo,
+        loteFicha: ctx.inventarioFicha,
+        salaHref,
+        ctaLabel: "Ir a la sala",
+        siteOrigin,
+      }),
     });
     return NextResponse.json({ ok: true });
   }

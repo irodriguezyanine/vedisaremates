@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import { PasswordInput } from "@/components/auth/password-input";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +31,15 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    router.prefetch(redirect.startsWith("/") ? redirect : "/subastas");
+    router.prefetch("/mi-cuenta");
+  }, [redirect, router]);
+
+  function resolveTargetPath(path: string): string {
+    return path.startsWith("/") ? path : "/subastas";
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,33 +73,46 @@ export function LoginForm() {
         emailForLogin = emailForLogin.toLowerCase();
       }
 
-      const { error: signErr } = await supabase.auth.signInWithPassword({ email: emailForLogin, password });
+      const { data: signData, error: signErr } = await supabase.auth.signInWithPassword({ email: emailForLogin, password });
       if (signErr) {
         setError(mapAuthError(signErr.message));
         return;
       }
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user?.email_confirmed_at) {
+
+      const signedUser = signData?.user;
+      if (!signedUser?.email_confirmed_at) {
         await supabase.auth.signOut();
         setError("Tu correo aún no está verificado. Revisa tu bandeja y confirma tu cuenta antes de ingresar.");
         return;
       }
-      if (user?.id) {
-        const { data: profile } = await supabase
+
+      const fallbackTarget = resolveTargetPath(redirect);
+      let forcedTarget = fallbackTarget;
+
+      if (signedUser.id) {
+        const mustChangePasswordPromise = supabase
           .from("profiles")
           .select("must_change_password")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (profile?.must_change_password) {
-          router.refresh();
-          router.push("/mi-cuenta");
-          return;
+          .eq("id", signedUser.id)
+          .maybeSingle()
+          .then(({ data }) => Boolean(data?.must_change_password))
+          .catch(() => false);
+
+        const quickDecision = await Promise.race<boolean | "timeout">([
+          mustChangePasswordPromise,
+          new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 150)),
+        ]);
+
+        if (quickDecision === true) {
+          forcedTarget = "/mi-cuenta";
+        } else if (quickDecision === "timeout") {
+          void mustChangePasswordPromise.then((mustChange) => {
+            if (mustChange) router.replace("/mi-cuenta");
+          });
         }
       }
-      router.refresh();
-      router.push(redirect.startsWith("/") ? redirect : "/subastas");
+
+      router.replace(forcedTarget);
     } finally {
       setLoading(false);
     }

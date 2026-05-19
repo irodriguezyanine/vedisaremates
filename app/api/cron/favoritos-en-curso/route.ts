@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { buildMailShell, toPlainText } from "@/lib/mail/templates";
 import { sendSesEmail } from "@/lib/mail/ses";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -40,25 +41,24 @@ function unauthorized() {
 
 function buildMail(remateTitulo: string, loteTitulo: string, link: string) {
   const subject = `Tu favorito ya abrió: ${remateTitulo}`;
-  const text = [
-    "Tu lote favorito ya está en curso.",
-    "",
-    `Remate: ${remateTitulo}`,
-    `Lote: ${loteTitulo}`,
-    `Entrar: ${link}`,
-  ].join("\n");
-  const html = `
-    <div style="font-family:Arial,sans-serif;padding:20px;background:#f3f7fb;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #dbe7f2;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:16px 18px;background:#0f3d5c;color:#fff;font-size:22px;font-weight:800;">Tu favorito ya abrió</td></tr>
-        <tr><td style="padding:18px;">
-          <p style="margin:0 0 10px;color:#334155;">Ya puedes revisar tu lote favorito en sala:</p>
-          <p style="margin:0 0 6px;"><strong>Remate:</strong> ${remateTitulo}</p>
-          <p style="margin:0 0 14px;"><strong>Lote:</strong> ${loteTitulo}</p>
-          <a href="${link}" style="display:inline-block;background:#009ade;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:700;">Entrar a la sala</a>
-        </td></tr>
+  const html = buildMailShell({
+    siteOrigin: SITE_ORIGIN,
+    title: "Tu favorito ya abrió",
+    subtitle: "El lote que sigues está en curso",
+    intro: "Ya puedes revisar tu lote favorito en sala y ofertar.",
+    primaryCta: { label: "Entrar a la sala", href: link },
+    contentHtml: `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dbe7f2;background:#f8fbff;border-radius:10px;">
+        <tr>
+          <td style="padding:14px;">
+            <p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>Remate:</strong> ${remateTitulo}</p>
+            <p style="margin:0;font-size:14px;color:#334155;"><strong>Lote:</strong> ${loteTitulo}</p>
+          </td>
+        </tr>
       </table>
-    </div>`;
+    `,
+  });
+  const text = toPlainText(html);
   return { subject, text, html };
 }
 

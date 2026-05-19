@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { buildMailShell, toPlainText } from "@/lib/mail/templates";
 import { sendSesEmail } from "@/lib/mail/ses";
 import { SITE } from "@/lib/site-config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,56 +40,33 @@ function isClienteRemateRole(rol: unknown) {
 }
 
 function buildMail(actionLink: string, siteOrigin: string) {
-  const logoUrl = `${siteOrigin}/vedisa-logo-navbar.png`;
   const subject = "Restablece tu contraseña · VEDISA Remates";
-  const text = [
-    "Recibimos una solicitud para restablecer tu contraseña en VEDISA Remates.",
-    "Abre este enlace seguro para elegir una nueva contraseña:",
-    actionLink,
-    "",
-    "Si no solicitaste este cambio, ignora este correo.",
-    "Nunca compartas tu contraseña por correo, WhatsApp o teléfono.",
-  ].join("\n");
-  const html = `
-    <div style="margin:0;background:#f3f7fb;padding:24px 12px;font-family:Arial,sans-serif;color:#0f1f2c;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe7f2;border-radius:14px;overflow:hidden;">
+  const html = buildMailShell({
+    siteOrigin,
+    title: "Cambio de contraseña",
+    subtitle: "Acceso seguro a tu cuenta de remates",
+    intro: "Recibimos una solicitud para restablecer tu contraseña.",
+    primaryCta: { label: "Restablecer contraseña", href: actionLink },
+    showSupport: false,
+    contentHtml: `
+      <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Si el botón no funciona, copia este enlace:</p>
+      <p style="margin:0 0 16px;font-size:12px;word-break:break-all;">
+        <a href="${actionLink}" style="color:#0369a1;">${actionLink}</a>
+      </p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dbeafe;background:#f8fbff;border-radius:10px;">
         <tr>
-          <td style="background:linear-gradient(90deg,#0f2f49,#0f3d5c);padding:18px 22px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td style="vertical-align:top;padding-right:12px;">
-                  <div style="font-size:28px;line-height:1.15;color:#ffffff;font-weight:900;margin:0;">Cambio de contraseña</div>
-                  <div style="font-size:14px;color:#cfe9ff;margin-top:6px;">Acceso seguro a tu cuenta de remates.</div>
-                </td>
-                <td style="width:220px;text-align:right;vertical-align:middle;">
-                  <img src="${logoUrl}" alt="${SITE.name}" width="200" style="display:inline-block;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:22px;">
-            <p style="margin:0 0 12px;font-size:15px;color:#334155;">
-              Recibimos una solicitud para restablecer tu contraseña.
-            </p>
-            <p style="margin:0 0 18px;">
-              <a href="${actionLink}" style="display:inline-block;background:#009ade;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">
-                Restablecer contraseña
-              </a>
-            </p>
-            <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Si el botón no funciona, copia este enlace:</p>
-            <p style="margin:0 0 16px;font-size:12px;word-break:break-all;">
-              <a href="${actionLink}" style="color:#0369a1;">${actionLink}</a>
-            </p>
-            <p style="margin:0;font-size:12px;color:#64748b;">
-              Si no solicitaste este cambio, ignora este correo. Nunca compartas tu contraseña por ningún canal.
-            </p>
+          <td style="padding:12px 14px;font-size:13px;line-height:1.55;color:#334155;">
+            Si no solicitaste este cambio, ignora este correo.<br/>
+            Nunca compartas tu contraseña por correo, WhatsApp o teléfono.
           </td>
         </tr>
       </table>
-    </div>
-  `;
+      <p style="margin:12px 0 0;font-size:12px;color:#64748b;">
+        Soporte WhatsApp: <a href="${SITE.whatsappHref}" style="color:#0369a1;font-weight:700;text-decoration:none;">${SITE.contactPhoneDisplay}</a>
+      </p>
+    `,
+  });
+  const text = toPlainText(html);
   return { subject, text, html };
 }
 

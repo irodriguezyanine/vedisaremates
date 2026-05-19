@@ -24,9 +24,16 @@ type Lote = PortalRemateLoteRow & { inventario: InventarioRow | null };
 
 const TZ_CHILE = { timeZone: "America/Santiago" } satisfies Intl.DateTimeFormatOptions;
 
-function formatClDateTime(iso: string | null): string {
-  if (!iso) return "No definido";
-  return new Date(iso).toLocaleString("es-CL", TZ_CHILE);
+function formatClDateParts(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: "No definido", time: "" };
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return { date: "No definido", time: "" };
+  return {
+    date: value
+      .toLocaleDateString("es-CL", { ...TZ_CHILE, day: "2-digit", month: "2-digit", year: "numeric" })
+      .replaceAll("/", "-"),
+    time: value.toLocaleTimeString("es-CL", { ...TZ_CHILE, hour: "2-digit", minute: "2-digit" }),
+  };
 }
 
 function formatClTime(iso: string): string {
@@ -649,6 +656,12 @@ export function AuctionLiveRoom({
   const viewerIsClienteRemate = !!viewerId && isClienteRemateRole(viewerRole);
   const showOnlyOffersCount = !viewerId;
   const showPublicOfferSummary = !viewerOffersOnlyMode;
+  const startsAtDisplay = useMemo(() => formatClDateParts(remate.starts_at), [remate.starts_at]);
+  const endsAtDisplay = useMemo(() => formatClDateParts(remate.ends_at), [remate.ends_at]);
+  const remateStatusLabel = useMemo(
+    () => String(remate.estado ?? "").replaceAll("_", " ") || "—",
+    [remate.estado],
+  );
 
   useEffect(() => {
     if (!soundEnabled || !isLastTenMinutes || countdownLive == null || countdownLive <= 0) return;
@@ -759,39 +772,48 @@ export function AuctionLiveRoom({
             </button>
           </div>
         </div>
-        <div className="w-full shrink-0 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm shadow-sm lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex min-w-[8.5rem] shrink-0 flex-col leading-tight">
+        <div className="w-full shrink-0 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-sky-50/30 p-4 text-sm shadow-[0_10px_28px_rgba(15,61,92,0.08)] lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</span>
-              <span className="text-base font-bold capitalize text-neutral-900">
-                {String(remate.estado ?? "").replaceAll("_", " ") || "—"}
-              </span>
+              <p className="mt-1 text-2xl font-black capitalize leading-none text-neutral-900">{remateStatusLabel}</p>
             </div>
-            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 sm:block" aria-hidden />
-            <div className="min-w-0 flex-1 leading-tight">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Inicio</span>
-              <p className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                {formatClDateTime(remate.starts_at)}
-              </p>
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Inicio</span>
+              <p className="mt-1 text-lg font-black leading-none text-sky-800">{startsAtDisplay.date}</p>
+              <p className="mt-1 text-xs font-semibold tabular-nums text-sky-700">{startsAtDisplay.time || "Sin hora"}</p>
             </div>
-            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 sm:block" aria-hidden />
-            <div className="min-w-0 flex-1 leading-tight">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Cierra</span>
-              <p className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${
-                countdownLive !== null && countdownLive <= 0
-                  ? "border-rose-200 bg-rose-50 text-rose-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
-              }`}>
-                {countdownLive !== null && countdownLive <= 0
-                  ? "Este remate ya cerró según la fecha configurada."
-                  : remate.ends_at
-                    ? formatClDateTime(remate.ends_at)
-                    : "—"}
-              </p>
-            </div>
-            <span className="hidden h-8 w-px shrink-0 bg-neutral-200 xl:block" aria-hidden />
             <div
-              className={`min-w-[11rem] rounded-xl border px-3 py-2 text-center xl:text-left ${
+              className={`rounded-xl border px-3 py-2.5 ${
+                countdownLive !== null && countdownLive <= 0
+                  ? "border-rose-200 bg-rose-50"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider ${
+                  countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
+                }`}
+              >
+                Cierra
+              </span>
+              <p
+                className={`mt-1 text-lg font-black leading-none ${
+                  countdownLive !== null && countdownLive <= 0 ? "text-rose-800" : "text-emerald-800"
+                }`}
+              >
+                {endsAtDisplay.date}
+              </p>
+              <p
+                className={`mt-1 text-xs font-semibold tabular-nums ${
+                  countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
+                }`}
+              >
+                {countdownLive !== null && countdownLive <= 0 ? "Cerrado" : endsAtDisplay.time || "Sin hora"}
+              </p>
+            </div>
+            <div
+              className={`rounded-xl border px-3 py-2.5 ${
                 isLastTenMinutes
                   ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)] animate-pulse"
                   : "border-sky-200 bg-sky-50"
@@ -805,14 +827,14 @@ export function AuctionLiveRoom({
                 Cuenta regresiva
               </span>
               <p
-                className={`mt-0.5 font-mono text-lg font-black tabular-nums ${
+                className={`mt-1 font-mono text-2xl font-black tabular-nums leading-none ${
                   isLastTenMinutes ? "text-rose-700" : "text-sky-800"
                 }`}
               >
                 {countdownText}
               </p>
               {isLastTenMinutes ? (
-                <p className="text-[10px] font-semibold text-rose-700">Alerta activa: últimos 10 minutos</p>
+                <p className="mt-1 text-[10px] font-semibold text-rose-700">Alerta activa: últimos 10 minutos</p>
               ) : null}
             </div>
           </div>
@@ -955,6 +977,13 @@ export function AuctionLiveRoom({
                   {viewerOffersOnlyMode ? (
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
                       <h3 className="text-lg font-bold text-neutral-900">Ofertas recibidas ({listForActive.length})</h3>
+                      {listForActive.length > 0 ? (
+                        <div className="mt-3 hidden grid-cols-[5.5rem_8.5rem_minmax(0,1fr)] items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500 sm:grid">
+                          <span>Hora</span>
+                          <span>Monto</span>
+                          <span>Usuario</span>
+                        </div>
+                      ) : null}
                       <ul className="mt-3 max-h-96 space-y-2 overflow-auto text-sm">
                         {listForActive.length === 0 ? (
                           <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
@@ -962,11 +991,11 @@ export function AuctionLiveRoom({
                           listForActive.map((o) => (
                             <li
                               key={o.id}
-                              className="rounded-lg border border-neutral-100 px-2 py-1"
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2"
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
-                                <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
+                              <div className="grid grid-cols-[5.2rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1 sm:grid-cols-[5.5rem_8.5rem_minmax(0,1fr)]">
+                                <span className="text-[11px] font-medium tabular-nums text-neutral-500">{formatClTime(o.created_at)}</span>
+                                <span className="text-sm font-extrabold tabular-nums text-neutral-900">{formatClp(o.monto)}</span>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -976,7 +1005,7 @@ export function AuctionLiveRoom({
                                     setOpenOfferUserId((curr) => (curr === targetId ? null : targetId));
                                     void loadOfferUserCard(targetId);
                                   }}
-                                  className="truncate text-[11px] font-semibold text-[#0f3d5c] underline decoration-dotted underline-offset-2 hover:text-[#009ade]"
+                                  className="min-w-0 truncate text-left text-[11px] font-semibold text-[#0f3d5c] underline decoration-dotted underline-offset-2 hover:text-[#009ade] sm:text-xs"
                                   title="Ver datos del cliente"
                                 >
                                   {formatOfferUserName(o, offerUserNamesById)}
