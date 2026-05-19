@@ -1059,35 +1059,37 @@ export function AuctionLiveRoom({
                               placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
                             />
                           </label>
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 space-y-2">
                             <button
                               type="button"
                               onClick={() => setQuickBid(1)}
-                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                              className="w-full rounded-lg border border-[#0b3352] bg-[#0f3d5c] px-3 py-2.5 text-sm font-extrabold text-white shadow-md shadow-[#0f3d5c]/25 transition hover:-translate-y-[1px] hover:bg-[#0b3352] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/60 focus:ring-offset-1"
                             >
-                              Oferta mínima ({formatClp(minNext)})
+                              Oferta directa minima ({formatClp(minNext)})
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setQuickBid(2)}
-                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                            >
-                              + 1 incremento
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setQuickBid(3)}
-                              className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                            >
-                              + 2 incrementos
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setQuickBid(customQuick)}
-                              className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
-                            >
-                              + {customQuick - 1} incrementos (personalizado)
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setQuickBid(2)}
+                                className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                              >
+                                + 1 incremento
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setQuickBid(3)}
+                                className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                              >
+                                + 2 incrementos
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setQuickBid(customQuick)}
+                                className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
+                              >
+                                + {customQuick - 1} incrementos (personalizado)
+                              </button>
+                            </div>
                           </div>
                           <label className="mt-2 block text-xs text-neutral-600">
                             Oferta rápida personalizada (cantidad de incrementos)
