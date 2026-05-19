@@ -1,12 +1,13 @@
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
 let sesClient: SESv2Client | null | undefined;
+const VEDISA_FROM_EMAIL = "informacion@vedisaremates.cl";
 
 function getSesEnv() {
   const accessKeyId = (process.env.AWS_ACCESS_KEY_ID ?? process.env.SES_ACCESS_KEY_ID ?? "").trim();
   const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY ?? process.env.SES_SECRET_ACCESS_KEY ?? "").trim();
   const region = (process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? process.env.SES_REGION ?? "").trim();
-  const fromEmail = (process.env.AWS_SES_FROM_EMAIL ?? process.env.SES_FROM_EMAIL ?? "").trim();
+  const fromEmail = VEDISA_FROM_EMAIL;
   const replyTo = (process.env.AWS_SES_REPLY_TO ?? process.env.SES_REPLY_TO ?? "").trim();
   if (!accessKeyId || !secretAccessKey || !region || !fromEmail) return null;
   return { accessKeyId, secretAccessKey, region, fromEmail, replyTo };

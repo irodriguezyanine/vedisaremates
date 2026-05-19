@@ -574,6 +574,15 @@ export function AuctionLiveRoom({
         ? `¡Oferta registrada! El cierre se extendió ${formatSecondsLabel(extendSeconds)}.`
         : "¡Oferta registrada!",
     );
+    void fetch("/api/notifications/remate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "post_bid",
+        loteId: active.id,
+        monto,
+      }),
+    }).catch(() => null);
     setBusy(false);
   }
 

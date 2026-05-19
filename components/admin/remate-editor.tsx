@@ -298,6 +298,22 @@ export function RemateEditor({ remateId }: { remateId: string }) {
       setErr(res?.error ?? "No se pudo actualizar la oferta ganadora.");
       return;
     }
+    if (ofertaId) {
+      const oferta = ofertas.find((o) => o.oferta_id === ofertaId);
+      const email = String(oferta?.cliente_email ?? "").trim().toLowerCase();
+      if (email) {
+        void fetch("/api/notifications/remate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "oferta_aceptada",
+            loteId,
+            email,
+            monto: oferta?.monto ?? null,
+          }),
+        }).catch(() => null);
+      }
+    }
     await load();
   }
 
