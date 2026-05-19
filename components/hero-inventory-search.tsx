@@ -159,13 +159,63 @@ function glo3dUrl(row: InventarioAnyRow): string | null {
   return firstGlo3dViewerUrl(row) ?? findUrlByHintKeys(row, GLO3D_HINT_KEYS);
 }
 
-function getFirstRawValue(raw: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = raw[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+type RawEntry = {
+  key: string;
+  path: string;
+  value: unknown;
+};
+
+function normalizeKeyToken(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\s\-.]+/g, "_")
+    .trim();
+}
+
+function collectRawEntries(input: unknown, parentPath = ""): RawEntry[] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return [];
+  const source = input as Record<string, unknown>;
+  const entries: RawEntry[] = [];
+  for (const [rawKey, rawValue] of Object.entries(source)) {
+    const key = normalizeKeyToken(rawKey);
+    const path = parentPath ? `${parentPath}.${key}` : key;
+    entries.push({ key, path, value: rawValue });
+    if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      entries.push(...collectRawEntries(rawValue, path));
+    }
+  }
+  return entries;
+}
+
+function asDisplayValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "si" : "no";
+  return null;
+}
+
+function getFirstRawValue(entries: RawEntry[], keys: string[]): string | null {
+  const normalizedKeys = keys.map((key) => normalizeKeyToken(key));
+  for (const alias of normalizedKeys) {
+    const exact = entries.find((entry) => entry.path === alias || entry.key === alias);
+    const exactValue = asDisplayValue(exact?.value);
+    if (exactValue) return exactValue;
+    const contains = entries.find((entry) => entry.path.includes(alias) || alias.includes(entry.key));
+    const containsValue = asDisplayValue(contains?.value);
+    if (containsValue) return containsValue;
   }
   return null;
+}
+
+function statusLabel(value: string | null, opts: { yes: string; no?: string }): string | null {
+  if (!value) return null;
+  const status = normalizeBinaryStatus(value);
+  if (status === "yes") return opts.yes;
+  if (status === "no") return opts.no ?? `SIN ${opts.yes}`;
+  const cleaned = value.trim();
+  return cleaned ? cleaned.toUpperCase() : null;
 }
 
 function normalizeMileage(value: string | null): string | null {
@@ -206,34 +256,76 @@ function getMovementTestLabel(value: string | null): string | null {
   return value?.trim().toUpperCase() ?? null;
 }
 
-function isAffirmativeStatus(value: string | null): boolean {
-  return normalizeBinaryStatus(value) === "yes";
-}
-
 function getVehicleSpecs(row: InventarioAnyRow): SearchSpec[] {
   const raw = row as Record<string, unknown>;
+  const entries = collectRawEntries(raw);
   const mileage = normalizeMileage(
-    getFirstRawValue(raw, ["kilometraje", "km", "kms", "odometro", "odómetro", "glo3d.kilometraje"]),
+    getFirstRawValue(entries, ["kilometraje", "km", "kms", "odometro", "odómetro", "glo3d.kilometraje", "odometro_actual"]),
   );
-  const year = getFirstRawValue(raw, ["ano", "anio", "year", "glo3d.year"]);
-  const fuel = getFirstRawValue(raw, ["combustible", "fuel", "glo3d.combustible"]);
-  const transmission = getFirstRawValue(raw, ["transmision", "transmisión", "caja", "transmission", "glo3d.transmision"]);
-  const motorTestRaw = getFirstRawValue(raw, ["prueba_motor", "pdm", "pruebaMotor", "motor_test", "glo3d.prueba_motor"]);
-  const movementTestRaw = getFirstRawValue(raw, [
+  const year = getFirstRawValue(entries, ["ano", "anio", "year", "glo3d.year"]);
+  const fuel = getFirstRawValue(entries, ["combustible", "fuel", "glo3d.combustible", "tipo_combustible"]);
+  const transmission = getFirstRawValue(entries, [
+    "transmision",
+    "transmisión",
+    "caja",
+    "transmission",
+    "glo3d.transmision",
+    "tipo_caja",
+  ]);
+  const motorTestRaw = getFirstRawValue(entries, [
+    "prueba_motor",
+    "pdm",
+    "pruebaMotor",
+    "motor_test",
+    "glo3d.prueba_motor",
+    "motor_arranca",
+    "arranca",
+    "motor_funciona",
+  ]);
+  const movementTestRaw = getFirstRawValue(entries, [
     "prueba_desplazamiento",
     "pdd",
     "pruebaDesplazamiento",
     "movement_test",
     "glo3d.prueba_desplazamiento",
+    "se_desplaza",
+    "desplaza",
+    "movimiento",
   ]);
-  const conditionedRaw = getFirstRawValue(raw, ["condicionado", "glo3d.condicionado"]);
-  const singleOwnerRaw = getFirstRawValue(raw, ["unico_propietario", "single_owner", "one_owner", "glo3d.unico_propietario"]);
-  const airConditioningRaw = getFirstRawValue(raw, ["aire_acondicionado", "air_conditioning", "has_ac", "ac", "glo3d.aire_acondicionado"]);
-  const keysRaw = getFirstRawValue(raw, ["llaves", "keys", "has_keys", "tiene_llaves", "glo3d.llaves"]);
-  const tractionRaw = getFirstRawValue(raw, ["traccion", "traction", "glo3d.traccion"]);
-  const airbagsRaw = getFirstRawValue(raw, ["estado_airbags", "airbags", "eda", "glo3d.estado_airbags"]);
+  const conditionedRaw = getFirstRawValue(entries, ["condicionado", "glo3d.condicionado", "acondicionado"]);
+  const singleOwnerRaw = getFirstRawValue(entries, [
+    "unico_propietario",
+    "single_owner",
+    "one_owner",
+    "glo3d.unico_propietario",
+    "duenos",
+    "dueno_unico",
+  ]);
+  const airConditioningRaw = getFirstRawValue(entries, [
+    "aire_acondicionado",
+    "air_conditioning",
+    "has_ac",
+    "ac",
+    "glo3d.aire_acondicionado",
+    "aire",
+  ]);
+  const keysRaw = getFirstRawValue(entries, [
+    "llaves",
+    "keys",
+    "has_keys",
+    "tiene_llaves",
+    "glo3d.llaves",
+    "con_llaves",
+    "cantidad_llaves",
+  ]);
+  const tractionRaw = getFirstRawValue(entries, ["traccion", "traction", "glo3d.traccion", "traccion_4x4", "4x4"]);
+  const airbagsRaw = getFirstRawValue(entries, ["estado_airbags", "airbags", "eda", "glo3d.estado_airbags", "airbag"]);
   const motorTest = getMotorTestLabel(motorTestRaw);
   const movementTest = getMovementTestLabel(movementTestRaw);
+  const conditioned = statusLabel(conditionedRaw, { yes: "ACONDICIONADO", no: "NO ACONDICIONADO" });
+  const singleOwner = statusLabel(singleOwnerRaw, { yes: "UNICO DUEÑO", no: "MULTIPLES DUEÑOS" });
+  const airConditioning = statusLabel(airConditioningRaw, { yes: "AIRE ACONDICIONADO", no: "SIN AIRE ACONDICIONADO" });
+  const keys = statusLabel(keysRaw, { yes: "CON LLAVES", no: "SIN LLAVES" });
 
   const specs: SearchSpec[] = [];
   if (mileage) specs.push({ key: "km", label: mileage, icon: "km" });
@@ -242,14 +334,13 @@ function getVehicleSpecs(row: InventarioAnyRow): SearchSpec[] {
   if (transmission) specs.push({ key: "gear", label: transmission.toUpperCase(), icon: "gear" });
   if (motorTest) specs.push({ key: "engineTest", label: motorTest, icon: "engineTest", wide: true });
   if (movementTest) specs.push({ key: "movementTest", label: movementTest, icon: "movementTest", wide: true });
-  if (isAffirmativeStatus(conditionedRaw)) specs.push({ key: "conditioned", label: "ACONDICIONADO", icon: "conditioned", wide: true });
-  if (isAffirmativeStatus(singleOwnerRaw)) specs.push({ key: "singleOwner", label: "UNICO DUEÑO", icon: "singleOwner", wide: true });
-  if (isAffirmativeStatus(airConditioningRaw))
-    specs.push({ key: "airConditioning", label: "AIRE ACONDICIONADO", icon: "airConditioning", wide: true });
-  if (isAffirmativeStatus(keysRaw)) specs.push({ key: "keys", label: "CON LLAVES", icon: "keys", wide: true });
+  if (conditioned) specs.push({ key: "conditioned", label: conditioned, icon: "conditioned", wide: true });
+  if (singleOwner) specs.push({ key: "singleOwner", label: singleOwner, icon: "singleOwner", wide: true });
+  if (airConditioning) specs.push({ key: "airConditioning", label: airConditioning, icon: "airConditioning", wide: true });
+  if (keys) specs.push({ key: "keys", label: keys, icon: "keys", wide: true });
   if (tractionRaw) specs.push({ key: "traction", label: `TRACCION ${tractionRaw.toUpperCase()}`, icon: "traction", wide: true });
   if (airbagsRaw) specs.push({ key: "airbags", label: `AIRBAGS: ${airbagsRaw.toUpperCase()}`, icon: "airbags", wide: true });
-  return specs.slice(0, 10);
+  return specs.slice(0, 12);
 }
 
 function formatClpFromUnknown(value: unknown): string | null {
@@ -278,7 +369,7 @@ function vehicleDescription(row: InventarioAnyRow): string {
 }
 
 function vehicleLotLabel(row: InventarioAnyRow): string | null {
-  const lot = getFirstRawValue(row as Record<string, unknown>, ["csv_lote", "lote", "lot", "numero_lote"]);
+  const lot = getFirstRawValue(collectRawEntries(row), ["csv_lote", "lote", "lot", "numero_lote"]);
   return lot ? `Lote ${lot}` : null;
 }
 
@@ -624,7 +715,7 @@ export function HeroInventorySearch({
           ) : null}
 
           {visibleRows.length ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {visibleRows.map((row) => {
                 const specs = getVehicleSpecs(row.inventario);
                 const lotLabel = vehicleLotLabel(row.inventario);
@@ -635,9 +726,9 @@ export function HeroInventorySearch({
                 return (
                   <article
                     key={String(row.inventario.id)}
-                    className="overflow-hidden rounded-2xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_12px_24px_rgba(73,46,26,0.12)]"
+                    className="overflow-hidden rounded-xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_8px_18px_rgba(73,46,26,0.12)]"
                   >
-                    <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-[#dfd4c7]">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-[#dfd4c7]">
                       <SearchCardImage inventario={row.inventario} />
                       {glo3d ? (
                         <a
@@ -651,17 +742,17 @@ export function HeroInventorySearch({
                       ) : null}
                     </div>
 
-                    <div className="space-y-3 p-4">
-                      <h3 className="line-clamp-2 text-[1.15rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
-                      <p className="line-clamp-3 text-[0.9rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
+                    <div className="space-y-2.5 p-3">
+                      <h3 className="line-clamp-2 text-[0.98rem] font-extrabold tracking-tight text-[#2f1f14]">{vehicleTitle(row.inventario)}</h3>
+                      <p className="line-clamp-2 text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
 
                       {specs.length > 0 ? (
-                        <div className="rounded-xl border border-amber-200/70 bg-[#fdfaf5] p-3">
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-[#4f5a66]">
+                        <div className="rounded-lg border border-amber-200/70 bg-[#fdfaf5] p-2.5">
+                          <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-xs text-[#4f5a66]">
                             {specs.map((spec) => (
                               <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
                                 <SpecIcon icon={spec.icon} />
-                                <span className={`${spec.wide ? "text-xs font-semibold uppercase" : "truncate"} text-[#5a616d]`}>
+                                <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
                                   {spec.label}
                                 </span>
                               </div>
@@ -670,7 +761,7 @@ export function HeroInventorySearch({
                         </div>
                       ) : null}
 
-                      <div className="flex flex-wrap gap-2 text-xs text-[#604734]">
+                      <div className="flex flex-wrap gap-1.5 text-[11px] text-[#604734]">
                         {lotLabel ? <span className="rounded-full border border-amber-300/60 bg-[#f4ebe2] px-2.5 py-1">{lotLabel}</span> : null}
                         {categoryLabel ? (
                           <span className="rounded-full border border-amber-300/70 bg-[#eddccf] px-2.5 py-1 font-semibold">{categoryLabel}</span>
@@ -678,15 +769,15 @@ export function HeroInventorySearch({
                       </div>
 
                       {priceLabel ? (
-                        <div className="border-t border-amber-200/70 pt-3">
-                          <p className="text-[1.7rem] font-extrabold tracking-tight text-[#673b1f]">{priceLabel}</p>
+                        <div className="border-t border-amber-200/70 pt-2.5">
+                          <p className="text-[1.45rem] font-extrabold tracking-tight text-[#673b1f]">{priceLabel}</p>
                         </div>
                       ) : null}
 
                       {row.remateId ? (
                         <Link
                           href={`/subastas/${row.remateId}`}
-                          className="inline-flex w-full items-center justify-center rounded-xl bg-[#66cceb] px-3 py-2 text-sm font-bold text-[#0f1f2c] transition hover:brightness-105"
+                          className="inline-flex w-full items-center justify-center rounded-lg bg-[#66cceb] px-3 py-2 text-xs font-bold text-[#0f1f2c] transition hover:brightness-105"
                         >
                           Ir a ofertar
                         </Link>
