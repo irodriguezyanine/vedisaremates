@@ -1,5 +1,5 @@
-import { OfertasPanel } from "@/components/admin/ofertas-panel";
+import { OfertasPanelV2 } from "@/components/admin/ofertas-panel-v2";
 
 export default function AdminOfertasPage() {
-  return <OfertasPanel />;
+  return <OfertasPanelV2 />;
 }
