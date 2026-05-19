@@ -90,13 +90,18 @@ export function LoginForm() {
       let forcedTarget = fallbackTarget;
 
       if (signedUser.id) {
-        const mustChangePasswordPromise = supabase
-          .from("profiles")
-          .select("must_change_password")
-          .eq("id", signedUser.id)
-          .maybeSingle()
-          .then(({ data }) => Boolean(data?.must_change_password))
-          .catch(() => false);
+        const mustChangePasswordPromise = (async () => {
+          try {
+            const { data } = await supabase
+              .from("profiles")
+              .select("must_change_password")
+              .eq("id", signedUser.id)
+              .maybeSingle();
+            return Boolean(data?.must_change_password);
+          } catch {
+            return false;
+          }
+        })();
 
         const quickDecision = await Promise.race<boolean | "timeout">([
           mustChangePasswordPromise,
