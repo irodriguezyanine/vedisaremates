@@ -9,6 +9,7 @@ type Props = {
   className?: string;
   menuAlign?: "left" | "right";
   buttonLabel?: string;
+  buttonVariant?: "primary" | "secondary";
 };
 
 function toAbsoluteUrl(input?: string): string {
@@ -29,6 +30,7 @@ export function ShareIconMenuButton({
   className,
   menuAlign = "right",
   buttonLabel = "Compartir",
+  buttonVariant = "primary",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -97,13 +99,17 @@ export function ShareIconMenuButton({
   }, [copyLink]);
 
   const menuPosClass = menuAlign === "left" ? "left-0" : "right-0";
+  const buttonClassName =
+    buttonVariant === "secondary"
+      ? "inline-flex min-h-10 items-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-[#1a2332]/30 hover:bg-neutral-50 hover:text-[#1a2332]"
+      : "inline-flex min-h-10 items-center gap-2 rounded-md border border-[#23354f] bg-[#1a2332] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#252f3f] hover:border-[#2d415f]";
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className ?? ""}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-md border border-[#23354f] bg-[#1a2332] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#252f3f] hover:border-[#2d415f]"
+        className={buttonClassName}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={buttonLabel}

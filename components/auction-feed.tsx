@@ -47,6 +47,16 @@ const SUB_LABEL: Record<EstadoFiltro, string> = {
   cerrado: "Histórico",
 };
 
+const TAB_CONFIG: Record<AuctionTab, { label: string; icon: string }> = {
+  actuales: { label: "Actuales", icon: "●" },
+  proximas: { label: "Próximas", icon: "◔" },
+  cerradas: { label: "Cerradas", icon: "◌" },
+};
+
+function tabCountLabel(count: number): string {
+  return count > 99 ? "99+" : String(Math.max(0, count));
+}
+
 function estadoBadge(estado: (typeof DEMO_LOTES)[number]["estado"]) {
   if (estado === "abierta") {
     return (
@@ -86,7 +96,8 @@ function badgeForSlice(slice: RemateFeedSlice, remateEstado: PortalRemateRow["es
   }
   if (remateEstado === "en_curso") {
     return (
-      <span className="inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
+      <span className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white ring-2 ring-emerald-500/30">
+        <span className="inline-block h-2 w-2 rounded-full bg-white/95 shadow-[0_0_0_3px_rgba(255,255,255,0.25)]" aria-hidden />
         En curso
       </span>
     );
@@ -105,7 +116,7 @@ function tabToSlice(tab: AuctionTab): RemateFeedSlice {
 }
 
 const cardShell =
-  "group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] transition hover:-translate-y-0.5 hover:shadow-[0_16px_44px_rgba(0,154,222,0.12)]";
+  "group flex flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.08)] ring-1 ring-[#dbe8f5] transition hover:-translate-y-0.5 hover:shadow-[0_22px_52px_rgba(0,154,222,0.16)]";
 
 const THUMB_VISIBLE = 4;
 
@@ -220,7 +231,7 @@ function RemateLotsStrip({
         style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
       >
         {slides.map((s, i) => (
-          <div key={s.loteId} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
+          <div key={s.loteId} className="relative aspect-[16/10] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner">
             <Link
               href={thumbHref(s.loteId)}
               className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
@@ -249,7 +260,7 @@ function RemateLotsStrip({
           return (
             <div
               key={slide ? `thumb-${slide.loteId}-${globalIdx}` : `thumb-pad-${globalIdx}`}
-              className="relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner"
+              className="relative aspect-[16/10] overflow-hidden rounded-lg border border-neutral-200/80 bg-neutral-100 shadow-inner"
             >
               {slide ? (
                 <Link
@@ -335,11 +346,7 @@ function DemoRemateLotsStrip() {
         {Array.from({ length: THUMB_VISIBLE }).map((_, i) => {
           const grad = demoSlides[(start + i) % demoSlides.length];
           return (
-            <div
-              key={`demo-slot-${start}-${i}`}
-              className={`relative aspect-[4/3] overflow-hidden rounded-lg bg-gradient-to-br ${grad}`}
-              aria-hidden
-            >
+            <div key={`demo-slot-${start}-${i}`} className={`relative aspect-[16/10] overflow-hidden rounded-lg bg-gradient-to-br ${grad}`} aria-hidden>
               <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold uppercase tracking-wide text-neutral-600/80">
                 Lote ejemplo
               </span>
@@ -446,6 +453,22 @@ export function AuctionFeed() {
     return [...list].sort((a, b) => sign * (new Date(a.ends_at).getTime() - new Date(b.ends_at).getTime()));
   }, [liveRows, tab]);
 
+  const tabCounts = useMemo(() => {
+    if (useDemo) {
+      return { actuales: 1, proximas: 1, cerradas: 1 };
+    }
+    let actuales = 0;
+    let proximas = 0;
+    let cerradas = 0;
+    for (const row of liveRows) {
+      const slice = classifyRemateForFeed(row);
+      if (slice === "actual") actuales += 1;
+      else if (slice === "proxima") proximas += 1;
+      else cerradas += 1;
+    }
+    return { actuales, proximas, cerradas };
+  }, [liveRows, useDemo]);
+
   const heading = useMemo(() => {
     if (bundle.kind === "loading") return "Subastas";
     return useDemo ? `${TAB_LABEL[tab]} · vista ${SUB_LABEL[sub]}` : TAB_LABEL[tab];
@@ -462,28 +485,33 @@ export function AuctionFeed() {
   }, []);
 
   return (
-    <section aria-labelledby="sec-subastas" className="border-y border-neutral-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%)]">
+    <section
+      aria-labelledby="sec-subastas"
+      className="border-y border-neutral-200/90 bg-[radial-gradient(circle_at_14%_0%,rgba(0,154,222,0.08),transparent_38%),linear-gradient(180deg,#f5f9fd_0%,#ffffff_55%)]"
+    >
       <div className="mx-auto max-w-7xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5 lg:px-8">
         <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-wrap gap-1 rounded-xl bg-white/90 p-1.5 shadow-md ring-1 ring-black/[0.06] backdrop-blur">
-            {(
-              [
-                ["actuales", "Actuales"],
-                ["proximas", "Próximas"],
-                ["cerradas", "Cerradas"],
-              ] as const
-            ).map(([key, label]) => (
+          <div className="flex flex-wrap gap-1 rounded-full bg-white p-1.5 shadow-[0_8px_18px_rgba(15,23,42,0.08)] ring-1 ring-[#d8e4f3]">
+            {(Object.keys(TAB_CONFIG) as AuctionTab[]).map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
-                className={`rounded-lg px-4 py-2.5 text-xs font-bold uppercase tracking-wide transition sm:text-sm ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-bold uppercase tracking-wide transition sm:text-sm ${
                   tab === key
-                    ? "bg-[#1a2332] text-[#FFC600] shadow-inner"
+                    ? "bg-[#1a2332] text-[#FFC600] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
                     : "text-neutral-600 hover:bg-neutral-100"
                 }`}
               >
-                {label}
+                <span aria-hidden>{TAB_CONFIG[key].icon}</span>
+                <span>{TAB_CONFIG[key].label}</span>
+                <span
+                  className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                    tab === key ? "bg-white/15 text-[#FFC600]" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {tabCountLabel(tabCounts[key])}
+                </span>
               </button>
             ))}
           </div>
@@ -523,10 +551,10 @@ export function AuctionFeed() {
 
         <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 id="sec-subastas" className="text-xl font-black text-neutral-900 md:text-2xl">
+            <h2 id="sec-subastas" className="text-2xl font-black tracking-tight text-neutral-900 md:text-3xl">
               {heading}
             </h2>
-            <p className="mt-1 text-sm text-neutral-600">
+            <p className="mt-1 text-sm font-medium text-neutral-600">
               {bundle.kind === "loading"
                 ? "Cargando remates publicados…"
                 : useDemo
@@ -553,7 +581,7 @@ export function AuctionFeed() {
         </div>
 
         {bundle.kind === "loading" ? (
-          <div className="mx-auto flex max-w-5xl flex-col gap-7">
+          <div className="mx-auto flex w-full flex-col gap-7">
             {[0, 1, 2].map((k) => (
               <div key={k} className="overflow-hidden rounded-2xl border border-neutral-200/80 animate-pulse">
                 <div className="border-b border-neutral-100 p-6">
@@ -571,33 +599,39 @@ export function AuctionFeed() {
             ))}
           </div>
         ) : useDemo ? (
-          <div className="mx-auto flex max-w-5xl flex-col gap-7">
+          <div className="mx-auto flex w-full flex-col gap-7">
             {DEMO_LOTES.map((lote, i) => (
               <article key={i} className={cardShell}>
-                <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
+                <div className="border-b border-neutral-100 px-5 pb-3 pt-4 sm:px-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{lote.titulo}</h3>
+                    <h3 className="line-clamp-2 min-w-0 flex-1 text-xl font-black tracking-tight text-neutral-900">{lote.titulo}</h3>
                     <div className="flex items-center gap-2">
                       <ShareIconMenuButton
                         shareUrl="/subastas"
                         title={lote.titulo}
                         text={`Revisa este remate en VEDISA Remates: ${lote.titulo}`}
                         buttonLabel="Compartir remate"
+                        buttonVariant="secondary"
                       />
                       {estadoBadge(lote.estado)}
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-neutral-600">{lote.subtitulo}</p>
-                  {lote.countdown ? (
-                    <p className="mt-3 inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
-                      <span className="mr-1.5">Cierre en</span>
-                      <span className="tabular-nums font-extrabold">{lote.countdown}</span>
-                    </p>
-                  ) : (
-                    <p className="mt-3 text-xs text-neutral-500">Verifica la ficha y las condiciones antes de ofertar.</p>
-                  )}
-                  <div className="mt-4 border-t border-neutral-100 pt-4">
-                    <span className="text-sm font-bold text-neutral-400">Conecta la base para habilitar enlaces</span>
+                  <p className="mt-2 line-clamp-1 text-sm font-medium text-neutral-600">{lote.subtitulo}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+                      Lotes disponibles: 12
+                    </span>
+                    {lote.countdown ? (
+                      <p className="inline-flex min-h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                        <span className="mr-1.5">Cierre en</span>
+                        <span className="tabular-nums font-extrabold">{lote.countdown}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 border-t border-neutral-100 pt-3">
+                    <span className="inline-flex min-h-10 items-center rounded-lg bg-[#0e6fa4] px-4 py-2 text-sm font-bold text-white">
+                      Ver sala del remate
+                    </span>
                   </div>
                 </div>
                 <div className="p-4 sm:p-5">
@@ -626,7 +660,7 @@ export function AuctionFeed() {
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-5xl flex-col gap-7">
+          <div className="mx-auto flex w-full flex-col gap-7">
             {slicedLive.map((r) => {
               const slice = classifyRemateForFeed(r);
               const cd = slice !== "cerrada" ? countdownLabelFromEndsAt(r.ends_at) : null;
@@ -638,36 +672,47 @@ export function AuctionFeed() {
 
               return (
                 <article key={r.id} className={cardShell}>
-                  <div className="border-b border-neutral-100 px-5 pb-4 pt-5">
+                  <div className="border-b border-neutral-100 px-5 pb-3 pt-4 sm:px-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-neutral-900">{tituloLimpio}</h3>
-                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-xl font-black tracking-tight text-neutral-900 sm:text-2xl">{tituloLimpio}</h3>
+                        <p
+                          className="mt-2 line-clamp-1 text-sm font-medium text-neutral-600 transition-all group-hover:line-clamp-2"
+                          title={descripcionLimpia}
+                        >
+                          {descripcionLimpia}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <ShareIconMenuButton
                           shareUrl={`/subastas/${r.id}`}
                           title={tituloLimpio}
                           text={`Revisa este remate en VEDISA Remates: ${tituloLimpio}`}
                           buttonLabel="Compartir remate"
+                          buttonVariant="secondary"
                         />
                         {badgeForSlice(slice, r.estado)}
                       </div>
                     </div>
-                    <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{descripcionLimpia}</p>
-                    {cd ? (
-                      <p className="mt-3 inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
-                        <span className="mr-1.5">Cierre en</span>
-                        <span className="tabular-nums font-extrabold">{cd}</span>
-                      </p>
-                    ) : (
-                      <p className="mt-3 text-xs text-neutral-500">
-                        Cierre: {new Date(r.ends_at).toLocaleString("es-CL")}
-                      </p>
-                    )}
-                    <div className="mt-4 border-t border-neutral-100 pt-4">
+                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                      <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+                        Lotes disponibles: {slides.length}
+                      </span>
+                      {cd ? (
+                        <p className="inline-flex min-h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                          <span className="mr-1.5">Cierre en</span>
+                          <span className="tabular-nums font-extrabold">{cd}</span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-neutral-500">Cierre: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
+                      )}
+                    </div>
+                    <div className="mt-3 border-t border-neutral-100 pt-3">
                       <Link
                         href={`/subastas/${r.id}`}
-                        className="text-sm font-bold text-[#009ade] underline-offset-4 hover:underline group-hover:text-[#005f8a]"
+                        className="inline-flex min-h-10 items-center rounded-lg bg-[#0e6fa4] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#0b5f8d]"
                       >
-                        Ir a la sala del remate →
+                        Ir a la sala del remate
                       </Link>
                     </div>
                   </div>
