@@ -382,7 +382,7 @@ function vehicleCategoryLabel(row: InventarioAnyRow): string | null {
 function SpecIcon({ icon }: { icon: SpecIconName }) {
   if (icon === "km")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="10" cy="10" r="6.8" stroke="currentColor" strokeWidth="1.6" />
         <path d="M10 10 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         <circle cx="10" cy="10" r="1.1" fill="currentColor" />
@@ -390,60 +390,60 @@ function SpecIcon({ icon }: { icon: SpecIconName }) {
     );
   if (icon === "year")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <rect x="3.5" y="4.5" width="13" height="11.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
         <path d="M6.5 3.5v2M13.5 3.5v2M3.5 8h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "fuel")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M4.5 4.5h6v11h-6z" stroke="currentColor" strokeWidth="1.6" />
         <path d="M10.5 7h1.8l1.4 1.6v4.4a1.7 1.7 0 0 0 3.4 0V9.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (icon === "engineTest")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <rect x="3.5" y="7" width="9.8" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
         <path d="M13.3 8.4h2.2M13.3 11.6h2.2M6.4 7V5.4M10.4 7V5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "movementTest")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M4 10h9.8M10.8 6l3.5 4-3.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (icon === "conditioned")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M4.2 10.2h11.6M10.5 4.4c2.8.2 5 2.5 5 5.3 0 2.9-2.3 5.3-5.3 5.3-2.8 0-5.1-2.2-5.3-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "singleOwner")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="10" cy="6.5" r="2.3" stroke="currentColor" strokeWidth="1.6" />
         <path d="M5 15.3c.6-2.1 2.5-3.6 5-3.6s4.4 1.5 5 3.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "airConditioning")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M5 6.5h10M10 4.5v2M7.2 10.2l2.8-1.7 2.8 1.7M10 8.5V15.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (icon === "keys")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="7" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
         <path d="M9.5 10h6M13.5 10v1.8M15.5 10v1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "traction")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="6" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
         <circle cx="14" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
         <path d="M5.5 12h9l-1-3.2H7.1L5.5 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
@@ -451,7 +451,7 @@ function SpecIcon({ icon }: { icon: SpecIconName }) {
     );
   if (icon === "airbags")
     return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="8.2" cy="7" r="2" stroke="currentColor" strokeWidth="1.6" />
         <path d="M4.8 14.8c.4-2 1.9-3.4 3.9-3.7M10.8 12.2h4.4M13 9.5v5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
@@ -726,9 +726,9 @@ export function HeroInventorySearch({
                 return (
                   <article
                     key={String(row.inventario.id)}
-                    className="flex h-full flex-col overflow-hidden rounded-xl border border-[#dfd4c7] bg-[#fcfaf7] text-left shadow-[0_8px_18px_rgba(73,46,26,0.12)]"
+                    className="flex h-full flex-col overflow-hidden rounded-xl border border-[#d6e5f4] bg-[#f8fbff] text-left shadow-[0_8px_18px_rgba(15,45,80,0.12)]"
                   >
-                    <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-[#dfd4c7]">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-[#d6e5f4]">
                       <SearchCardImage inventario={row.inventario} />
                       {glo3d ? (
                         <a
@@ -748,12 +748,12 @@ export function HeroInventorySearch({
                         <p className="line-clamp-2 text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
 
                         {specs.length > 0 ? (
-                          <div className="rounded-lg border border-amber-200/70 bg-[#fdfaf5] p-2.5">
+                          <div className="rounded-lg border border-sky-200/80 bg-[#f3f9ff] p-2.5">
                             <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-xs text-[#4f5a66]">
                               {specs.map((spec) => (
                                 <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
                                   <SpecIcon icon={spec.icon} />
-                                  <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
+                                  <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#51657d]`}>
                                     {spec.label}
                                   </span>
                                 </div>
@@ -765,16 +765,16 @@ export function HeroInventorySearch({
 
                       <div className="mt-auto space-y-2.5 pt-2.5">
                         <div className="min-h-[24px]">
-                          <div className="flex flex-wrap gap-1.5 text-[11px] text-[#604734]">
-                            {lotLabel ? <span className="rounded-full border border-amber-300/60 bg-[#f4ebe2] px-2.5 py-1">{lotLabel}</span> : null}
+                          <div className="flex flex-wrap gap-1.5 text-[11px] text-[#35506d]">
+                            {lotLabel ? <span className="rounded-full border border-sky-200 bg-[#eaf3ff] px-2.5 py-1">{lotLabel}</span> : null}
                             {categoryLabel ? (
-                              <span className="rounded-full border border-amber-300/70 bg-[#eddccf] px-2.5 py-1 font-semibold">{categoryLabel}</span>
+                              <span className="rounded-full border border-sky-200 bg-[#dcecff] px-2.5 py-1 font-semibold">{categoryLabel}</span>
                             ) : null}
                           </div>
                         </div>
 
-                        <div className="border-t border-amber-200/70 pt-2.5">
-                          <p className="min-h-[34px] text-[1.45rem] font-extrabold tracking-tight text-[#673b1f]">
+                        <div className="border-t border-sky-200/80 pt-2.5">
+                          <p className="min-h-[34px] text-[1.45rem] font-extrabold tracking-tight text-[#0b5f8d]">
                             {priceLabel ?? " "}
                           </p>
                         </div>

@@ -89,7 +89,7 @@ function badgeForSlice(slice: RemateFeedSlice, remateEstado: PortalRemateRow["es
   }
   if (slice === "proxima") {
     return (
-      <span className="inline-flex min-h-10 items-center rounded-lg bg-amber-400 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-neutral-900 ring-2 ring-amber-300/80">
+      <span className="inline-flex min-h-10 items-center rounded-lg bg-sky-500 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-white ring-2 ring-sky-300/70">
         Próximo inicio
       </span>
     );
@@ -303,7 +303,7 @@ function lotCategory(slide: RemateCarouselSlide): string | null {
 function SpecIcon({ icon }: { icon: SpecIconName }) {
   if (icon === "km")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="10" cy="10" r="6.8" stroke="currentColor" strokeWidth="1.6" />
         <path d="M10 10 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         <circle cx="10" cy="10" r="1.1" fill="currentColor" />
@@ -311,48 +311,48 @@ function SpecIcon({ icon }: { icon: SpecIconName }) {
     );
   if (icon === "year")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <rect x="3.5" y="4.5" width="13" height="11.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
         <path d="M6.5 3.5v2M13.5 3.5v2M3.5 8h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "fuel")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M4.5 4.5h6v11h-6z" stroke="currentColor" strokeWidth="1.6" />
         <path d="M10.5 7h1.8l1.4 1.6v4.4a1.7 1.7 0 0 0 3.4 0V9.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (icon === "engineTest")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <rect x="3.5" y="7" width="9.8" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
         <path d="M13.3 8.4h2.2M13.3 11.6h2.2M6.4 7V5.4M10.4 7V5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "movementTest")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <path d="M4 10h9.8M10.8 6l3.5 4-3.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (icon === "keys")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="7" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
         <path d="M9.5 10h6M13.5 10v1.8M15.5 10v1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     );
   if (icon === "traction")
     return (
-      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
         <circle cx="6" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
         <circle cx="14" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
         <path d="M5.5 12h9l-1-3.2H7.1L5.5 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
       </svg>
     );
   return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#7a624f]" fill="none" aria-hidden>
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#4f6b88]" fill="none" aria-hidden>
       <circle cx="8.2" cy="7" r="2" stroke="currentColor" strokeWidth="1.6" />
       <path d="M4.8 14.8c.4-2 1.9-3.4 3.9-3.7M10.8 12.2h4.4M13 9.5v5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
@@ -429,8 +429,8 @@ function RemateLotsStrip({
     const price = formatLotPrice(slide.precio);
     const href = thumbHref(slide.loteId);
     return (
-      <article className="flex h-full flex-col overflow-hidden rounded-lg border border-[#dfd4c7] bg-[#fcfaf7] shadow-[0_6px_14px_rgba(73,46,26,0.12)]">
-        <div className="relative aspect-[16/10] overflow-hidden border-b border-[#dfd4c7]">
+      <article className="flex h-full flex-col overflow-hidden rounded-lg border border-[#d6e5f4] bg-[#f8fbff] shadow-[0_6px_14px_rgba(15,45,80,0.12)]">
+        <div className="relative aspect-[16/10] overflow-hidden border-b border-[#d6e5f4]">
           <Link
             href={href}
             className="group/thumb block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009ade] focus-visible:ring-offset-2"
@@ -448,12 +448,12 @@ function RemateLotsStrip({
         <div className="flex flex-1 flex-col p-2.5">
           <h4 className="line-clamp-2 text-[0.86rem] font-extrabold tracking-tight text-[#2f1f14]">{lotTitle(slide)}</h4>
           {specs.length > 0 ? (
-            <div className="mt-2 rounded-md border border-amber-200/70 bg-[#fdfaf5] p-2">
+            <div className="mt-2 rounded-md border border-sky-200/80 bg-[#f3f9ff] p-2">
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs text-[#4f5a66]">
                 {specs.map((spec) => (
                   <div key={spec.key} className={`flex items-center gap-1.5 ${spec.wide ? "col-span-2" : ""}`}>
                     <SpecIcon icon={spec.icon} />
-                    <span className={`${spec.wide ? "text-[0.65rem] font-semibold uppercase leading-tight" : "truncate"} text-[#5a616d]`}>
+                    <span className={`${spec.wide ? "text-[0.65rem] font-semibold uppercase leading-tight" : "truncate"} text-[#51657d]`}>
                       {spec.label}
                     </span>
                   </div>
@@ -465,13 +465,13 @@ function RemateLotsStrip({
           <div className="mt-auto space-y-2 pt-2">
             <div className="min-h-[22px]">
               {category ? (
-                <span className="inline-flex rounded-full border border-amber-300/70 bg-[#eddccf] px-2 py-0.5 text-[10px] font-semibold text-[#604734]">
+                <span className="inline-flex rounded-full border border-sky-200 bg-[#dcecff] px-2 py-0.5 text-[10px] font-semibold text-[#35506d]">
                   {category}
                 </span>
               ) : null}
             </div>
-            <div className="border-t border-amber-200/70 pt-2">
-              <p className="min-h-[30px] text-[1.2rem] font-extrabold tracking-tight text-[#673b1f]">{price ?? " "}</p>
+            <div className="border-t border-sky-200/80 pt-2">
+              <p className="min-h-[30px] text-[1.2rem] font-extrabold tracking-tight text-[#0b5f8d]">{price ?? " "}</p>
             </div>
             <Link
               href={href}
@@ -487,10 +487,7 @@ function RemateLotsStrip({
 
   if (n < THUMB_VISIBLE) {
     return (
-      <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
-      >
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {slides.map((s, i) => (
           <LotCard key={s.loteId} slide={s} idx={i} loading={i === 0 ? "eager" : "lazy"} />
         ))}
@@ -500,7 +497,7 @@ function RemateLotsStrip({
 
   return (
     <div className="relative">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: THUMB_VISIBLE }).map((_, i) => {
           const slide = slides[start + i];
           const globalIdx = start + i;
@@ -521,7 +518,7 @@ function RemateLotsStrip({
 
       {maxStart > 0 ? (
         <>
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center sm:w-11">
+          <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-10 items-center sm:flex sm:w-11">
             <button
               type="button"
               onClick={() => go(-1)}
@@ -533,7 +530,7 @@ function RemateLotsStrip({
               </svg>
             </button>
           </div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center sm:w-11">
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-10 items-center justify-center sm:flex sm:w-11">
             <button
               type="button"
               onClick={() => go(1)}
@@ -795,13 +792,13 @@ export function AuctionFeed() {
             </p>
           </div>
           {useDemo ? (
-            <p className="max-w-md rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+            <p className="max-w-md rounded-lg border border-sky-200/80 bg-sky-50/90 px-3 py-2 text-xs text-sky-900">
               <span className="font-bold">Tip:</span> los contadores y estados se actualizan según fechas y estado del
               remate en la base.
             </p>
           ) : null}
           {!useDemo && liveError ? (
-            <p className="max-w-md rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
+            <p className="max-w-md rounded-lg border border-sky-200/80 bg-sky-50/90 px-3 py-2 text-xs text-sky-900">
               {liveError}
             </p>
           ) : null}
@@ -899,18 +896,18 @@ export function AuctionFeed() {
 
               return (
                 <article key={r.id} className={cardShell}>
-                  <div className="border-b border-neutral-100 px-5 pb-3 pt-4 sm:px-6">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="border-b border-neutral-100 px-4 pb-3 pt-4 sm:px-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
-                        <h3 className="line-clamp-2 text-xl font-black tracking-tight text-neutral-900 sm:text-2xl">{tituloLimpio}</h3>
+                        <h3 className="line-clamp-2 text-[1.45rem] font-black tracking-tight text-neutral-900 sm:text-2xl">{tituloLimpio}</h3>
                         <p
-                          className="mt-2 line-clamp-1 text-sm font-medium text-neutral-600 transition-all group-hover:line-clamp-2"
+                          className="mt-2 line-clamp-2 text-sm font-medium text-neutral-600 transition-all sm:line-clamp-1 group-hover:line-clamp-2"
                           title={descripcionLimpia}
                         >
                           {descripcionLimpia}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         <ShareIconMenuButton
                           shareUrl={`/subastas/${r.id}`}
                           title={tituloLimpio}
@@ -921,12 +918,12 @@ export function AuctionFeed() {
                         {badgeForSlice(slice, r.estado)}
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                      <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-700 sm:text-xs">
                         Lotes disponibles: {slides.length}
                       </span>
                       {cd ? (
-                        <p className="inline-flex min-h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                        <p className="inline-flex min-h-9 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 sm:text-xs">
                           <span className="mr-1.5">Cierre en</span>
                           <span className="tabular-nums font-extrabold">{cd}</span>
                         </p>
@@ -943,7 +940,7 @@ export function AuctionFeed() {
                       </Link>
                     </div>
                   </div>
-                  <div className="p-4 sm:p-5">
+                  <div className="p-3 sm:p-5">
                     <RemateLotsStrip slides={slides} remateId={r.id} altBase={tituloLimpio} />
                   </div>
                 </article>
