@@ -1,18 +1,10 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 
+import { AuctionLiveRoomClient } from "@/components/subastas/auction-live-room-client";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/server";
-
-const AuctionLiveRoom = dynamic(
-  () => import("@/components/subastas/auction-live-room").then((m) => m.AuctionLiveRoom),
-  {
-    ssr: false,
-    loading: () => <div className="mx-auto max-w-6xl px-4 py-16 text-center text-neutral-500">Cargando sala…</div>,
-  },
-);
 
 type Props = {
   params: Promise<{ remateId: string }>;
@@ -90,7 +82,7 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
     requestedLote && lotesEnriquecidos.some((l) => l.id === requestedLote) ? requestedLote : null;
 
   return (
-    <AuctionLiveRoom
+    <AuctionLiveRoomClient
       initialRemate={r}
       initialLotes={lotesEnriquecidos}
       viewerId={user?.id ?? null}
