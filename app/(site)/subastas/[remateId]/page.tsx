@@ -4,7 +4,14 @@ import { notFound } from "next/navigation";
 import { AuctionLiveRoomClient } from "@/components/subastas/auction-live-room-client";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
+import { resolveAvaluoFiscalMonto } from "@/lib/tasaciones-avaluo-fiscal";
 import { createClient } from "@/lib/supabase/server";
+
+type LoteConInventario = PortalRemateLoteRow & {
+  inventario: InventarioRow | null;
+  avaluo_fiscal_monto: number | null;
+  tasaciones_remate_item_id?: string | null;
+};
 
 type Props = {
   params: Promise<{ remateId: string }>;
@@ -50,8 +57,27 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
     .eq("remate_id", remateId)
     .order("orden", { ascending: true });
 
-  const lotesFlat = ((lotesRows ?? []) as PortalRemateLoteRow[]) ?? [];
+  const lotesFlat = ((lotesRows ?? []) as LoteConInventario[]) ?? [];
   const invIds = [...new Set(lotesFlat.map((l) => l.inventario_id).filter((x): x is string => Boolean(x)))];
+  const tasacionesItemIds = [
+    ...new Set(
+      lotesFlat
+        .map((l) => String((l as { tasaciones_remate_item_id?: string | null }).tasaciones_remate_item_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  const remateItemExtraById: Record<string, unknown> = {};
+  if (tasacionesItemIds.length) {
+    const { data: remateItems } = await supabase
+      .from("remates_items")
+      .select("id, extra_fields")
+      .in("id", tasacionesItemIds);
+    for (const row of (remateItems ?? []) as Array<{ id?: string; extra_fields?: unknown }>) {
+      const id = String(row.id ?? "").trim();
+      if (id) remateItemExtraById[id] = row.extra_fields ?? null;
+    }
+  }
 
   const invLookup: Record<string, InventarioRow> = {};
   if (invIds.length) {
@@ -61,10 +87,21 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
     }
   }
 
-  const lotesEnriquecidos = lotesFlat.map((l) => ({
-    ...l,
-    inventario: l.inventario_id ? invLookup[l.inventario_id] ?? null : null,
-  }));
+  const lotesEnriquecidos: LoteConInventario[] = lotesFlat.map((l) => {
+    const inventario = l.inventario_id ? invLookup[l.inventario_id] ?? null : null;
+    const tasacionesItemId = String(
+      (l as { tasaciones_remate_item_id?: string | null }).tasaciones_remate_item_id ?? "",
+    ).trim();
+    const avaluo_fiscal_monto = resolveAvaluoFiscalMonto({
+      remateItemExtraFields: tasacionesItemId ? remateItemExtraById[tasacionesItemId] : null,
+      inventario: inventario as Record<string, unknown> | null,
+    });
+    return {
+      ...l,
+      inventario,
+      avaluo_fiscal_monto,
+    };
+  });
 
   const { data: fichaCfgRow, error: fichaCfgErr } = await supabase
     .from("portal_inventario_ficha_config")
