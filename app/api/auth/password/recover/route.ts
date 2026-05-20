@@ -70,6 +70,15 @@ function buildMail(actionLink: string, siteOrigin: string) {
   return { subject, text, html };
 }
 
+function buildRecoveryEntryLink(siteOrigin: string, data: unknown, fallbackActionLink: string): string {
+  const props = ((data as { properties?: Record<string, unknown> } | null)?.properties ?? {}) as Record<string, unknown>;
+  const tokenHash = String(props.hashed_token ?? props.token_hash ?? "").trim();
+  if (tokenHash) {
+    return `${siteOrigin}/restablecer-clave?token_hash=${encodeURIComponent(tokenHash)}&type=recovery`;
+  }
+  return fallbackActionLink;
+}
+
 export async function POST(request: Request) {
   let body: Record<string, unknown> = {};
   try {
@@ -131,8 +140,9 @@ export async function POST(request: Request) {
   }
   const actionLink = data?.properties?.action_link;
   if (!actionLink) return NextResponse.json({ ok: false, error: "link_invalido" }, { status: 500 });
+  const entryLink = buildRecoveryEntryLink(siteOrigin, data, actionLink);
 
-  const mail = buildMail(actionLink, siteOrigin);
+  const mail = buildMail(entryLink, siteOrigin);
   const sent = await sendSesEmail({
     to: email,
     subject: mail.subject,

@@ -45,36 +45,44 @@ export function ResetPasswordForm() {
     async function verifySession() {
       try {
         let flowError: string | null = null;
+        const hashParams = getHashParams();
+        const hashCode = hashParams.get("code");
+        const hashTokenHash = hashParams.get("token_hash");
+        const hashType = hashParams.get("type");
+        const hashAccessToken = hashParams.get("access_token");
+        const hashRefreshToken = hashParams.get("refresh_token");
+        const effectiveCode = code ?? hashCode;
+        const effectiveTokenHash = tokenHash ?? hashTokenHash;
+        const effectiveRecoveryType = recoveryType ?? hashType;
+        const effectiveAccessToken = queryAccessToken ?? hashAccessToken;
+        const effectiveRefreshToken = queryRefreshToken ?? hashRefreshToken;
 
-        if (code) {
-          const { error: exchangeError } = await client.auth.exchangeCodeForSession(code);
+        if (effectiveCode) {
+          const { error: exchangeError } = await client.auth.exchangeCodeForSession(effectiveCode);
           if (exchangeError) {
             flowError = "El enlace de recuperación es inválido o ya expiró.";
           }
-        } else if (queryAccessToken && queryRefreshToken) {
+        } else if (effectiveAccessToken && effectiveRefreshToken) {
           const { error: setSessionError } = await client.auth.setSession({
-            access_token: queryAccessToken,
-            refresh_token: queryRefreshToken,
+            access_token: effectiveAccessToken,
+            refresh_token: effectiveRefreshToken,
           });
           if (setSessionError) {
             flowError = "El enlace de recuperación es inválido o ya expiró.";
           }
-        } else if (tokenHash && recoveryType === "recovery") {
+        } else if (effectiveTokenHash && effectiveRecoveryType === "recovery") {
           const { error: otpError } = await client.auth.verifyOtp({
-            token_hash: tokenHash,
+            token_hash: effectiveTokenHash,
             type: "recovery",
           });
           if (otpError) {
             flowError = "El enlace de recuperación es inválido o ya expiró.";
           }
         } else {
-          const hashParams = getHashParams();
-          const accessToken = hashParams.get("access_token");
-          const refreshToken = hashParams.get("refresh_token");
-          if (accessToken && refreshToken) {
+          if (hashAccessToken && hashRefreshToken) {
             const { error: setSessionError } = await client.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
+              access_token: hashAccessToken,
+              refresh_token: hashRefreshToken,
             });
             if (setSessionError) {
               flowError = "El enlace de recuperación es inválido o ya expiró.";
