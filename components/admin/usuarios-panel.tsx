@@ -9,7 +9,7 @@ import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
-type TabKey = "staff" | "cliente_remate";
+type TabKey = "staff" | "cliente_remate" | "cliente_empresa";
 type SortKey = "email" | "nombre" | "rol" | "garantia" | "created_at";
 type SortDir = "asc" | "desc";
 
@@ -134,6 +134,11 @@ function buildRoleCandidates(rol: string | null | undefined): string[] {
 function isClienteRemate(rol: string | null | undefined): boolean {
   const value = normalize(rol);
   return value === "cliente_remate" || value === "cliente-remate" || value === "cliente remate";
+}
+
+function isClienteEmpresa(rol: string | null | undefined): boolean {
+  const value = normalize(rol);
+  return value === "cliente_empresa" || value === "cliente-empresa" || value === "cliente empresa";
 }
 
 function csvSafe(text: string): string {
@@ -404,50 +409,35 @@ export function UsuariosPanel() {
       return;
     }
 
-    // Normaliza garantía desde profiles para evitar desincronización del RPC listar_usuarios.
-    const garantiaRes = await fetch("/api/admin/users/garantia-map", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userIds: ids }),
-    });
-    if (!garantiaRes.ok) {
-      setUsers((prev) => {
-        const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
-        return rows.map((u) => ({
-          ...u,
-          garantia_aprobada: u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false,
-        }));
-      });
-      return;
-    }
-    const garantiaJson = (await garantiaRes.json().catch(() => ({}))) as {
-      ok?: boolean;
-      rows?: Array<{ id: string; garantia_aprobada: boolean | null }>;
-    };
-    if (!garantiaJson.ok || !Array.isArray(garantiaJson.rows)) {
-      setUsers((prev) => {
-        const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
-        return rows.map((u) => ({
-          ...u,
-          garantia_aprobada: u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false,
-        }));
-      });
-      return;
-    }
+    // Pintamos de inmediato la tabla para reducir latencia percibida.
+    setUsers(rows);
 
-    const garantiaMap = new Map<string, boolean | null>();
-    for (const row of garantiaJson.rows) {
-      garantiaMap.set(String(row.id), row.garantia_aprobada ?? null);
-    }
-    setUsers((prev) => {
-      const prevGarantia = new Map(prev.map((u) => [u.id, u.garantia_aprobada ?? null] as const));
-      return rows.map((u) => ({
-        ...u,
-        garantia_aprobada: garantiaMap.has(u.id)
-          ? (garantiaMap.get(u.id) ?? null)
-          : (u.garantia_aprobada ?? prevGarantia.get(u.id) ?? false),
-      }));
-    });
+    // Normaliza garantía en segundo plano para evitar desincronización del RPC listar_usuarios,
+    // sin bloquear el render inicial del panel.
+    void (async () => {
+      const garantiaRes = await fetch("/api/admin/users/garantia-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: ids }),
+      });
+      if (!garantiaRes.ok) return;
+      const garantiaJson = (await garantiaRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        rows?: Array<{ id: string; garantia_aprobada: boolean | null }>;
+      };
+      if (!garantiaJson.ok || !Array.isArray(garantiaJson.rows)) return;
+
+      const garantiaMap = new Map<string, boolean | null>();
+      for (const row of garantiaJson.rows) {
+        garantiaMap.set(String(row.id), row.garantia_aprobada ?? null);
+      }
+      setUsers((prev) =>
+        prev.map((u) => ({
+          ...u,
+          garantia_aprobada: garantiaMap.has(u.id) ? (garantiaMap.get(u.id) ?? null) : (u.garantia_aprobada ?? false),
+        })),
+      );
+    })();
   }, []);
 
   useEffect(() => {
@@ -710,12 +700,18 @@ export function UsuariosPanel() {
   }
 
   const usersByTab = useMemo(() => {
-    const staff = users.filter((u) => !isClienteRemate(u.rol));
+    const staff = users.filter((u) => !isClienteRemate(u.rol) && !isClienteEmpresa(u.rol));
+    const empresa = users.filter((u) => isClienteEmpresa(u.rol));
     const cliente = users.filter((u) => isClienteRemate(u.rol));
-    return { staff, cliente };
+    return { staff, empresa, cliente };
   }, [users]);
 
-  const tabRows = activeTab === "staff" ? usersByTab.staff : usersByTab.cliente;
+  const tabRows =
+    activeTab === "staff"
+      ? usersByTab.staff
+      : activeTab === "cliente_empresa"
+        ? usersByTab.empresa
+        : usersByTab.cliente;
   const existingEmailSet = useMemo(() => {
     const set = new Set<string>();
     for (const u of users) {
@@ -1357,7 +1353,16 @@ export function UsuariosPanel() {
                 activeTab === "staff" ? "bg-[#33C7E3]/20 text-[#33C7E3]" : "bg-white/5 text-neutral-300"
               }`}
             >
-              Usuarios ({usersByTab.staff.length})
+              Usuarios normales ({usersByTab.staff.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("cliente_empresa")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                activeTab === "cliente_empresa" ? "bg-[#33C7E3]/20 text-[#33C7E3]" : "bg-white/5 text-neutral-300"
+              }`}
+            >
+              Clientes empresa ({usersByTab.empresa.length})
             </button>
             <button
               type="button"
@@ -1366,7 +1371,7 @@ export function UsuariosPanel() {
                 activeTab === "cliente_remate" ? "bg-[#33C7E3]/20 text-[#33C7E3]" : "bg-white/5 text-neutral-300"
               }`}
             >
-              Cliente-remate ({usersByTab.cliente.length})
+              Clientes remate ({usersByTab.cliente.length})
             </button>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
