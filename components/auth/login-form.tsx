@@ -25,21 +25,25 @@ function mapAuthError(message: string): string {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/subastas";
+  const redirectParam = searchParams.get("redirect");
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    router.prefetch(redirect.startsWith("/") ? redirect : "/subastas");
-    router.prefetch("/mi-cuenta");
-  }, [redirect, router]);
-
-  function resolveTargetPath(path: string): string {
-    return path.startsWith("/") ? path : "/subastas";
+  function resolvePostLoginTarget(path: string | null): string {
+    const raw = (path ?? "").trim();
+    if (!raw || raw === "/subastas") return "/";
+    return raw.startsWith("/") ? raw : "/";
   }
+
+  const postLoginTarget = resolvePostLoginTarget(redirectParam);
+
+  useEffect(() => {
+    router.prefetch(postLoginTarget);
+    router.prefetch("/mi-cuenta");
+  }, [postLoginTarget, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -86,8 +90,7 @@ export function LoginForm() {
         return;
       }
 
-      const fallbackTarget = resolveTargetPath(redirect);
-      let forcedTarget = fallbackTarget;
+      let forcedTarget = postLoginTarget;
 
       if (signedUser.id) {
         const mustChangePasswordPromise = (async () => {

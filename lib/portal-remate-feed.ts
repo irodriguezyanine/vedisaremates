@@ -22,6 +22,82 @@ export function classifyRemateForFeed(r: PortalRemateRow): RemateFeedSlice {
   return "cerrada";
 }
 
+/** Ventana para distinguir «próximo» (cerca) vs «futuro» (más adelante) en remates publicados sin iniciar. */
+const REMATE_PROXIMO_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+export type RemateSalaSection = "actuales" | "proximos" | "futuros" | "cerrados";
+
+export const REMATE_SALA_SECTIONS: {
+  key: RemateSalaSection;
+  title: string;
+  empty: string;
+}[] = [
+  { key: "actuales", title: "Remates actuales", empty: "No hay remates en curso en este momento." },
+  { key: "proximos", title: "Remates próximos", empty: "No hay remates próximos publicados." },
+  { key: "futuros", title: "Remates futuros", empty: "No hay remates futuros publicados." },
+  { key: "cerrados", title: "Remates cerrados", empty: "Todavía no hay remates cerrados para mostrar." },
+];
+
+export function classifyRemateForSala(r: PortalRemateRow): RemateSalaSection {
+  const slice = classifyRemateForFeed(r);
+  if (slice === "actual") return "actuales";
+  if (slice === "cerrada") return "cerrados";
+
+  const now = Date.now();
+  const startMs = r.starts_at ? new Date(r.starts_at).getTime() : null;
+  if (startMs != null && !Number.isNaN(startMs) && startMs - now > REMATE_PROXIMO_WINDOW_MS) {
+    return "futuros";
+  }
+  return "proximos";
+}
+
+export function formatRemateScheduleCompact(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-CL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+export function rematePublicStatusLabel(section: RemateSalaSection): "Abierto" | "Próximo" | "Futuro" | "Cerrado" {
+  if (section === "actuales") return "Abierto";
+  if (section === "proximos") return "Próximo";
+  if (section === "futuros") return "Futuro";
+  return "Cerrado";
+}
+
+export function rematePublicStatusBadgeClass(section: RemateSalaSection): string {
+  if (section === "actuales") {
+    return "bg-emerald-600 text-white ring-2 ring-emerald-500/25";
+  }
+  if (section === "proximos") {
+    return "bg-sky-600 text-white ring-2 ring-sky-400/40";
+  }
+  if (section === "futuros") {
+    return "bg-indigo-600 text-white ring-2 ring-indigo-400/35";
+  }
+  return "bg-neutral-500 text-white";
+}
+
+export function groupRematesBySalaSection(rows: PortalRemateRow[]): Record<RemateSalaSection, PortalRemateRow[]> {
+  const groups: Record<RemateSalaSection, PortalRemateRow[]> = {
+    actuales: [],
+    proximos: [],
+    futuros: [],
+    cerrados: [],
+  };
+  for (const row of rows) {
+    groups[classifyRemateForSala(row)].push(row);
+  }
+  return groups;
+}
+
 export function countdownLabelFromEndsAt(endsAt: string): string | null {
   const endMs = new Date(endsAt).getTime();
   if (Number.isNaN(endMs)) return null;

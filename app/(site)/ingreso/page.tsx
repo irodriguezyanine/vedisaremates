@@ -1,9 +1,21 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
+import { createClient } from "@/lib/supabase/server";
 
-export default function IngresoPage() {
+export default async function IngresoPage() {
+  const supabase = await createClient();
+  if (supabase) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.email_confirmed_at) {
+      redirect("/");
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-xl flex-col justify-center gap-6 px-4 py-16">
       <div>
