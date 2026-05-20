@@ -100,6 +100,17 @@ type LiveNotice = {
 };
 
 const OFFERS_FALLBACK_POLL_MS = 5000;
+const GASTOS_OPERACIONALES_CLP = 190000;
+const AVALUO_FISCAL_SOURCE_KEYS = [
+  "avaluo_fiscal",
+  "avaluo_tasacion",
+  "avaluo_tasacion_fiscal",
+  "tasacion_fiscal",
+  "valor_avaluo_fiscal",
+  "valor_tasacion_fiscal",
+  "monto_avaluo_fiscal",
+  "fiscal_avaluo",
+] as const;
 
 function formatCountdown(ms: number | null): string {
   if (ms == null) return "--:--:--";
@@ -127,6 +138,38 @@ function parseCurrencyInput(raw: string): number {
   const digits = sanitizeCurrencyInput(raw);
   if (!digits) return 0;
   return Number.parseInt(digits, 10);
+}
+
+function normalizeLooseKey(raw: string): string {
+  return String(raw ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function toPositiveMoney(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 0 ? Math.round(value) : null;
+  }
+  if (typeof value === "string") {
+    const parsed = parseCurrencyInput(value);
+    return parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function readAvaluoFiscal(inventario: InventarioRow | null | undefined): number | null {
+  if (!inventario || typeof inventario !== "object") return null;
+  const row = inventario as Record<string, unknown>;
+  const wanted = new Set(AVALUO_FISCAL_SOURCE_KEYS.map((key) => normalizeLooseKey(key)));
+
+  for (const [key, rawValue] of Object.entries(row)) {
+    if (!wanted.has(normalizeLooseKey(key))) continue;
+    const parsed = toPositiveMoney(rawValue);
+    if (parsed != null) return parsed;
+  }
+  return null;
 }
 
 function incrementoAutomaticoPorRango(precioReferencia: number): number {
@@ -473,6 +516,16 @@ export function AuctionLiveRoom({
   const topForActive = useMemo(() => getLeadingOffer(active ? offersByLote[active.id] ?? [] : []), [active, offersByLote]);
   const lotPriceDisplay = topForActive ? Number(topForActive.monto ?? 0) : Number(active?.precio_base ?? 0);
   const lotPriceLabel = topForActive ? "Oferta líder actual" : "Precio base publicado";
+  const ofertaReferencia = Math.max(0, Math.round(minNext));
+  const detalleComision = Math.round(ofertaReferencia * 0.12);
+  const detalleIvaComision = Math.round(detalleComision * 0.19);
+  const detalleAvaluoFiscal = readAvaluoFiscal(active?.inventario);
+  const detalleImpuestoTransferencia =
+    detalleAvaluoFiscal != null ? Math.round(detalleAvaluoFiscal * 0.015) : null;
+  const detalleTotalPagar =
+    detalleImpuestoTransferencia != null
+      ? ofertaReferencia + detalleComision + detalleIvaComision + GASTOS_OPERACIONALES_CLP + detalleImpuestoTransferencia
+      : null;
   const viewerHasBidInActive = !!(viewerId && listForActive.some((o) => o.user_id === viewerId));
   const viewerIsTopBidder = !!(viewerId && topForActive && topForActive.user_id === viewerId);
 
@@ -1007,6 +1060,54 @@ export function AuctionLiveRoom({
                             {busyProxy ? "Guardando…" : "Activar"}
                           </button>
                         </div>
+                      </div>
+                      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+                        <table className="w-full text-xs">
+                          <tbody>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 font-semibold text-neutral-600">Valor ofertado</td>
+                              <td className="px-3 py-2 text-right font-bold tabular-nums text-neutral-900">
+                                {formatClp(ofertaReferencia)}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 text-neutral-600">Comisión (12%)</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                                {formatClp(detalleComision)}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 text-neutral-600">IVA comisión (19%)</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                                {formatClp(detalleIvaComision)}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 text-neutral-600">Gastos operacionales (IVA incl.)</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                                {formatClp(GASTOS_OPERACIONALES_CLP)}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 text-neutral-600">Avalúo fiscal</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                                {detalleAvaluoFiscal != null ? formatClp(detalleAvaluoFiscal) : "Pendiente"}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-neutral-100">
+                              <td className="px-3 py-2 text-neutral-600">Impuesto transferencia (1,5%)</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                                {detalleImpuestoTransferencia != null ? formatClp(detalleImpuestoTransferencia) : "Pendiente"}
+                              </td>
+                            </tr>
+                            <tr className="bg-[#f7fbff]">
+                              <td className="px-3 py-2 font-bold text-[#0f3d5c]">Total estimado</td>
+                              <td className="px-3 py-2 text-right font-extrabold tabular-nums text-[#0f3d5c]">
+                                {detalleTotalPagar != null ? formatClp(detalleTotalPagar) : "Pendiente"}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                       {!canBidNow ? (
                         <p className="text-xs font-semibold text-amber-700">
