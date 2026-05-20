@@ -92,6 +92,15 @@ type OfferUserCard = {
   empresa?: string | null;
 };
 
+type LiveNotice = {
+  id: string;
+  tone: "info" | "warning";
+  title: string;
+  detail: string;
+};
+
+const OFFERS_FALLBACK_POLL_MS = 5000;
+
 function formatCountdown(ms: number | null): string {
   if (ms == null) return "--:--:--";
   if (ms <= 0) return "00:00:00";
@@ -134,6 +143,11 @@ function incrementoPorLote(lote: Pick<PortalRemateLoteRow, "precio_base" | "prec
   if (!lote) return 10000;
   const referencia = Math.max(Number(lote.precio_minimo_remate ?? 0), Number(lote.precio_base ?? 0), 0);
   return incrementoAutomaticoPorRango(referencia);
+}
+
+function getLeadingOffer(list: PortalOfertaRow[]): PortalOfertaRow | null {
+  if (!list.length) return null;
+  return [...list].sort((a, b) => b.monto - a.monto || new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 }
 
 type BidMsgTone = "success" | "error" | "info";
@@ -234,10 +248,23 @@ export function AuctionLiveRoom({
   const [quickCustomIncrements, setQuickCustomIncrements] = useState("3");
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [roomView, setRoomView] = useState<"compacta" | "detallada">("detallada");
+  const [liveNotices, setLiveNotices] = useState<LiveNotice[]>([]);
   const lastSoundBucketRef = useRef<number | null>(null);
+  const lastTopOfferByLoteRef = useRef<Record<string, { id: string; userId: string | null; monto: number }>>({});
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
   const lotesById = useMemo(() => new Map(lotes.map((l) => [l.id, l])), [lotes]);
+
+  const pushLiveNotice = useCallback((tone: LiveNotice["tone"], title: string, detail: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setLiveNotices((prev) => {
+      const next = [...prev, { id, tone, title, detail }];
+      return next.slice(-4);
+    });
+    window.setTimeout(() => {
+      setLiveNotices((prev) => prev.filter((n) => n.id !== id));
+    }, 6500);
+  }, []);
 
   const loadOffers = useCallback(
     async (loteIds: string[]) => {
@@ -460,29 +487,60 @@ export function AuctionLiveRoom({
         if (cfgRes.data) setCfg(cfgRes.data as PortalRematesConfigRow);
       });
     void refreshRemateAndCfg();
-    const poll = window.setInterval(() => {
+    const rematePoll = window.setInterval(() => {
       void refreshRemateAndCfg();
-    }, 15000);
+    }, 10000);
+    const offersPoll = window.setInterval(() => {
+      void loadOffers(ids);
+    }, OFFERS_FALLBACK_POLL_MS);
 
     return () => {
       void sb.removeChannel(ch);
-      window.clearInterval(poll);
+      window.clearInterval(rematePoll);
+      window.clearInterval(offersPoll);
     };
-  }, [lotes, remate.id]);
+  }, [lotes, remate.id, loadOffers]);
 
   const minNext = useMemo(() => {
     if (!active) return 0;
     const floor = Number(active.precio_minimo_remate ?? 0) || 0;
     const list = offersByLote[active.id] ?? [];
-    const max = list.length ? list[0]!.monto : null;
+    const max = getLeadingOffer(list)?.monto ?? null;
     const incremento = incrementoPorLote(active);
     if (max === null) return Math.max(Number(active.precio_base) || 0, floor);
     return Math.max(max + incremento, floor);
   }, [active, offersByLote]);
   const listForActive = active ? (offersByLote[active.id] ?? []).slice(0, 40) : [];
-  const topForActive = listForActive[0] ?? null;
+  const topForActive = useMemo(() => getLeadingOffer(active ? offersByLote[active.id] ?? [] : []), [active, offersByLote]);
+  const lotPriceDisplay = topForActive ? Number(topForActive.monto ?? 0) : Number(active?.precio_base ?? 0);
+  const lotPriceLabel = topForActive ? "Oferta líder actual" : "Precio base publicado";
   const viewerHasBidInActive = !!(viewerId && listForActive.some((o) => o.user_id === viewerId));
   const viewerIsTopBidder = !!(viewerId && topForActive && topForActive.user_id === viewerId);
+
+  useEffect(() => {
+    if (!active?.id || !topForActive) return;
+    const prev = lastTopOfferByLoteRef.current[active.id];
+    const current = {
+      id: String(topForActive.id),
+      userId: String(topForActive.user_id ?? "").trim() || null,
+      monto: Number(topForActive.monto ?? 0),
+    };
+
+    if (!prev) {
+      lastTopOfferByLoteRef.current[active.id] = current;
+      return;
+    }
+
+    if (prev.id !== current.id) {
+      if (viewerId && prev.userId === viewerId && current.userId !== viewerId) {
+        pushLiveNotice("warning", "Tu oferta fue superada", `Nueva oferta líder: ${formatClp(current.monto)}.`);
+      } else if (!viewerId || current.userId !== viewerId) {
+        pushLiveNotice("info", "Nueva oferta líder", `Oferta actual: ${formatClp(current.monto)}.`);
+      }
+    }
+
+    lastTopOfferByLoteRef.current[active.id] = current;
+  }, [active?.id, topForActive, viewerId, pushLiveNotice]);
 
   async function placeBid() {
     if (!active || !viewerId) {
@@ -849,6 +907,36 @@ export function AuctionLiveRoom({
         </div>
       </div>
 
+      {liveNotices.length ? (
+        <div className="fixed right-3 top-20 z-50 flex w-[min(92vw,22rem)] flex-col gap-2 sm:right-5">
+          {liveNotices.map((notice) => (
+            <div
+              key={notice.id}
+              className={`rounded-xl border px-3 py-2.5 shadow-lg backdrop-blur ${
+                notice.tone === "warning"
+                  ? "border-rose-300 bg-rose-50/95 text-rose-900"
+                  : "border-sky-300 bg-sky-50/95 text-sky-900"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-extrabold">{notice.title}</p>
+                  <p className="mt-0.5 text-xs font-semibold">{notice.detail}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLiveNotices((prev) => prev.filter((n) => n.id !== notice.id))}
+                  className="rounded-md border border-current/30 px-1.5 py-0.5 text-[11px] font-bold opacity-80 hover:opacity-100"
+                  aria-label="Cerrar notificación"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {lotes.length === 0 ? (
         <p className="text-neutral-600">Este remate aún no tiene lotes publicados.</p>
       ) : (
@@ -962,15 +1050,36 @@ export function AuctionLiveRoom({
 
                   <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm ring-1 ring-neutral-100/80">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Precios del lote</p>
-                    <p className="mt-2 text-2xl font-black tabular-nums text-neutral-900">{formatClp(active.precio_base)}</p>
-                    <p className="mt-1 text-xs text-neutral-600">Precio base publicado</p>
-                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Precio mínimo remate</p>
-                      <p className="mt-1 text-sm font-bold text-slate-800">{formatClp(active.precio_minimo_remate ?? active.precio_base)}</p>
-                    </div>
-                    <div className="mt-4 border-t border-neutral-100 pt-4">
-                      <p className="text-sm font-semibold text-neutral-700">Siguiente oferta mínima</p>
-                      <p className="mt-1 text-xl font-bold tabular-nums text-[#0f3d5c]">{formatClp(minNext)}</p>
+                    <p className="mt-2 text-2xl font-black tabular-nums text-neutral-900">{formatClp(lotPriceDisplay)}</p>
+                    <p className="mt-1 text-xs text-neutral-600">{lotPriceLabel}</p>
+                    <div className="mt-4 border-t border-neutral-100 pt-4 space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setQuickBid(1)}
+                        className="w-full rounded-lg border border-[#0b3352] bg-[#0f3d5c] px-3 py-2.5 text-sm font-extrabold text-white shadow-md shadow-[#0f3d5c]/25 transition hover:-translate-y-[1px] hover:bg-[#0b3352] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/60 focus:ring-offset-1"
+                      >
+                        Oferta minima ({formatClp(minNext)})
+                      </button>
+                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                        <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            value={proxyMax}
+                            onChange={(e) => setProxyMax(formatCurrencyInput(e.target.value))}
+                            inputMode="numeric"
+                            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                            placeholder="$25.000.000"
+                          />
+                          <button
+                            type="button"
+                            disabled={busyProxy}
+                            onClick={() => void setProxyBid()}
+                            className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                          >
+                            {busyProxy ? "Guardando…" : "Activar"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1097,15 +1206,7 @@ export function AuctionLiveRoom({
                               placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
                             />
                           </label>
-                          <div className="mt-3 space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => setQuickBid(1)}
-                              className="w-full rounded-lg border border-[#0b3352] bg-[#0f3d5c] px-3 py-2.5 text-sm font-extrabold text-white shadow-md shadow-[#0f3d5c]/25 transition hover:-translate-y-[1px] hover:bg-[#0b3352] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/60 focus:ring-offset-1"
-                            >
-                              Oferta directa minima ({formatClp(minNext)})
-                            </button>
-                            <div className="flex flex-wrap gap-2">
+                          <div className="mt-3 flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => setQuickBid(2)}
@@ -1127,7 +1228,6 @@ export function AuctionLiveRoom({
                               >
                                 + {customQuick - 1} incrementos (personalizado)
                               </button>
-                            </div>
                           </div>
                           <label className="mt-2 block text-xs text-neutral-600">
                             Oferta rápida personalizada (cantidad de incrementos)
@@ -1156,26 +1256,6 @@ export function AuctionLiveRoom({
                           >
                             {busy ? "Enviando…" : "Confirmar oferta"}
                           </button>
-                          <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                            <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
-                            <div className="mt-2 flex gap-2">
-                              <input
-                                value={proxyMax}
-                                onChange={(e) => setProxyMax(formatCurrencyInput(e.target.value))}
-                                inputMode="numeric"
-                                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                                placeholder="$25.000.000"
-                              />
-                              <button
-                                type="button"
-                                disabled={busyProxy}
-                                onClick={() => void setProxyBid()}
-                                className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
-                              >
-                                {busyProxy ? "Guardando…" : "Activar"}
-                              </button>
-                            </div>
-                          </div>
                         </>
                       )}
                     {bidMsg ? (
@@ -1264,7 +1344,7 @@ export function AuctionLiveRoom({
                       const row = lotesById.get(id);
                       if (!row) return null;
                       const inv = row.inventario;
-                      const currentMax = (offersByLote[id]?.[0]?.monto ?? null) as number | null;
+                      const currentMax = getLeadingOffer(offersByLote[id] ?? [])?.monto ?? null;
                       const nextMin = currentMax == null ? Number(row.precio_base) : currentMax + incrementoPorLote(row);
                       return (
                         <article key={id} className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
