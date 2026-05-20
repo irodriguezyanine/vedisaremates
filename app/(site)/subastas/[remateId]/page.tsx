@@ -1,11 +1,18 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 
-import { AuctionLiveRoom } from "@/components/subastas/auction-live-room";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/server";
+
+const AuctionLiveRoom = dynamic(
+  () => import("@/components/subastas/auction-live-room").then((m) => m.AuctionLiveRoom),
+  {
+    ssr: false,
+    loading: () => <div className="mx-auto max-w-6xl px-4 py-16 text-center text-neutral-500">Cargando sala…</div>,
+  },
+);
 
 type Props = {
   params: Promise<{ remateId: string }>;
@@ -54,7 +61,7 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
   const lotesFlat = ((lotesRows ?? []) as PortalRemateLoteRow[]) ?? [];
   const invIds = [...new Set(lotesFlat.map((l) => l.inventario_id).filter((x): x is string => Boolean(x)))];
 
-  let invLookup: Record<string, InventarioRow> = {};
+  const invLookup: Record<string, InventarioRow> = {};
   if (invIds.length) {
     const { data: invs } = await supabase.from("inventario").select("*").in("id", invIds);
     for (const row of ((invs ?? []) as InventarioRow[]) ?? []) {
@@ -83,15 +90,13 @@ export default async function SubastaDetallePage({ params, searchParams }: Props
     requestedLote && lotesEnriquecidos.some((l) => l.id === requestedLote) ? requestedLote : null;
 
   return (
-    <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-16 text-center text-neutral-500">Cargando sala…</div>}>
-      <AuctionLiveRoom
-        initialRemate={r}
-        initialLotes={lotesEnriquecidos}
-        viewerId={user?.id ?? null}
-        viewerHasGarantia={viewerHasGarantia}
-        fichaDisplayConfig={fichaDisplayConfig}
-        initialActiveLoteId={initialActiveLoteId}
-      />
-    </Suspense>
+    <AuctionLiveRoom
+      initialRemate={r}
+      initialLotes={lotesEnriquecidos}
+      viewerId={user?.id ?? null}
+      viewerHasGarantia={viewerHasGarantia}
+      fichaDisplayConfig={fichaDisplayConfig}
+      initialActiveLoteId={initialActiveLoteId}
+    />
   );
 }

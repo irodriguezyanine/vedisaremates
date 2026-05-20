@@ -170,22 +170,60 @@ function toPositiveMoney(value: unknown): number | null {
 
 function readAvaluoFiscal(...sources: unknown[]): number | null {
   const wanted = new Set(AVALUO_FISCAL_SOURCE_KEYS.map((key) => normalizeLooseKey(key)));
-  for (const source of sources) {
-    if (!source || typeof source !== "object") continue;
-    const row = source as Record<string, unknown>;
-    for (const [key, rawValue] of Object.entries(row)) {
-      if (!wanted.has(normalizeLooseKey(key))) continue;
-      const parsed = toPositiveMoney(rawValue);
-      if (parsed != null) return parsed;
-    }
-    const nestedInventario = row.inventario;
-    if (nestedInventario && typeof nestedInventario === "object") {
-      for (const [key, rawValue] of Object.entries(nestedInventario as Record<string, unknown>)) {
-        if (!wanted.has(normalizeLooseKey(key))) continue;
-        const parsed = toPositiveMoney(rawValue);
+  const matchesAvaluoFiscalKey = (normalizedKey: string) =>
+    wanted.has(normalizedKey) ||
+    (normalizedKey.includes("avaluo") && normalizedKey.includes("fiscal")) ||
+    normalizedKey.includes("tasacionfiscal");
+
+  const tryValueByKey = (key: string, value: unknown): number | null => {
+    if (!matchesAvaluoFiscalKey(normalizeLooseKey(key))) return null;
+    return toPositiveMoney(value);
+  };
+
+  const visited = new Set<object>();
+  const walk = (value: unknown, depth: number): number | null => {
+    if (depth > 5 || !value || typeof value !== "object") return null;
+    if (visited.has(value as object)) return null;
+    visited.add(value as object);
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const parsed = walk(item, depth + 1);
         if (parsed != null) return parsed;
       }
+      return null;
     }
+
+    const row = value as Record<string, unknown>;
+
+    for (const [key, rawValue] of Object.entries(row)) {
+      const direct = tryValueByKey(key, rawValue);
+      if (direct != null) return direct;
+    }
+
+    for (const candidateKey of ["label", "nombre", "name", "key", "campo", "title", "titulo"]) {
+      const candidate = row[candidateKey];
+      if (typeof candidate !== "string") continue;
+      if (!matchesAvaluoFiscalKey(normalizeLooseKey(candidate))) continue;
+      const parsed =
+        toPositiveMoney(row.value) ??
+        toPositiveMoney(row.valor) ??
+        toPositiveMoney(row.amount) ??
+        toPositiveMoney(row.monto) ??
+        null;
+      if (parsed != null) return parsed;
+    }
+
+    for (const nested of Object.values(row)) {
+      const parsed = walk(nested, depth + 1);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  };
+
+  for (const source of sources) {
+    const parsed = walk(source, 0);
+    if (parsed != null) return parsed;
   }
   return null;
 }
@@ -299,6 +337,7 @@ export function AuctionLiveRoom({
   const [msg, setMsg] = useState<string | null>(null);
   const [tick, setTick] = useState<number | null>(null);
   const [proxyMax, setProxyMax] = useState("");
+  const [customBidAmount, setCustomBidAmount] = useState("");
   const [cfg, setCfg] = useState<PortalRematesConfigRow | null>(null);
   const [viewerRole, setViewerRole] = useState<string>("");
   const [favoriteLoteIds, setFavoriteLoteIds] = useState<Set<string>>(new Set());
@@ -534,7 +573,8 @@ export function AuctionLiveRoom({
   const topForActive = useMemo(() => getLeadingOffer(active ? offersByLote[active.id] ?? [] : []), [active, offersByLote]);
   const lotPriceDisplay = topForActive ? Number(topForActive.monto ?? 0) : Number(active?.precio_base ?? 0);
   const lotPriceLabel = topForActive ? "Oferta líder actual" : "Precio base publicado";
-  const ofertaReferencia = Math.max(0, Math.round(minNext));
+  const customBidMonto = parseCurrencyInput(customBidAmount);
+  const ofertaReferencia = customBidMonto > 0 ? customBidMonto : Math.max(0, Math.round(minNext));
   const detalleComision = Math.round(ofertaReferencia * 0.12);
   const detalleIvaComision = Math.round(detalleComision * 0.19);
   const detalleAvaluoFiscal = readAvaluoFiscal(active, active?.inventario);
@@ -572,7 +612,7 @@ export function AuctionLiveRoom({
     lastTopOfferByLoteRef.current[active.id] = current;
   }, [active?.id, topForActive, viewerId, pushLiveNotice]);
 
-  async function placeMinimumBid() {
+  async function placeBidAmount(rawMonto: number, origen: "minima" | "personalizada") {
     if (!active || !viewerId) {
       setMsg("Inicie sesión para ofertar.");
       return;
@@ -581,9 +621,17 @@ export function AuctionLiveRoom({
       setMsg("Este lote no está habilitado para recibir ofertas.");
       return;
     }
+    const monto = Math.max(0, Math.round(rawMonto));
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setMsg("Monto inválido.");
+      return;
+    }
+    if (origen === "personalizada" && monto < minNext) {
+      setMsg(`La oferta personalizada debe ser al menos ${formatClp(minNext)}.`);
+      return;
+    }
     setBusy(true);
     setMsg(null);
-    const monto = Math.max(0, Math.round(minNext));
     const sb = createClient();
     if (!sb) {
       setMsg("No se pudo iniciar la conexión. Actualice la página o intente más tarde.");
@@ -594,6 +642,7 @@ export function AuctionLiveRoom({
     const summaryMsg = [
       "Confirme su oferta",
       "",
+      origen === "personalizada" ? "Origen: oferta personalizada" : "Origen: oferta mínima",
       `Monto a ofertar: ${formatClp(monto)}`,
       `Mínimo sugerido: ${formatClp(minNext)}`,
       topForActive ? `Oferta líder actual: ${formatClp(topForActive.monto)}` : "Aún no hay oferta líder.",
@@ -656,6 +705,9 @@ export function AuctionLiveRoom({
     if (res.ends_at_extendido) {
       setRemate((prev) => ({ ...prev, ends_at: res.ends_at_extendido as string }));
     }
+    if (origen === "personalizada") {
+      setCustomBidAmount("");
+    }
     await loadOffers(lotes.map((l) => l.id));
     const extendSeconds = Math.max(0, Number(cfg?.anti_sniping_extend_seconds ?? 90));
     setMsg(
@@ -673,6 +725,14 @@ export function AuctionLiveRoom({
       }),
     }).catch(() => null);
     setBusy(false);
+  }
+
+  async function placeMinimumBid() {
+    await placeBidAmount(minNext, "minima");
+  }
+
+  async function placeCustomBid() {
+    await placeBidAmount(customBidMonto, "personalizada");
   }
 
   async function setProxyBid() {
@@ -1079,6 +1139,29 @@ export function AuctionLiveRoom({
                           </button>
                         </div>
                       </div>
+                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                        <p className="text-xs font-semibold text-neutral-700">Tu oferta personalizada</p>
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            value={customBidAmount}
+                            onChange={(e) => setCustomBidAmount(formatCurrencyInput(e.target.value))}
+                            inputMode="numeric"
+                            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
+                            placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
+                          />
+                          <button
+                            type="button"
+                            disabled={!canBidNow || busy}
+                            onClick={() => void placeCustomBid()}
+                            className="rounded-lg border border-[#0b3352] bg-[#0f3d5c] px-3 py-2 text-xs font-bold text-white hover:bg-[#0b3352] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {busy ? "Enviando..." : "Enviar"}
+                          </button>
+                        </div>
+                        <p className="mt-1 text-[11px] text-neutral-500">
+                          Al escribir tu oferta se actualiza en tiempo real la simulación de costos.
+                        </p>
+                      </div>
                       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
                         <table className="w-full text-xs">
                           <tbody>
@@ -1118,9 +1201,9 @@ export function AuctionLiveRoom({
                                 {detalleImpuestoTransferencia != null ? formatClp(detalleImpuestoTransferencia) : "Pendiente"}
                               </td>
                             </tr>
-                            <tr className="bg-[#f7fbff]">
-                              <td className="px-3 py-2 font-bold text-[#0f3d5c]">Total estimado</td>
-                              <td className="px-3 py-2 text-right font-extrabold tabular-nums text-[#0f3d5c]">
+                            <tr className="border-t-2 border-[#33C7E3]/40 bg-[#eaf7ff]">
+                              <td className="px-3 py-2.5 text-sm font-black text-[#0f3d5c]">Total estimado</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-black tabular-nums text-[#0f3d5c]">
                                 {detalleTotalPagar != null ? formatClp(detalleTotalPagar) : "Pendiente"}
                               </td>
                             </tr>
