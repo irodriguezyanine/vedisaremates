@@ -1,71 +1,104 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { VehicleSpecGrid } from "@/components/vehicle-spec-grid";
-import { formatClp } from "@/lib/format-clp";
+import { extraerCamposAutoredInventario } from "@/lib/autored/extract-inventario";
+import { fetchPrecioPublicacionAutored } from "@/lib/autored/fetch-precio-publicacion.client";
+import { formatClp, formatThousandsEsClInteger } from "@/lib/format-clp";
 import type { LotePortalContext, RematePortalContext } from "@/lib/inventario-ficha";
 import type { InventarioRow } from "@/lib/portal-types";
 import { getVehicleSpecs, vehicleSummaryTitle } from "@/lib/vehicle-spec-summary";
 
-const TZ = { timeZone: "America/Santiago" } satisfies Intl.DateTimeFormatOptions;
-
-function fechaLargaCl(iso?: string | null): string | null {
-  if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      ...TZ,
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return null;
-  }
-}
-
-function MetaRow({
-  icon,
-  label,
-  value,
+function AutoredPrecioPublicacionCard({
+  inventario,
 }: {
-  icon: "calendar" | "clock" | "price" | "step";
-  label: string;
-  value: string | null;
+  inventario: InventarioRow & Record<string, unknown>;
 }) {
-  if (!value) return null;
-  const iconClass = "h-5 w-5 shrink-0 text-[#009ade]";
-  const glyph =
-    icon === "calendar" ? (
-      <svg viewBox="0 0 24 24" className={iconClass} fill="none" aria-hidden>
-        <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ) : icon === "clock" ? (
-      <svg viewBox="0 0 24 24" className={iconClass} fill="none" aria-hidden>
-        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ) : icon === "price" ? (
-      <svg viewBox="0 0 24 24" className={iconClass} fill="none" aria-hidden>
-        <path d="M6 8h12M6 12h8M6 16h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-    ) : (
-      <svg viewBox="0 0 24 24" className={iconClass} fill="none" aria-hidden>
-        <path d="M6 16l4-8 4 8M8 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
+  const campos = useMemo(() => extraerCamposAutoredInventario(inventario), [inventario]);
+  const lookupKey = `${campos.patente}|${campos.version ?? ""}|${campos.kilometrajeNum ?? ""}`;
+
+  const [estado, setEstado] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [precio, setPrecio] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (campos.patente.length < 5) {
+      setEstado("error");
+      setPrecio(null);
+      setErrorMsg("Sin patente válida para consultar Autored");
+      return;
+    }
+
+    let cancelled = false;
+    setEstado("loading");
+    setErrorMsg(null);
+
+    void fetchPrecioPublicacionAutored({
+      patente: campos.patente,
+      version: campos.version,
+      kilometraje: campos.kilometraje,
+    }).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.precio_publicacion != null) {
+        setPrecio(res.precio_publicacion);
+        setEstado("ok");
+        setErrorMsg(null);
+      } else {
+        setPrecio(null);
+        setEstado("error");
+        setErrorMsg(res.error ?? "Precio de publicación no disponible en Autored");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupKey, campos.patente, campos.version, campos.kilometraje]);
+
+  const consultaDetalle = [
+    campos.patente || null,
+    campos.version ? `versión ${campos.version}` : null,
+    campos.kilometrajeNum != null ? `${formatThousandsEsClInteger(campos.kilometrajeNum)} km` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-neutral-200/90 bg-white px-4 py-3 shadow-sm">
-      {glyph}
-      <div className="min-w-0 flex-1">
-        <p className="text-[0.65rem] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
-        <p className="mt-0.5 text-sm font-bold text-neutral-900">{value}</p>
+    <div className="rounded-2xl border border-[#009ade]/25 bg-gradient-to-br from-[#f0fafd] via-white to-white p-5 shadow-sm ring-1 ring-[#009ade]/10">
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#009ade]/10 text-[#009ade]">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden>
+            <path d="M6 8h12M6 12h8M6 16h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#009ade]">Precio referencial de publicación</p>
+          <p className="mt-1 text-2xl font-black tracking-tight text-neutral-900 sm:text-[1.65rem]">
+            {estado === "loading" ? (
+              <span className="text-lg font-semibold text-neutral-500">Consultando Autored…</span>
+            ) : estado === "ok" && precio != null ? (
+              formatClp(precio)
+            ) : (
+              <span className="text-lg font-semibold text-neutral-500">No disponible</span>
+            )}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+            Referencia Autored según patente
+            {campos.version ? ", versión" : ""}
+            {campos.kilometrajeNum != null ? " y kilometraje" : ""} del vehículo.
+            {consultaDetalle ? (
+              <>
+                {" "}
+                <span className="font-medium text-neutral-600">{consultaDetalle}</span>
+              </>
+            ) : null}
+          </p>
+          {estado === "error" && errorMsg ? (
+            <p className="mt-2 text-xs text-amber-800/90">{errorMsg}</p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -82,11 +115,7 @@ export function LoteVehicleSummary({
 }) {
   const specs = useMemo(() => getVehicleSpecs(inventario), [inventario]);
   const title = useMemo(() => vehicleSummaryTitle(inventario), [inventario]);
-
-  const inicio = fechaLargaCl(rematePortal.starts_at);
-  const cierre = fechaLargaCl(rematePortal.ends_at);
-  const precioBase = lotePortal.precio_base != null ? formatClp(lotePortal.precio_base) : null;
-  const incremento = lotePortal.incremento_minimo != null ? formatClp(lotePortal.incremento_minimo) : null;
+  const invRecord = inventario as InventarioRow & Record<string, unknown>;
 
   const loteSubtitle = [
     lotePortal.orden != null ? `Lote ${lotePortal.orden}` : null,
@@ -96,10 +125,8 @@ export function LoteVehicleSummary({
     .filter(Boolean)
     .join(" · ");
 
-  const hasRemateMeta = Boolean(inicio || cierre || precioBase || incremento);
-
   return (
-    <section className="space-y-5" aria-label="Resumen del vehículo y del lote">
+    <section className="space-y-5" aria-label="Resumen del vehículo">
       <header className="space-y-1">
         <h3 className="text-xl font-black tracking-tight text-neutral-900 sm:text-2xl">{title}</h3>
         {loteSubtitle ? <p className="text-sm text-neutral-500">{loteSubtitle}</p> : null}
@@ -107,14 +134,7 @@ export function LoteVehicleSummary({
 
       {specs.length > 0 ? <VehicleSpecGrid specs={specs} size="md" /> : null}
 
-      {hasRemateMeta ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <MetaRow icon="calendar" label="Inicio del remate" value={inicio} />
-          <MetaRow icon="clock" label="Cierre programado" value={cierre} />
-          <MetaRow icon="price" label="Precio base publicado" value={precioBase} />
-          <MetaRow icon="step" label="Incremento mínimo de oferta" value={incremento} />
-        </div>
-      ) : null}
+      <AutoredPrecioPublicacionCard inventario={invRecord} />
     </section>
   );
 }
