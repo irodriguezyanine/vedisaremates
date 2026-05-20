@@ -5,12 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { VehicleSpecGrid } from "@/components/vehicle-spec-grid";
 import { extraerCamposAutoredInventario, leerValorEsperadoInventario } from "@/lib/autored/extract-inventario";
 import { fetchPrecioPublicacionAutored } from "@/lib/autored/fetch-precio-publicacion.client";
-import { formatClp, formatThousandsEsClInteger } from "@/lib/format-clp";
+import { formatClp } from "@/lib/format-clp";
 import type { LotePortalContext, RematePortalContext } from "@/lib/inventario-ficha";
 import type { InventarioRow } from "@/lib/portal-types";
 import { getVehicleSpecs, vehicleSummaryTitle } from "@/lib/vehicle-spec-summary";
-
-type PrecioFuente = "inventario" | "autored";
 
 function PrecioReferencialPublicacionCard({
   inventario,
@@ -23,30 +21,22 @@ function PrecioReferencialPublicacionCard({
 
   const [estado, setEstado] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [precio, setPrecio] = useState<number | null>(null);
-  const [fuente, setFuente] = useState<PrecioFuente | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (valorEsperadoInventario != null && valorEsperadoInventario > 0) {
       setPrecio(valorEsperadoInventario);
-      setFuente("inventario");
       setEstado("ok");
-      setErrorMsg(null);
       return;
     }
 
     if (campos.patente.length < 5) {
       setEstado("error");
       setPrecio(null);
-      setFuente(null);
-      setErrorMsg("Sin patente válida ni precio referencial en inventario");
       return;
     }
 
     let cancelled = false;
     setEstado("loading");
-    setErrorMsg(null);
-    setFuente(null);
 
     void fetchPrecioPublicacionAutored({
       patente: campos.patente,
@@ -56,14 +46,10 @@ function PrecioReferencialPublicacionCard({
       if (cancelled) return;
       if (res.ok && res.precio_publicacion != null) {
         setPrecio(res.precio_publicacion);
-        setFuente("autored");
         setEstado("ok");
-        setErrorMsg(null);
       } else {
         setPrecio(null);
-        setFuente(null);
         setEstado("error");
-        setErrorMsg(res.error ?? "Precio de publicación no disponible");
       }
     });
 
@@ -71,21 +57,6 @@ function PrecioReferencialPublicacionCard({
       cancelled = true;
     };
   }, [lookupKey, valorEsperadoInventario, campos.patente, campos.version, campos.kilometraje]);
-
-  const consultaDetalle = [
-    campos.patente || null,
-    campos.version ? `versión ${campos.version}` : null,
-    campos.kilometrajeNum != null ? `${formatThousandsEsClInteger(campos.kilometrajeNum)} km` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  const descripcionFuente =
-    fuente === "inventario"
-      ? "Mismo valor que «Precio aproximado referencial Vedisa» del inventario Tasaciones (valor_esperado)."
-      : fuente === "autored"
-        ? `Consulta Autored (plan B) según patente${campos.version ? ", versión" : ""}${campos.kilometrajeNum != null ? " y kilometraje" : ""} del vehículo.`
-        : "Referencia de publicación del vehículo.";
 
   return (
     <div className="rounded-2xl border border-[#009ade]/25 bg-gradient-to-br from-[#f0fafd] via-white to-white p-5 shadow-sm ring-1 ring-[#009ade]/10">
@@ -107,18 +78,6 @@ function PrecioReferencialPublicacionCard({
               <span className="text-lg font-semibold text-neutral-500">No disponible</span>
             )}
           </p>
-          <p className="mt-2 text-xs leading-relaxed text-neutral-500">
-            {descripcionFuente}
-            {consultaDetalle ? (
-              <>
-                {" "}
-                <span className="font-medium text-neutral-600">{consultaDetalle}</span>
-              </>
-            ) : null}
-          </p>
-          {estado === "error" && errorMsg ? (
-            <p className="mt-2 text-xs text-amber-800/90">{errorMsg}</p>
-          ) : null}
         </div>
       </div>
     </div>
