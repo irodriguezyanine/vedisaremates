@@ -9,7 +9,7 @@ import { AuctionLotesCarousel } from "@/components/subastas/auction-lotes-carous
 import { InventarioMediaGallery } from "@/components/subastas/inventario-media-gallery";
 import { InventarioFichaTecnica } from "@/components/subastas/inventario-ficha-tecnica";
 import { useStyledDialogs } from "@/components/ui/use-styled-dialogs";
-import { formatClp } from "@/lib/format-clp";
+import { formatClp, tryParseMoneyInteger } from "@/lib/format-clp";
 import type {
   InventarioRow,
   PortalLoteFavoritoRow,
@@ -157,74 +157,78 @@ function normalizeLooseKey(raw: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function toPositiveMoney(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value > 0 ? Math.round(value) : null;
+/** Monto de avalúo fiscal plausible en CLP (evita IDs de catálogo u otros números internos). */
+function isPlausibleAvaluoFiscal(amount: number): boolean {
+  return Number.isFinite(amount) && amount >= 100_000 && amount <= 300_000_000;
+}
+
+function parseAvaluoFiscalValue(value: unknown): number | null {
+  const parsed =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.round(value)
+      : tryParseMoneyInteger(value);
+  if (parsed == null || !isPlausibleAvaluoFiscal(parsed)) return null;
+  return parsed;
+}
+
+function isExactAvaluoFiscalFieldKey(key: string): boolean {
+  return AVALUO_FISCAL_SOURCE_KEYS.some((candidate) => normalizeLooseKey(candidate) === normalizeLooseKey(key));
+}
+
+function isAvaluoFiscalDisplayLabel(label: string): boolean {
+  const nk = normalizeLooseKey(label);
+  if (!nk) return false;
+  if (nk.includes("version") || nk.includes("catalogo") || nk.includes("permiso") || nk.includes("circulacion")) {
+    return false;
   }
-  if (typeof value === "string") {
-    const parsed = parseCurrencyInput(value);
-    return parsed > 0 ? parsed : null;
+  if (isExactAvaluoFiscalFieldKey(label)) return true;
+  return nk === "avaluofiscal" || nk === "avaluofiscaltasacion";
+}
+
+function readAvaluoFiscalFromRow(row: Record<string, unknown>): number | null {
+  for (const key of AVALUO_FISCAL_SOURCE_KEYS) {
+    if (!(key in row)) continue;
+    const parsed = parseAvaluoFiscalValue(row[key]);
+    if (parsed != null) return parsed;
+  }
+  for (const [key, rawValue] of Object.entries(row)) {
+    if (!isExactAvaluoFiscalFieldKey(key)) continue;
+    const parsed = parseAvaluoFiscalValue(rawValue);
+    if (parsed != null) return parsed;
   }
   return null;
 }
 
-function readAvaluoFiscal(...sources: unknown[]): number | null {
-  const wanted = new Set(AVALUO_FISCAL_SOURCE_KEYS.map((key) => normalizeLooseKey(key)));
-  const matchesAvaluoFiscalKey = (normalizedKey: string) =>
-    wanted.has(normalizedKey) ||
-    (normalizedKey.includes("avaluo") && normalizedKey.includes("fiscal")) ||
-    normalizedKey.includes("tasacionfiscal");
-
-  const tryValueByKey = (key: string, value: unknown): number | null => {
-    if (!matchesAvaluoFiscalKey(normalizeLooseKey(key))) return null;
-    return toPositiveMoney(value);
-  };
-
-  const visited = new Set<object>();
-  const walk = (value: unknown, depth: number): number | null => {
-    if (depth > 5 || !value || typeof value !== "object") return null;
-    if (visited.has(value as object)) return null;
-    visited.add(value as object);
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const parsed = walk(item, depth + 1);
-        if (parsed != null) return parsed;
-      }
-      return null;
-    }
-
-    const row = value as Record<string, unknown>;
-
-    for (const [key, rawValue] of Object.entries(row)) {
-      const direct = tryValueByKey(key, rawValue);
-      if (direct != null) return direct;
-    }
-
-    for (const candidateKey of ["label", "nombre", "name", "key", "campo", "title", "titulo"]) {
-      const candidate = row[candidateKey];
-      if (typeof candidate !== "string") continue;
-      if (!matchesAvaluoFiscalKey(normalizeLooseKey(candidate))) continue;
-      const parsed =
-        toPositiveMoney(row.value) ??
-        toPositiveMoney(row.valor) ??
-        toPositiveMoney(row.amount) ??
-        toPositiveMoney(row.monto) ??
-        null;
-      if (parsed != null) return parsed;
-    }
-
-    for (const nested of Object.values(row)) {
-      const parsed = walk(nested, depth + 1);
-      if (parsed != null) return parsed;
-    }
-    return null;
-  };
-
-  for (const source of sources) {
-    const parsed = walk(source, 0);
+function readAvaluoFiscalFromSpecEntries(entries: unknown): number | null {
+  if (!Array.isArray(entries)) return null;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const label = String(row.label ?? row.nombre ?? row.key ?? row.campo ?? row.title ?? row.titulo ?? "").trim();
+    if (!label || !isAvaluoFiscalDisplayLabel(label)) continue;
+    const parsed =
+      parseAvaluoFiscalValue(row.value) ??
+      parseAvaluoFiscalValue(row.valor) ??
+      parseAvaluoFiscalValue(row.monto) ??
+      parseAvaluoFiscalValue(row.amount) ??
+      null;
     if (parsed != null) return parsed;
   }
+  return null;
+}
+
+function readAvaluoFiscal(inventario: InventarioRow | null | undefined): number | null {
+  if (!inventario || typeof inventario !== "object") return null;
+  const row = inventario as Record<string, unknown>;
+
+  const direct = readAvaluoFiscalFromRow(row);
+  if (direct != null) return direct;
+
+  for (const nestedKey of ["vehicle_specs", "technical_fields", "detalles", "campos_extra", "specifications"]) {
+    const parsed = readAvaluoFiscalFromSpecEntries(row[nestedKey]);
+    if (parsed != null) return parsed;
+  }
+
   return null;
 }
 
@@ -381,18 +385,28 @@ export function AuctionLiveRoom({
       const userIds = [...new Set((data as PortalOfertaRow[]).map((row) => String(row.user_id ?? "").trim()).filter(Boolean))];
       if (!userIds.length) return;
 
-      const { data: profileRows } = await sb.from("profiles").select("id,nombre,apellido").in("id", userIds);
+      const { data: profileRows } = await sb
+        .from("profiles")
+        .select("id,username,nombre,apellido")
+        .in("id", userIds);
       if (!profileRows) return;
 
       const resolved: Record<string, string> = {};
-      for (const profile of profileRows as Array<{ id?: string | null; nombre?: string | null; apellido?: string | null }>) {
+      for (const profile of profileRows as Array<{
+        id?: string | null;
+        username?: string | null;
+        nombre?: string | null;
+        apellido?: string | null;
+      }>) {
         const id = String(profile.id ?? "").trim();
         if (!id) continue;
+        const username = String(profile.username ?? "").trim();
         const nombre = String(profile.nombre ?? "").trim();
         const apellido = String(profile.apellido ?? "").trim();
         const fullName = [nombre, apellido].filter(Boolean).join(" ").trim();
-        if (fullName) {
-          resolved[id] = fullName;
+        const display = username || fullName;
+        if (display) {
+          resolved[id] = display;
         }
       }
       if (Object.keys(resolved).length > 0) {
@@ -577,7 +591,7 @@ export function AuctionLiveRoom({
   const ofertaReferencia = customBidMonto > 0 ? customBidMonto : Math.max(0, Math.round(minNext));
   const detalleComision = Math.round(ofertaReferencia * 0.12);
   const detalleIvaComision = Math.round(detalleComision * 0.19);
-  const detalleAvaluoFiscal = readAvaluoFiscal(active, active?.inventario);
+  const detalleAvaluoFiscal = readAvaluoFiscal(active?.inventario);
   const detalleImpuestoTransferencia =
     detalleAvaluoFiscal != null ? Math.round(detalleAvaluoFiscal * 0.015) : null;
   const detalleTotalPagar =
@@ -586,6 +600,7 @@ export function AuctionLiveRoom({
       : null;
   const viewerHasBidInActive = !!(viewerId && listForActive.some((o) => o.user_id === viewerId));
   const viewerIsTopBidder = !!(viewerId && topForActive && topForActive.user_id === viewerId);
+  const topBidderUsername = topForActive ? formatOfferUserName(topForActive, offerUserNamesById) : null;
 
   useEffect(() => {
     if (!active?.id || !topForActive) return;
@@ -1162,48 +1177,52 @@ export function AuctionLiveRoom({
                           Al escribir tu oferta se actualiza en tiempo real la simulación de costos.
                         </p>
                       </div>
-                      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-                        <table className="w-full text-xs">
+                      <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
+                        <table className="w-full table-fixed text-xs">
+                          <colgroup>
+                            <col className="w-[56%]" />
+                            <col className="w-[44%]" />
+                          </colgroup>
                           <tbody>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 font-semibold text-neutral-600">Valor ofertado</td>
-                              <td className="px-3 py-2 text-right font-bold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top font-semibold text-neutral-600">Valor ofertado</td>
+                              <td className="px-2 py-2 text-right align-top font-bold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {formatClp(ofertaReferencia)}
                               </td>
                             </tr>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 text-neutral-600">Comisión (12%)</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top text-neutral-600">Comisión (12%)</td>
+                              <td className="px-2 py-2 text-right align-top font-semibold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {formatClp(detalleComision)}
                               </td>
                             </tr>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 text-neutral-600">IVA comisión (19%)</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top text-neutral-600">IVA comisión (19%)</td>
+                              <td className="px-2 py-2 text-right align-top font-semibold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {formatClp(detalleIvaComision)}
                               </td>
                             </tr>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 text-neutral-600">Gastos operacionales (IVA incl.)</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top text-neutral-600">Gastos operacionales (IVA incl.)</td>
+                              <td className="px-2 py-2 text-right align-top font-semibold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {formatClp(GASTOS_OPERACIONALES_CLP)}
                               </td>
                             </tr>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 text-neutral-600">Avalúo fiscal</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top text-neutral-600">Avalúo fiscal</td>
+                              <td className="px-2 py-2 text-right align-top font-semibold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {detalleAvaluoFiscal != null ? formatClp(detalleAvaluoFiscal) : "Pendiente"}
                               </td>
                             </tr>
                             <tr className="border-b border-neutral-100">
-                              <td className="px-3 py-2 text-neutral-600">Impuesto transferencia (1,5%)</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-neutral-900">
+                              <td className="px-3 py-2 align-top text-neutral-600">Impuesto transferencia (1,5%)</td>
+                              <td className="px-2 py-2 text-right align-top font-semibold tabular-nums text-neutral-900 whitespace-nowrap">
                                 {detalleImpuestoTransferencia != null ? formatClp(detalleImpuestoTransferencia) : "Pendiente"}
                               </td>
                             </tr>
                             <tr className="border-t-2 border-[#33C7E3]/40 bg-[#eaf7ff]">
-                              <td className="px-3 py-2.5 text-sm font-black text-[#0f3d5c]">Total estimado</td>
-                              <td className="px-3 py-2.5 text-right text-sm font-black tabular-nums text-[#0f3d5c]">
+                              <td className="px-3 py-2.5 align-top text-sm font-black text-[#0f3d5c]">Total estimado</td>
+                              <td className="px-2 py-2.5 text-right align-top text-sm font-black tabular-nums text-[#0f3d5c] whitespace-nowrap">
                                 {detalleTotalPagar != null ? formatClp(detalleTotalPagar) : "Pendiente"}
                               </td>
                             </tr>
@@ -1336,15 +1355,55 @@ export function AuctionLiveRoom({
                           <span className="font-bold text-neutral-900 tabular-nums">{listForActive.length}</span>
                         </p>
                         {!showOnlyOffersCount ? (
-                          <p className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2">
-                            <span className="text-neutral-600">
-                              {viewerIsClienteRemate ? "Oferta ganadora actual" : "Oferta líder actual"}
-                            </span>
-                            <span className="font-bold text-neutral-900">
-                              {topForActive ? formatClp(topForActive.monto) : "Sin ofertas"}
-                            </span>
-                          </p>
+                          <>
+                            <p className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2">
+                              <span className="text-neutral-600">
+                                {viewerIsClienteRemate ? "Oferta ganadora actual" : "Oferta líder actual"}
+                              </span>
+                              <span className="font-bold text-neutral-900 tabular-nums">
+                                {topForActive ? formatClp(topForActive.monto) : "Sin ofertas"}
+                              </span>
+                            </p>
+                            <p className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2">
+                              <span className="text-neutral-600">Usuario oferta</span>
+                              <span className="max-w-[58%] truncate text-right font-bold text-neutral-900">
+                                {topForActive ? topBidderUsername : "Sin ofertas"}
+                              </span>
+                            </p>
+                          </>
                         ) : null}
+                        <p
+                          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                            countdownLive !== null && countdownLive <= 0
+                              ? "border-rose-200 bg-rose-50"
+                              : isLastTenMinutes
+                                ? "border-rose-200 bg-rose-50"
+                                : "border-sky-200 bg-sky-50"
+                          }`}
+                        >
+                          <span
+                            className={
+                              countdownLive !== null && countdownLive <= 0
+                                ? "font-semibold text-rose-700"
+                                : isLastTenMinutes
+                                  ? "font-semibold text-rose-700"
+                                  : "font-semibold text-sky-700"
+                            }
+                          >
+                            Cuenta regresiva
+                          </span>
+                          <span
+                            className={`font-mono text-base font-black tabular-nums ${
+                              countdownLive !== null && countdownLive <= 0
+                                ? "text-rose-800"
+                                : isLastTenMinutes
+                                  ? "text-rose-800"
+                                  : "text-sky-800"
+                            }`}
+                          >
+                            {countdownText}
+                          </span>
+                        </p>
                       </div>
                       {!viewerId ? (
                         <p className="mt-3 text-xs text-neutral-500">
