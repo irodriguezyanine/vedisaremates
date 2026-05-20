@@ -810,9 +810,87 @@ export function AuctionLiveRoom({
     });
   }
 
+  const remateStatusPanel = (
+    <div className="w-full shrink-0 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-sky-50/30 p-4 text-sm shadow-[0_10px_28px_rgba(15,61,92,0.08)] lg:min-w-[min(100%,20rem)] lg:max-w-2xl">
+      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</span>
+          <p className="mt-1 text-xl font-black capitalize leading-none text-neutral-900 sm:text-2xl">{remateStatusLabel}</p>
+        </div>
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Inicio</span>
+          <p className="mt-1 text-base font-black leading-none text-sky-800 sm:text-lg">{startsAtDisplay.date}</p>
+          <p className="mt-1 text-xs font-semibold tabular-nums text-sky-700">{startsAtDisplay.time || "Sin hora"}</p>
+        </div>
+        <div
+          className={`rounded-xl border px-3 py-2.5 ${
+            countdownLive !== null && countdownLive <= 0
+              ? "border-rose-200 bg-rose-50"
+              : "border-emerald-200 bg-emerald-50"
+          }`}
+        >
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider ${
+              countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
+            }`}
+          >
+            Cierra
+          </span>
+          <p
+            className={`mt-1 text-base font-black leading-none sm:text-lg ${
+              countdownLive !== null && countdownLive <= 0 ? "text-rose-800" : "text-emerald-800"
+            }`}
+          >
+            {endsAtDisplay.date}
+          </p>
+          <p
+            className={`mt-1 text-xs font-semibold tabular-nums ${
+              countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
+            }`}
+          >
+            {countdownLive !== null && countdownLive <= 0 ? "Cerrado" : endsAtDisplay.time || "Sin hora"}
+          </p>
+        </div>
+        <div
+          className={`col-span-2 rounded-xl border px-3 py-2.5 xl:col-span-1 ${
+            isLastTenMinutes
+              ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)] animate-pulse"
+              : "border-sky-200 bg-sky-50"
+          }`}
+        >
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider ${
+              isLastTenMinutes ? "text-rose-700" : "text-sky-700"
+            }`}
+          >
+            Cuenta regresiva
+          </span>
+          <p
+            className={`mt-1 font-mono text-xl font-black tabular-nums leading-none sm:text-2xl ${
+              isLastTenMinutes ? "text-rose-700" : "text-sky-800"
+            }`}
+          >
+            {countdownText}
+          </p>
+          {isLastTenMinutes ? (
+            <p className="mt-1 text-[10px] font-semibold text-rose-700">Alerta activa: últimos 10 minutos</p>
+          ) : null}
+        </div>
+      </div>
+      {!viewerId ? (
+        <Link
+          href={`/ingreso?redirect=/subastas/${remate.id}`}
+          className="mt-2 inline-flex w-full justify-center rounded-lg bg-[#009ade]/10 px-3 py-1.5 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15 sm:w-auto sm:justify-start"
+        >
+          Inicie sesión para ofertar
+        </Link>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:py-10">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <Link href="/subastas" className="text-sm font-semibold text-[#009ade] hover:underline">
             ← Sala de remates
@@ -847,81 +925,17 @@ export function AuctionLiveRoom({
             </button>
           </div>
         </div>
-        <div className="w-full shrink-0 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-sky-50/30 p-4 text-sm shadow-[0_10px_28px_rgba(15,61,92,0.08)] lg:min-w-[min(100%,24rem)] lg:max-w-2xl">
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Estado del remate</span>
-              <p className="mt-1 text-2xl font-black capitalize leading-none text-neutral-900">{remateStatusLabel}</p>
-            </div>
-            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">Inicio</span>
-              <p className="mt-1 text-lg font-black leading-none text-sky-800">{startsAtDisplay.date}</p>
-              <p className="mt-1 text-xs font-semibold tabular-nums text-sky-700">{startsAtDisplay.time || "Sin hora"}</p>
-            </div>
-            <div
-              className={`rounded-xl border px-3 py-2.5 ${
-                countdownLive !== null && countdownLive <= 0
-                  ? "border-rose-200 bg-rose-50"
-                  : "border-emerald-200 bg-emerald-50"
-              }`}
-            >
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
-                }`}
-              >
-                Cierra
-              </span>
-              <p
-                className={`mt-1 text-lg font-black leading-none ${
-                  countdownLive !== null && countdownLive <= 0 ? "text-rose-800" : "text-emerald-800"
-                }`}
-              >
-                {endsAtDisplay.date}
-              </p>
-              <p
-                className={`mt-1 text-xs font-semibold tabular-nums ${
-                  countdownLive !== null && countdownLive <= 0 ? "text-rose-700" : "text-emerald-700"
-                }`}
-              >
-                {countdownLive !== null && countdownLive <= 0 ? "Cerrado" : endsAtDisplay.time || "Sin hora"}
-              </p>
-            </div>
-            <div
-              className={`rounded-xl border px-3 py-2.5 ${
-                isLastTenMinutes
-                  ? "border-rose-300 bg-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,0.12)] animate-pulse"
-                  : "border-sky-200 bg-sky-50"
-              }`}
-            >
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider ${
-                  isLastTenMinutes ? "text-rose-700" : "text-sky-700"
-                }`}
-              >
-                Cuenta regresiva
-              </span>
-              <p
-                className={`mt-1 font-mono text-2xl font-black tabular-nums leading-none ${
-                  isLastTenMinutes ? "text-rose-700" : "text-sky-800"
-                }`}
-              >
-                {countdownText}
-              </p>
-              {isLastTenMinutes ? (
-                <p className="mt-1 text-[10px] font-semibold text-rose-700">Alerta activa: últimos 10 minutos</p>
-              ) : null}
-            </div>
+        {active ? (
+          <div className="shrink-0 self-start">
+            <ShareIconMenuButton
+              shareUrl={`/subastas/${remate.id}?lote=${encodeURIComponent(active.id)}`}
+              title={active.titulo ?? "Lote en remate"}
+              text={`Mira este lote en VEDISA Remates: ${active.titulo ?? "Lote"}`}
+              buttonLabel="Compartir"
+              menuAlign="right"
+            />
           </div>
-          {!viewerId ? (
-            <Link
-              href={`/ingreso?redirect=/subastas/${remate.id}`}
-              className="mt-2 inline-flex w-full justify-center rounded-lg bg-[#009ade]/10 px-3 py-1.5 text-xs font-bold text-[#009ade] hover:bg-[#009ade]/15 sm:w-auto sm:justify-start"
-            >
-              Inicie sesión para ofertar
-            </Link>
-          ) : null}
-        </div>
+        ) : null}
       </div>
 
       {liveNotices.length ? (
@@ -960,31 +974,27 @@ export function AuctionLiveRoom({
         <div className="space-y-5 sm:space-y-6">
           {active ? (
             <>
-              <div className="space-y-1 border-b border-neutral-100 pb-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <h2 className="text-pretty min-w-0 flex-1 text-2xl font-black tracking-tight text-neutral-900 sm:text-3xl">
-                    {active.inventario
-                      ? [active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") ||
-                        (active.titulo ?? "Vehículo")
-                      : (active.titulo ?? "Detalle del lote")}
-                  </h2>
-                  <ShareIconMenuButton
-                    shareUrl={`/subastas/${remate.id}?lote=${encodeURIComponent(active.id)}`}
-                    title={active.titulo ?? "Lote en remate"}
-                    text={`Mira este lote en VEDISA Remates: ${active.titulo ?? "Lote"}`}
-                    buttonLabel="Compartir lote"
-                    menuAlign="right"
-                  />
+              <div className="space-y-4 border-b border-neutral-100 pb-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h2 className="text-pretty text-2xl font-black tracking-tight text-neutral-900 sm:text-3xl">
+                      {active.inventario
+                        ? [active.inventario.marca, active.inventario.modelo].filter(Boolean).join(" ") ||
+                          (active.titulo ?? "Vehículo")
+                        : (active.titulo ?? "Detalle del lote")}
+                    </h2>
+                    {active.inventario?.patente || active.inventario?.ano ? (
+                      <p className="text-sm text-neutral-500">
+                        {[active.inventario?.patente, active.inventario?.ano ? String(active.inventario.ano) : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : active.inventario?.categoria ? (
+                      <p className="text-sm text-neutral-500">{String(active.inventario.categoria)}</p>
+                    ) : null}
+                  </div>
+                  {remateStatusPanel}
                 </div>
-                {active.inventario?.patente || active.inventario?.ano ? (
-                  <p className="text-sm text-neutral-500">
-                    {[active.inventario?.patente, active.inventario?.ano ? String(active.inventario.ano) : null]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                ) : active.inventario?.categoria ? (
-                  <p className="text-sm text-neutral-500">{String(active.inventario.categoria)}</p>
-                ) : null}
               </div>
 
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start lg:gap-8 xl:gap-10">

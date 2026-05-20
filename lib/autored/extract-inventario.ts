@@ -1,3 +1,4 @@
+import { tryParseMoneyInteger } from "@/lib/format-clp";
 import type { InventarioRow } from "@/lib/portal-types";
 import { getInventarioField } from "@/lib/vehicle-spec-summary";
 
@@ -37,4 +38,13 @@ export function extraerCamposAutoredInventario(inventario: InventarioAnyRow): {
     kilometraje,
     kilometrajeNum: extraerKilometrajeNumerico(kilometraje),
   };
+}
+
+/** Mismo dato que la ficha «Precio aproximado referencial Vedisa» (`inventario.valor_esperado`). */
+export function leerValorEsperadoInventario(inventario: InventarioAnyRow): number | null {
+  const direct = tryParseMoneyInteger(inventario.valor_esperado);
+  if (direct != null && direct > 0) return direct;
+  const nested = tryParseMoneyInteger(getInventarioField(inventario, ["valor_esperado"]));
+  if (nested != null && nested > 0) return nested;
+  return null;
 }
