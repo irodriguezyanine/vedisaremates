@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AuctionLiveRoomClient } from "@/components/subastas/auction-live-room-client";
 import { SupabaseDeployWarning } from "@/components/supabase-deploy-warning";
 import type { InventarioRow, PortalRemateLoteRow, PortalRemateRow } from "@/lib/portal-types";
+import { buildLoteShareMetadata, buildRemateShareMetadata } from "@/lib/share-lote-metadata";
 import { resolveAvaluoFiscalMonto } from "@/lib/tasaciones-avaluo-fiscal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,6 +19,55 @@ type Props = {
   params: Promise<{ remateId: string }>;
   searchParams: Promise<{ lote?: string }>;
 };
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const { remateId } = await params;
+  const q = await searchParams;
+  const loteId = typeof q.lote === "string" ? q.lote.trim() : "";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedisaremates.vercel.app";
+  const canonicalPath = loteId
+    ? `/subastas/${remateId}?lote=${encodeURIComponent(loteId)}`
+    : `/subastas/${remateId}`;
+
+  const supabase = await createClient();
+  if (!supabase) {
+    return buildRemateShareMetadata({ remateTitulo: "Remate Vedisa", canonicalPath, siteUrl });
+  }
+
+  const { data: remate } = await supabase.from("portal_remates").select("titulo").eq("id", remateId).maybeSingle();
+  const remateTitulo = String((remate as { titulo?: string } | null)?.titulo ?? "Remate Vedisa");
+
+  if (!loteId) {
+    return buildRemateShareMetadata({ remateTitulo, canonicalPath, siteUrl });
+  }
+
+  const { data: lote } = await supabase
+    .from("portal_remate_lotes")
+    .select("id, titulo, inventario_id")
+    .eq("id", loteId)
+    .eq("remate_id", remateId)
+    .maybeSingle();
+
+  if (!lote) {
+    return buildRemateShareMetadata({ remateTitulo, canonicalPath, siteUrl });
+  }
+
+  let inventario: InventarioRow | null = null;
+  const inventarioId = String((lote as { inventario_id?: string | null }).inventario_id ?? "").trim();
+  if (inventarioId) {
+    const { data: inv } = await supabase.from("inventario").select("*").eq("id", inventarioId).maybeSingle();
+    inventario = (inv as InventarioRow | null) ?? null;
+  }
+
+  return buildLoteShareMetadata({
+    remateTitulo,
+    loteId,
+    loteTitulo: (lote as { titulo?: string | null }).titulo ?? null,
+    inventario: inventario as (InventarioRow & Record<string, unknown>) | null,
+    canonicalPath,
+    siteUrl,
+  });
+}
 
 export default async function SubastaDetallePage({ params, searchParams }: Props) {
   const { remateId } = await params;

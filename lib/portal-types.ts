@@ -21,6 +21,7 @@ export type PortalRemateRow = {
   ends_at: string;
   created_by: string | null;
   source_system?: string | null;
+  source_event_number?: string | null;
   tasaciones_remate_id?: string | null;
   deleted_at?: string | null;
 };

@@ -119,6 +119,19 @@ function etiquetaOrigenSimple(sourceSystem: string | null | undefined): string {
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
+/** Número oficial del remate (portal `source_event_number` o extraído del título). */
+function numeroRemateListado(row: PortalRemateRow): string | null {
+  const fromSource = String(row.source_event_number ?? "").trim();
+  const digitsFromSource = fromSource.replace(/\D/g, "");
+  if (digitsFromSource) return `Remate #${digitsFromSource}`;
+  const titulo = String(row.titulo ?? "");
+  const byHash = titulo.match(/#\s*([0-9]+)/);
+  if (byHash?.[1]) return `Remate #${byHash[1]}`;
+  const byPrefix = titulo.match(/^\s*remate\s*#?\s*([0-9]+)/i);
+  if (byPrefix?.[1]) return `Remate #${byPrefix[1]}`;
+  return null;
+}
+
 function esErrorDeadlock(error: unknown): boolean {
   const text = String(error ?? "").toLowerCase();
   return text.includes("deadlock");
@@ -516,6 +529,7 @@ export function RematesList() {
       <ul className="space-y-3">
         {itemsPagina.map((r) => {
           const tituloLimpio = tituloEventoCard(r.titulo);
+          const numeroRemate = numeroRemateListado(r);
           return (
           <li key={r.id}>
             <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#141c28] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -527,7 +541,15 @@ export function RematesList() {
                 >
                   {tituloLimpio}
                 </Link>
-                <p className="mt-1 text-xs text-neutral-500">Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  {numeroRemate ? (
+                    <>
+                      <span className="font-semibold text-neutral-400">{numeroRemate}</span>
+                      <span className="text-neutral-600"> · </span>
+                    </>
+                  ) : null}
+                  Fin programado: {new Date(r.ends_at).toLocaleString("es-CL")}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-4 text-sm font-semibold text-white sm:px-3">
                 <span>{etiquetaOrigenSimple(r.source_system)}</span>
