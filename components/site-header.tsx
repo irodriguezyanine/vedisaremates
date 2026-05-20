@@ -16,6 +16,9 @@ const navClasses = (active: boolean) =>
     active ? "bg-white/10 text-[#FFC600]" : "text-white/85 hover:bg-white/10 hover:text-[#33C7E3]"
   }`;
 
+const remataTuAutoNavClasses =
+  "inline-flex shrink-0 whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-bold text-[#FFC600] transition-colors hover:bg-white/10 hover:text-white";
+
 export function SiteHeader() {
   const pathname = usePathname();
   const cat = catalogoHref();
@@ -131,6 +134,14 @@ export function SiteHeader() {
             >
               Subastas
             </Link>
+            <a
+              href={SITE.remataTuAutoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={remataTuAutoNavClasses}
+            >
+              ¡Remata tu auto acá!
+            </a>
 
             <div className="relative z-[60] shrink-0" ref={moreRef}>
               <button
@@ -221,6 +232,15 @@ export function SiteHeader() {
             <Link href="/subastas" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Subastas en vivo
             </Link>
+            <a
+              href={SITE.remataTuAutoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md px-3 py-2.5 font-bold text-[#FFC600] hover:bg-white/5"
+              onClick={closeMobile}
+            >
+              ¡Remata tu auto acá!
+            </a>
             <Link href="/como-participar" className="rounded-md px-3 py-2.5 hover:bg-white/5" onClick={closeMobile}>
               Cómo participar
             </Link>

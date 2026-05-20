@@ -17,6 +17,7 @@ export const SITE = {
   mapsExhibicionHref:
     "https://www.google.com/maps/dir/?api=1&destination=Arturo+Prat+6457,+Noviciado,+Pudahuel",
   legacyRainworksHelp: "https://www.vehiculoschocados.cl/Help",
+  remataTuAutoHref: "https://www.rematatuauto.com/",
   pagosEmail: "pagos@vedisaremates.cl",
   guaranteeAmountDisplay: "$300.000",
 } as const;
