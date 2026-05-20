@@ -214,7 +214,6 @@ export function AuctionLiveRoom({
   initialRemate,
   initialLotes,
   viewerId,
-  viewerHasGarantia = false,
   fichaDisplayConfig,
   initialActiveLoteId = null,
 }: Props) {
@@ -234,7 +233,6 @@ export function AuctionLiveRoom({
   const [openOfferUserId, setOpenOfferUserId] = useState<string | null>(null);
   const [loadingOfferUserId, setLoadingOfferUserId] = useState<string | null>(null);
   const [offerUserCardError, setOfferUserCardError] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyProxy, setBusyProxy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -242,14 +240,10 @@ export function AuctionLiveRoom({
   const [proxyMax, setProxyMax] = useState("");
   const [cfg, setCfg] = useState<PortalRematesConfigRow | null>(null);
   const [viewerRole, setViewerRole] = useState<string>("");
-  const [viewerHasGarantiaLive, setViewerHasGarantiaLive] = useState<boolean>(viewerHasGarantia);
   const [favoriteLoteIds, setFavoriteLoteIds] = useState<Set<string>>(new Set());
   const [compareLoteIds, setCompareLoteIds] = useState<Set<string>>(new Set());
-  const [quickCustomIncrements, setQuickCustomIncrements] = useState("3");
-  const [soundEnabled, setSoundEnabled] = useState(false);
   const [roomView, setRoomView] = useState<"compacta" | "detallada">("detallada");
   const [liveNotices, setLiveNotices] = useState<LiveNotice[]>([]);
-  const lastSoundBucketRef = useRef<number | null>(null);
   const lastTopOfferByLoteRef = useRef<Record<string, { id: string; userId: string | null; monto: number }>>({});
 
   const active = useMemo(() => lotes.find((l) => l.id === activeId) ?? null, [lotes, activeId]);
@@ -395,41 +389,6 @@ export function AuctionLiveRoom({
   }, [viewerId]);
 
   useEffect(() => {
-    setViewerHasGarantiaLive(Boolean(viewerHasGarantia));
-  }, [viewerHasGarantia]);
-
-  useEffect(() => {
-    if (!viewerId) {
-      setViewerHasGarantiaLive(false);
-      return;
-    }
-    const sb = createClient();
-    if (!sb) return;
-
-    let cancelled = false;
-    const refreshGarantia = async () => {
-      const { data } = await sb
-        .from("profiles")
-        .select("garantia_aprobada")
-        .eq("id", viewerId)
-        .maybeSingle();
-      if (!cancelled) {
-        setViewerHasGarantiaLive(data?.garantia_aprobada === true);
-      }
-    };
-
-    void refreshGarantia();
-    const pollId = window.setInterval(() => {
-      void refreshGarantia();
-    }, 15000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(pollId);
-    };
-  }, [viewerId]);
-
-  useEffect(() => {
     if (!viewerId || !lotes.length) {
       setFavoriteLoteIds(new Set());
       return;
@@ -542,7 +501,7 @@ export function AuctionLiveRoom({
     lastTopOfferByLoteRef.current[active.id] = current;
   }, [active?.id, topForActive, viewerId, pushLiveNotice]);
 
-  async function placeBid() {
+  async function placeMinimumBid() {
     if (!active || !viewerId) {
       setMsg("Inicie sesión para ofertar.");
       return;
@@ -553,12 +512,7 @@ export function AuctionLiveRoom({
     }
     setBusy(true);
     setMsg(null);
-    const monto = parseCurrencyInput(amount);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      setMsg("Monto inválido.");
-      setBusy(false);
-      return;
-    }
+    const monto = Math.max(0, Math.round(minNext));
     const sb = createClient();
     if (!sb) {
       setMsg("No se pudo iniciar la conexión. Actualice la página o intente más tarde.");
@@ -628,7 +582,6 @@ export function AuctionLiveRoom({
       setBusy(false);
       return;
     }
-    setAmount("");
     if (res.ends_at_extendido) {
       setRemate((prev) => ({ ...prev, ends_at: res.ends_at_extendido as string }));
     }
@@ -661,6 +614,13 @@ export function AuctionLiveRoom({
       setMsg("Tope automático inválido.");
       return;
     }
+    const approve = await confirm({
+      title: "Confirmar puja automática",
+      message: `Se activará puja automática con tope máximo ${formatClp(monto)}.\n¿Deseas continuar?`,
+      confirmText: "Sí, activar",
+      cancelText: "Cancelar",
+    });
+    if (!approve) return;
     setBusyProxy(true);
     setMsg(null);
     const sb = createClient();
@@ -706,9 +666,7 @@ export function AuctionLiveRoom({
     started;
   const lotCanBid = !!active && !["pausado", "adjudicado", "vendido", "anulado"].includes(String(active?.estado ?? ""));
   const canBidNow = canBid && lotCanBid;
-  const lastWindowSeconds = cfg?.last_minutes_notice_seconds ?? 300;
   const bidMsg = msg ? formatBidMessage(msg) : null;
-  const customQuick = Math.max(1, Math.min(20, Number(quickCustomIncrements) || 1));
   const viewerOffersOnlyMode =
     !!viewerId && isAdminLikeRole(viewerRole) && !isClienteRemateRole(viewerRole);
   const viewerIsClienteRemate = !!viewerId && isClienteRemateRole(viewerRole);
@@ -720,38 +678,6 @@ export function AuctionLiveRoom({
     () => String(remate.estado ?? "").replaceAll("_", " ") || "—",
     [remate.estado],
   );
-
-  useEffect(() => {
-    if (!soundEnabled || !isLastTenMinutes || countdownLive == null || countdownLive <= 0) return;
-    const bucket = Math.floor(countdownLive / 60000);
-    if (bucket === lastSoundBucketRef.current) return;
-    lastSoundBucketRef.current = bucket;
-    try {
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = 880;
-      gain.gain.value = 0.02;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      window.setTimeout(() => {
-        osc.stop();
-        void ctx.close();
-      }, 140);
-    } catch {
-      // Ignorar si el navegador bloquea autoplay de audio.
-    }
-  }, [soundEnabled, isLastTenMinutes, countdownLive]);
-
-  function setQuickBid(multiplier: number) {
-    const safeMult = Math.max(1, Math.round(multiplier));
-    const next = minNext + incrementoPorLote(active) * (safeMult - 1);
-    setAmount(formatCurrencyInput(String(Math.max(minNext, next))));
-  }
 
   async function toggleFavorite(loteId: string) {
     if (!viewerId) {
@@ -1036,10 +962,11 @@ export function AuctionLiveRoom({
                           <p className="mt-1 text-xs text-rose-700">Sugerencia automática: {formatClp(minNext)}</p>
                           <button
                             type="button"
-                            onClick={() => setAmount(formatCurrencyInput(String(minNext)))}
-                            className="mt-2 rounded-md border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                            onClick={() => void placeMinimumBid()}
+                            disabled={!canBidNow || busy}
+                            className="mt-2 rounded-md border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Usar sugerencia
+                            {busy ? "Enviando..." : "Usar sugerencia"}
                           </button>
                         </>
                       ) : (
@@ -1055,10 +982,11 @@ export function AuctionLiveRoom({
                     <div className="mt-4 border-t border-neutral-100 pt-4 space-y-3">
                       <button
                         type="button"
-                        onClick={() => setQuickBid(1)}
+                        onClick={() => void placeMinimumBid()}
+                        disabled={!canBidNow || busy}
                         className="w-full rounded-lg border border-[#0b3352] bg-[#0f3d5c] px-3 py-2.5 text-sm font-extrabold text-white shadow-md shadow-[#0f3d5c]/25 transition hover:-translate-y-[1px] hover:bg-[#0b3352] focus:outline-none focus:ring-2 focus:ring-[#33C7E3]/60 focus:ring-offset-1"
                       >
-                        Oferta minima ({formatClp(minNext)})
+                        {busy ? "Enviando..." : `Oferta minima (${formatClp(minNext)})`}
                       </button>
                       <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                         <p className="text-xs font-semibold text-neutral-700">Puja automática (tope máximo)</p>
@@ -1072,7 +1000,7 @@ export function AuctionLiveRoom({
                           />
                           <button
                             type="button"
-                            disabled={busyProxy}
+                            disabled={busyProxy || !canBidNow}
                             onClick={() => void setProxyBid()}
                             className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
                           >
@@ -1080,7 +1008,37 @@ export function AuctionLiveRoom({
                           </button>
                         </div>
                       </div>
+                      {!canBidNow ? (
+                        <p className="text-xs font-semibold text-amber-700">
+                          {!remateAbierto
+                            ? "Este remate aún no está habilitado para ofertar."
+                            : !lotCanBid
+                              ? "Este lote está pausado/cerrado y no recibe ofertas."
+                              : countdownLive !== null && countdownLive <= 0
+                                ? "El remate ya cerró según la fecha de fin."
+                                : tick === null
+                                  ? "Cargando estado del remate…"
+                                  : !viewerId
+                                    ? "Inicie sesión para ofertar."
+                                    : remate.starts_at && new Date(remate.starts_at).getTime() > tick
+                                      ? "Esperando la hora de inicio."
+                                      : "No puede ofertar en este momento."}
+                        </p>
+                      ) : null}
                     </div>
+                    {bidMsg ? (
+                      <div
+                        className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                          bidMsg.tone === "success"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : bidMsg.tone === "error"
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : "border-sky-200 bg-sky-50 text-sky-700"
+                        }`}
+                      >
+                        {bidMsg.text}
+                      </div>
+                    ) : null}
                   </div>
 
                   {viewerOffersOnlyMode ? (
@@ -1165,114 +1123,7 @@ export function AuctionLiveRoom({
                         )}
                       </ul>
                     </div>
-                  ) : (
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                      <h3 className="text-lg font-bold text-neutral-900">Tu oferta</h3>
-                      {!canBidNow ? (
-                        <p className="mt-2 text-sm text-neutral-600">
-                          {!remateAbierto
-                            ? "Este remate aún no está habilitado para ofertar."
-                            : !lotCanBid
-                              ? "Este lote está pausado/cerrado y no recibe ofertas."
-                            : countdownLive !== null && countdownLive <= 0
-                              ? "El remate ya cerró según la fecha de fin."
-                              : tick === null
-                                ? "Cargando estado del remate…"
-                                : !viewerId
-                                  ? "Inicie sesión para ofertar."
-                                  : remate.starts_at && new Date(remate.starts_at).getTime() > tick
-                                    ? "Esperando la hora de inicio."
-                                    : "No puede ofertar en este momento."}
-                        </p>
-                      ) : (
-                        <>
-                          {!viewerHasGarantiaLive ? (
-                            <p className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              Si tu garantía fue aprobada recientemente, puedes intentar ofertar. La validación final se realiza al enviar la puja.
-                            </p>
-                          ) : null}
-                          {countdownLive !== null && countdownLive > 0 && countdownLive <= lastWindowSeconds * 1000 ? (
-                            <p className="mt-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              Últimos minutos: una nueva oferta puede extender el cierre automáticamente.
-                            </p>
-                          ) : null}
-                          <label className="mt-3 block text-sm text-neutral-600">
-                            Monto
-                            <input
-                              value={amount}
-                              onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
-                              inputMode="numeric"
-                              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                              placeholder={formatCurrencyInput(String(Math.ceil(minNext))) || "$0"}
-                            />
-                          </label>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setQuickBid(2)}
-                                className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                              >
-                                + 1 incremento
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setQuickBid(3)}
-                                className="rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                              >
-                                + 2 incrementos
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setQuickBid(customQuick)}
-                                className="rounded-md border border-[#009ade]/30 bg-[#009ade]/10 px-2.5 py-1.5 text-xs font-semibold text-[#006a98] hover:bg-[#009ade]/15"
-                              >
-                                + {customQuick - 1} incrementos (personalizado)
-                              </button>
-                          </div>
-                          <label className="mt-2 block text-xs text-neutral-600">
-                            Oferta rápida personalizada (cantidad de incrementos)
-                            <input
-                              value={quickCustomIncrements}
-                              onChange={(e) => setQuickCustomIncrements(e.target.value)}
-                              inputMode="numeric"
-                              className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-neutral-900"
-                              placeholder="Ej: 4"
-                            />
-                          </label>
-                          <label className="mt-2 inline-flex items-center gap-2 text-xs text-neutral-600">
-                            <input
-                              type="checkbox"
-                              checked={soundEnabled}
-                              onChange={(e) => setSoundEnabled(e.target.checked)}
-                              className="h-4 w-4 rounded border-neutral-300 text-[#009ade] focus:ring-[#009ade]"
-                            />
-                            Activar alerta sonora en últimos minutos
-                          </label>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void placeBid()}
-                            className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#33C7E3] to-[#2ab0c9] py-3 text-sm font-bold text-[#0f1f2c] disabled:opacity-50"
-                          >
-                            {busy ? "Enviando…" : "Confirmar oferta"}
-                          </button>
-                        </>
-                      )}
-                    {bidMsg ? (
-                      <div
-                        className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
-                          bidMsg.tone === "success"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : bidMsg.tone === "error"
-                              ? "border-rose-200 bg-rose-50 text-rose-700"
-                              : "border-sky-200 bg-sky-50 text-sky-700"
-                        }`}
-                      >
-                        {bidMsg.text}
-                      </div>
-                    ) : null}
-                    </div>
-                  )}
+                  ) : null}
 
                   {showPublicOfferSummary ? (
                     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
