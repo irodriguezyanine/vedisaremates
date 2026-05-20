@@ -4,6 +4,7 @@ export type ListaUsuarioRow = {
   email: string | null;
   nombre: string | null;
   rol: string | null;
+  empresa?: string | null;
   created_at: string | null;
   must_change_password?: boolean | null;
   garantia_aprobada?: boolean | null;

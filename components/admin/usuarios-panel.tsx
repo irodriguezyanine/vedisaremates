@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/public-env";
 
 type TabKey = "staff" | "cliente_remate" | "cliente_empresa";
-type SortKey = "email" | "nombre" | "rol" | "garantia" | "created_at";
+type SortKey = "email" | "nombre" | "rol" | "empresa" | "garantia" | "created_at";
 type SortDir = "asc" | "desc";
 
 type ImportRow = {
@@ -730,6 +730,7 @@ export function UsuariosPanel() {
       const allCols = [
         u.email ?? "",
         u.nombre ?? "",
+        u.empresa ?? "",
         formatRoleLabel(u.rol),
         u.created_at ? new Date(u.created_at).toLocaleDateString("es-CL") : "",
       ]
@@ -760,6 +761,9 @@ export function UsuariosPanel() {
       } else if (sortKey === "rol") {
         av = normalize(formatRoleLabel(a.rol));
         bv = normalize(formatRoleLabel(b.rol));
+      } else if (sortKey === "empresa") {
+        av = normalize(a.empresa ?? "");
+        bv = normalize(b.empresa ?? "");
       } else if (sortKey === "created_at") {
         const at = a.created_at ? new Date(a.created_at).getTime() : 0;
         const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -825,11 +829,12 @@ export function UsuariosPanel() {
 
   function exportFilteredCsv() {
     const lines = [
-      "Email;Nombre;Rol;Alta",
+      "Email;Nombre;Empresa;Rol;Alta",
       ...filteredRows.map((u) =>
         [
           csvSafe(u.email ?? ""),
           csvSafe(u.nombre ?? ""),
+          csvSafe(u.empresa ?? ""),
           csvSafe(formatRoleLabel(u.rol)),
           csvSafe(u.created_at ? new Date(u.created_at).toLocaleDateString("es-CL") : ""),
         ].join(";"),
@@ -1499,11 +1504,19 @@ export function UsuariosPanel() {
                     Nombre <span className="text-[11px]">{sortIndicator("nombre")}</span>
                   </button>
                 </th>
-                <th className="px-4 py-2 font-medium">
-                  <button type="button" onClick={() => onSortColumn("rol")} className="inline-flex items-center gap-1 hover:text-neutral-300">
-                    Rol <span className="text-[11px]">{sortIndicator("rol")}</span>
-                  </button>
-                </th>
+                {activeTab === "cliente_empresa" ? (
+                  <th className="px-4 py-2 font-medium">
+                    <button type="button" onClick={() => onSortColumn("empresa")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                      Empresa <span className="text-[11px]">{sortIndicator("empresa")}</span>
+                    </button>
+                  </th>
+                ) : (
+                  <th className="px-4 py-2 font-medium">
+                    <button type="button" onClick={() => onSortColumn("rol")} className="inline-flex items-center gap-1 hover:text-neutral-300">
+                      Rol <span className="text-[11px]">{sortIndicator("rol")}</span>
+                    </button>
+                  </th>
+                )}
                 {activeTab === "cliente_remate" ? (
                   <th className="px-4 py-2 font-medium">
                     <button
@@ -1543,9 +1556,13 @@ export function UsuariosPanel() {
                   ) : null}
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2">{u.nombre}</td>
-                  <td className="px-4 py-2">
-                    <span className="rounded bg-white/10 px-2 py-0.5 text-xs">{formatRoleLabel(u.rol)}</span>
-                  </td>
+                  {activeTab === "cliente_empresa" ? (
+                    <td className="px-4 py-2">{u.empresa?.trim() ? u.empresa : "—"}</td>
+                  ) : (
+                    <td className="px-4 py-2">
+                      <span className="rounded bg-white/10 px-2 py-0.5 text-xs">{formatRoleLabel(u.rol)}</span>
+                    </td>
+                  )}
                   {activeTab === "cliente_remate" ? (
                     <td className="px-4 py-2">
                       {u.garantia_aprobada === true ? (

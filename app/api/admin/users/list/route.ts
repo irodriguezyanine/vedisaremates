@@ -29,7 +29,20 @@ export async function GET() {
   // de clasificación/filtrado de usuarios que espera el panel.
   const { data: rpcRows, error: rpcError } = await supabase.rpc("listar_usuarios");
   if (!rpcError && Array.isArray(rpcRows)) {
-    return NextResponse.json({ ok: true, rows: (rpcRows as ListaUsuarioRow[]) || [] });
+    const rows = ((rpcRows as ListaUsuarioRow[]) || []).map((r) => ({ ...r }));
+    const ids = rows.map((r) => String(r.id ?? "").trim()).filter(Boolean);
+    if (!ids.length) return NextResponse.json({ ok: true, rows });
+
+    const { data: empresasRows } = await supabase.from("profiles").select("id, empresa").in("id", ids);
+    const empresaById = new Map<string, string | null>();
+    for (const row of (empresasRows ?? []) as Array<{ id: string; empresa: string | null }>) {
+      empresaById.set(String(row.id), row.empresa ?? null);
+    }
+    const merged = rows.map((row) => ({
+      ...row,
+      empresa: empresaById.get(String(row.id)) ?? null,
+    }));
+    return NextResponse.json({ ok: true, rows: merged });
   }
 
   // Camino B (fallback técnico): SERVICE_ROLE presente => evita caída total si el RPC falla.
@@ -41,7 +54,7 @@ export async function GET() {
       const to = from + PAGE_SIZE - 1;
       const { data: chunk, error: profilesError } = await admin
         .from("profiles")
-        .select("id, nombre, rol, created_at, must_change_password, garantia_aprobada")
+        .select("id, nombre, rol, empresa, created_at, must_change_password, garantia_aprobada")
         .order("created_at", { ascending: false })
         .range(from, to);
       if (profilesError) return NextResponse.json({ ok: false, error: profilesError.message }, { status: 500 });
