@@ -1357,30 +1357,6 @@ export function AuctionLiveRoom({
                       ) : null}
                     </div>
                   ) : null}
-
-                  {roomView === "detallada" && viewerOffersOnlyMode ? (
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-                  <h3 className="text-lg font-bold text-neutral-900">Actividad reciente</h3>
-                  <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
-                    {listForActive.length === 0 ? (
-                      <li className="text-neutral-500">Aún no hay ofertas en este lote.</li>
-                    ) : (
-                      listForActive.map((o) => (
-                        <li
-                          key={o.id}
-                          className={`flex justify-between gap-2 rounded-lg border border-neutral-100 px-2 py-1 ${
-                            viewerId && o.user_id === viewerId ? "bg-[#fff9e6] border-[#FFC600]/40" : ""
-                          }`}
-                        >
-                          <span className="text-neutral-500">{formatClTime(o.created_at)}</span>
-                          <span className="font-bold text-neutral-900">{formatClp(o.monto)}</span>
-                          <span className="text-[10px] text-neutral-400">oferta</span>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                </div>
-                  ) : null}
               </aside>
             </div>
 
