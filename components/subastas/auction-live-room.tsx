@@ -103,13 +103,22 @@ const OFFERS_FALLBACK_POLL_MS = 5000;
 const GASTOS_OPERACIONALES_CLP = 190000;
 const AVALUO_FISCAL_SOURCE_KEYS = [
   "avaluo_fiscal",
+  "avaluofiscal",
+  "avaluo_fiscal_tasacion",
+  "avaluofiscaltasacion",
   "avaluo_tasacion",
   "avaluo_tasacion_fiscal",
+  "tasacion_avaluo_fiscal",
+  "tasacionfiscal",
   "tasacion_fiscal",
   "valor_avaluo_fiscal",
+  "valor_fiscal",
+  "valor_fiscal_tasacion",
   "valor_tasacion_fiscal",
   "monto_avaluo_fiscal",
+  "monto_tasacion_fiscal",
   "fiscal_avaluo",
+  "avaluo_fiscal_remate",
 ] as const;
 
 function formatCountdown(ms: number | null): string {
@@ -159,15 +168,24 @@ function toPositiveMoney(value: unknown): number | null {
   return null;
 }
 
-function readAvaluoFiscal(inventario: InventarioRow | null | undefined): number | null {
-  if (!inventario || typeof inventario !== "object") return null;
-  const row = inventario as Record<string, unknown>;
+function readAvaluoFiscal(...sources: unknown[]): number | null {
   const wanted = new Set(AVALUO_FISCAL_SOURCE_KEYS.map((key) => normalizeLooseKey(key)));
-
-  for (const [key, rawValue] of Object.entries(row)) {
-    if (!wanted.has(normalizeLooseKey(key))) continue;
-    const parsed = toPositiveMoney(rawValue);
-    if (parsed != null) return parsed;
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue;
+    const row = source as Record<string, unknown>;
+    for (const [key, rawValue] of Object.entries(row)) {
+      if (!wanted.has(normalizeLooseKey(key))) continue;
+      const parsed = toPositiveMoney(rawValue);
+      if (parsed != null) return parsed;
+    }
+    const nestedInventario = row.inventario;
+    if (nestedInventario && typeof nestedInventario === "object") {
+      for (const [key, rawValue] of Object.entries(nestedInventario as Record<string, unknown>)) {
+        if (!wanted.has(normalizeLooseKey(key))) continue;
+        const parsed = toPositiveMoney(rawValue);
+        if (parsed != null) return parsed;
+      }
+    }
   }
   return null;
 }
@@ -519,7 +537,7 @@ export function AuctionLiveRoom({
   const ofertaReferencia = Math.max(0, Math.round(minNext));
   const detalleComision = Math.round(ofertaReferencia * 0.12);
   const detalleIvaComision = Math.round(detalleComision * 0.19);
-  const detalleAvaluoFiscal = readAvaluoFiscal(active?.inventario);
+  const detalleAvaluoFiscal = readAvaluoFiscal(active, active?.inventario);
   const detalleImpuestoTransferencia =
     detalleAvaluoFiscal != null ? Math.round(detalleAvaluoFiscal * 0.015) : null;
   const detalleTotalPagar =
