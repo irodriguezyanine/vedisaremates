@@ -4,7 +4,6 @@ import type { ReactNode, SVGProps } from "react";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 
-import { formatClp } from "@/lib/format-clp";
 import {
   normalizeDescripcionIntegrationText,
   sanitizeBasicDescripcionHtml,
@@ -14,31 +13,12 @@ import type { InventarioFichaSection } from "@/lib/inventario-ficha";
 import {
   applyFichaPublicConfig,
   buildInventarioFichaSections,
-  buildLotePortalRows,
   normalizeMapKey,
   type LotePortalContext,
   type RematePortalContext,
 } from "@/lib/inventario-ficha";
+import { LoteVehicleSummary } from "@/components/subastas/lote-vehicle-summary";
 import type { InventarioRow } from "@/lib/portal-types";
-
-const TZ = { timeZone: "America/Santiago" } satisfies Intl.DateTimeFormatOptions;
-
-function fechaLargaCl(iso?: string | null): string | null {
-  if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleString("es-CL", {
-      ...TZ,
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return null;
-  }
-}
 
 function IconCar(props: SVGProps<SVGSVGElement>) {
   return (
@@ -257,17 +237,9 @@ export function InventarioFichaTecnica({
 }: InventarioFichaTecnicaProps) {
   const rawSections = useMemo(() => buildInventarioFichaSections(inventario), [inventario]);
 
-  const rawPortalRows = useMemo(() => {
-    if (!lotePortal || !rematePortal) return [];
-    return buildLotePortalRows(lotePortal, rematePortal, {
-      fechaLarga: fechaLargaCl,
-      clp: (n) => (n != null ? formatClp(n) : null),
-    });
-  }, [lotePortal, rematePortal]);
-
-  const { sections, portalRows } = useMemo(
-    () => applyFichaPublicConfig(rawSections, rawPortalRows, fichaDisplayConfig),
-    [rawSections, rawPortalRows, fichaDisplayConfig],
+  const { sections } = useMemo(
+    () => applyFichaPublicConfig(rawSections, [], fichaDisplayConfig),
+    [rawSections, fichaDisplayConfig],
   );
 
   const tabbedSections = useMemo(() => sections.filter((sec) => isTabbedSectionTitle(sec.title)), [sections]);
@@ -290,19 +262,8 @@ export function InventarioFichaTecnica({
 
   return (
     <div className="space-y-10">
-      {portalRows.length ? (
-        <section className="space-y-4" aria-labelledby="ficha-lote-portal">
-          <div className="flex items-center gap-3">
-            {sectionGlyph("Este lote")}
-            <div>
-              <h3 id="ficha-lote-portal" className="text-lg font-black tracking-tight text-neutral-900">
-                Este lote en Vedisa Remates
-              </h3>
-              <p className="mt-1 text-sm text-neutral-500">Datos públicos del lote y del calendario del remate.</p>
-            </div>
-          </div>
-          <CatalogBlock rows={portalRows} />
-        </section>
+      {lotePortal && rematePortal ? (
+        <LoteVehicleSummary inventario={inventario} lotePortal={lotePortal} rematePortal={rematePortal} />
       ) : null}
 
       {transferenciaDisclaimer ? (

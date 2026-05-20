@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { VehicleSpecGrid } from "@/components/vehicle-spec-grid";
 import { getInventarioStaticImageUrls, preferredThumbnailUrl } from "@/lib/inventario-media";
 import { etiquetaCategoriaHumana } from "@/lib/nav-ver-stats";
 import type { InventarioRow } from "@/lib/portal-types";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/public-env";
+import { getInventarioField, getVehicleSpecs } from "@/lib/vehicle-spec-summary";
 
 type InventarioAnyRow = InventarioRow & Record<string, unknown>;
 type BoolFilter = "todos" | "si" | "no";
@@ -23,27 +25,6 @@ type SearchRow = {
   inventario: InventarioAnyRow;
   remateId: string | null;
   remateEstado: string | null;
-};
-
-type SpecIconName =
-  | "km"
-  | "year"
-  | "fuel"
-  | "gear"
-  | "engineTest"
-  | "movementTest"
-  | "conditioned"
-  | "singleOwner"
-  | "airConditioning"
-  | "keys"
-  | "traction"
-  | "airbags";
-
-type SearchSpec = {
-  key: string;
-  label: string;
-  icon: SpecIconName;
-  wide?: boolean;
 };
 
 const IMAGE_HINT_KEYS = [
@@ -155,190 +136,6 @@ function thumbnailCandidates(row: InventarioAnyRow): string[] {
   return candidates;
 }
 
-type RawEntry = {
-  key: string;
-  path: string;
-  value: unknown;
-};
-
-function normalizeKeyToken(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[\s\-.]+/g, "_")
-    .trim();
-}
-
-function collectRawEntries(input: unknown, parentPath = ""): RawEntry[] {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return [];
-  const source = input as Record<string, unknown>;
-  const entries: RawEntry[] = [];
-  for (const [rawKey, rawValue] of Object.entries(source)) {
-    const key = normalizeKeyToken(rawKey);
-    const path = parentPath ? `${parentPath}.${key}` : key;
-    entries.push({ key, path, value: rawValue });
-    if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
-      entries.push(...collectRawEntries(rawValue, path));
-    }
-  }
-  return entries;
-}
-
-function asDisplayValue(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "boolean") return value ? "si" : "no";
-  return null;
-}
-
-function getFirstRawValue(entries: RawEntry[], keys: string[]): string | null {
-  const normalizedKeys = keys.map((key) => normalizeKeyToken(key));
-  for (const alias of normalizedKeys) {
-    const exact = entries.find((entry) => entry.path === alias || entry.key === alias);
-    const exactValue = asDisplayValue(exact?.value);
-    if (exactValue) return exactValue;
-    const contains = entries.find((entry) => entry.path.includes(alias) || alias.includes(entry.key));
-    const containsValue = asDisplayValue(contains?.value);
-    if (containsValue) return containsValue;
-  }
-  return null;
-}
-
-function statusLabel(value: string | null, opts: { yes: string; no?: string }): string | null {
-  if (!value) return null;
-  const status = normalizeBinaryStatus(value);
-  if (status === "yes") return opts.yes;
-  if (status === "no") return opts.no ?? `SIN ${opts.yes}`;
-  const cleaned = value.trim();
-  return cleaned ? cleaned.toUpperCase() : null;
-}
-
-function normalizeMileage(value: string | null): string | null {
-  if (!value) return null;
-  const compact = value.trim();
-  if (!compact) return null;
-  const digits = compact.replace(/[^\d]/g, "");
-  if (!digits) return compact;
-  return `${Number(digits).toLocaleString("es-CL")} kms.`;
-}
-
-function normalizeBinaryStatus(value: string | null): "yes" | "no" | "unknown" | null {
-  if (!value) return null;
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  if (!normalized) return null;
-  if (["si", "yes", "true", "1", "arranca", "se mueve", "se desplaza"].includes(normalized)) return "yes";
-  if (["no", "false", "0", "no arranca", "no se mueve", "no se desplaza"].includes(normalized)) return "no";
-  return "unknown";
-}
-
-function getMotorTestLabel(value: string | null): string | null {
-  const status = normalizeBinaryStatus(value);
-  if (!status) return null;
-  if (status === "yes") return "MOTOR ARRANCA";
-  if (status === "no") return "MOTOR NO ARRANCA";
-  return value?.trim().toUpperCase() ?? null;
-}
-
-function getMovementTestLabel(value: string | null): string | null {
-  const status = normalizeBinaryStatus(value);
-  if (!status) return null;
-  if (status === "yes") return "SE DESPLAZA";
-  if (status === "no") return "NO SE DESPLAZA";
-  return value?.trim().toUpperCase() ?? null;
-}
-
-function getVehicleSpecs(row: InventarioAnyRow): SearchSpec[] {
-  const raw = row as Record<string, unknown>;
-  const entries = collectRawEntries(raw);
-  const mileage = normalizeMileage(
-    getFirstRawValue(entries, ["kilometraje", "km", "kms", "odometro", "odómetro", "glo3d.kilometraje", "odometro_actual"]),
-  );
-  const year = getFirstRawValue(entries, ["ano", "anio", "year", "glo3d.year"]);
-  const fuel = getFirstRawValue(entries, ["combustible", "fuel", "glo3d.combustible", "tipo_combustible"]);
-  const transmission = getFirstRawValue(entries, [
-    "transmision",
-    "transmisión",
-    "caja",
-    "transmission",
-    "glo3d.transmision",
-    "tipo_caja",
-  ]);
-  const motorTestRaw = getFirstRawValue(entries, [
-    "prueba_motor",
-    "pdm",
-    "pruebaMotor",
-    "motor_test",
-    "glo3d.prueba_motor",
-    "motor_arranca",
-    "arranca",
-    "motor_funciona",
-  ]);
-  const movementTestRaw = getFirstRawValue(entries, [
-    "prueba_desplazamiento",
-    "pdd",
-    "pruebaDesplazamiento",
-    "movement_test",
-    "glo3d.prueba_desplazamiento",
-    "se_desplaza",
-    "desplaza",
-    "movimiento",
-  ]);
-  const conditionedRaw = getFirstRawValue(entries, ["condicionado", "glo3d.condicionado", "acondicionado"]);
-  const singleOwnerRaw = getFirstRawValue(entries, [
-    "unico_propietario",
-    "single_owner",
-    "one_owner",
-    "glo3d.unico_propietario",
-    "duenos",
-    "dueno_unico",
-  ]);
-  const airConditioningRaw = getFirstRawValue(entries, [
-    "aire_acondicionado",
-    "air_conditioning",
-    "has_ac",
-    "ac",
-    "glo3d.aire_acondicionado",
-    "aire",
-  ]);
-  const keysRaw = getFirstRawValue(entries, [
-    "llaves",
-    "keys",
-    "has_keys",
-    "tiene_llaves",
-    "glo3d.llaves",
-    "con_llaves",
-    "cantidad_llaves",
-  ]);
-  const tractionRaw = getFirstRawValue(entries, ["traccion", "traction", "glo3d.traccion", "traccion_4x4", "4x4"]);
-  const airbagsRaw = getFirstRawValue(entries, ["estado_airbags", "airbags", "eda", "glo3d.estado_airbags", "airbag"]);
-  const motorTest = getMotorTestLabel(motorTestRaw);
-  const movementTest = getMovementTestLabel(movementTestRaw);
-  const conditioned = statusLabel(conditionedRaw, { yes: "ACONDICIONADO", no: "NO ACONDICIONADO" });
-  const singleOwner = statusLabel(singleOwnerRaw, { yes: "UNICO DUEÑO", no: "MULTIPLES DUEÑOS" });
-  const airConditioning = statusLabel(airConditioningRaw, { yes: "AIRE ACONDICIONADO", no: "SIN AIRE ACONDICIONADO" });
-  const keys = statusLabel(keysRaw, { yes: "CON LLAVES", no: "SIN LLAVES" });
-
-  const specs: SearchSpec[] = [];
-  if (mileage) specs.push({ key: "km", label: mileage, icon: "km" });
-  if (year) specs.push({ key: "year", label: year, icon: "year" });
-  if (fuel) specs.push({ key: "fuel", label: fuel.toUpperCase(), icon: "fuel" });
-  if (transmission) specs.push({ key: "gear", label: transmission.toUpperCase(), icon: "gear" });
-  if (motorTest) specs.push({ key: "engineTest", label: motorTest, icon: "engineTest", wide: true });
-  if (movementTest) specs.push({ key: "movementTest", label: movementTest, icon: "movementTest", wide: true });
-  if (conditioned) specs.push({ key: "conditioned", label: conditioned, icon: "conditioned", wide: true });
-  if (singleOwner) specs.push({ key: "singleOwner", label: singleOwner, icon: "singleOwner", wide: true });
-  if (airConditioning) specs.push({ key: "airConditioning", label: airConditioning, icon: "airConditioning", wide: true });
-  if (keys) specs.push({ key: "keys", label: keys, icon: "keys", wide: true });
-  if (tractionRaw) specs.push({ key: "traction", label: `TRACCION ${tractionRaw.toUpperCase()}`, icon: "traction", wide: true });
-  if (airbagsRaw) specs.push({ key: "airbags", label: `AIRBAGS: ${airbagsRaw.toUpperCase()}`, icon: "airbags", wide: true });
-  return specs.slice(0, 12);
-}
-
 function formatClpFromUnknown(value: unknown): string | null {
   if (typeof value === "number" && Number.isFinite(value)) return `$${value.toLocaleString("es-CL")}`;
   if (typeof value === "string" && value.trim()) {
@@ -365,7 +162,7 @@ function vehicleDescription(row: InventarioAnyRow): string {
 }
 
 function vehicleLotLabel(row: InventarioAnyRow): string | null {
-  const lot = getFirstRawValue(collectRawEntries(row), ["csv_lote", "lote", "lot", "numero_lote"]);
+  const lot = getInventarioField(row, ["csv_lote", "lote", "lot", "numero_lote"]);
   return lot ? `Lote ${lot}` : null;
 }
 
@@ -373,86 +170,6 @@ function vehicleCategoryLabel(row: InventarioAnyRow): string | null {
   const cat = String(row.categoria ?? "").trim();
   if (!cat) return null;
   return `Categoría: ${etiquetaCategoriaHumana(cat)}`;
-}
-
-function SpecIcon({ icon }: { icon: SpecIconName }) {
-  if (icon === "km")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <circle cx="10" cy="10" r="6.8" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M10 10 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <circle cx="10" cy="10" r="1.1" fill="currentColor" />
-      </svg>
-    );
-  if (icon === "year")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <rect x="3.5" y="4.5" width="13" height="11.5" rx="1.8" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M6.5 3.5v2M13.5 3.5v2M3.5 8h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  if (icon === "fuel")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <path d="M4.5 4.5h6v11h-6z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M10.5 7h1.8l1.4 1.6v4.4a1.7 1.7 0 0 0 3.4 0V9.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  if (icon === "engineTest")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <rect x="3.5" y="7" width="9.8" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M13.3 8.4h2.2M13.3 11.6h2.2M6.4 7V5.4M10.4 7V5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  if (icon === "movementTest")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <path d="M4 10h9.8M10.8 6l3.5 4-3.5 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  if (icon === "conditioned")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <path d="M4.2 10.2h11.6M10.5 4.4c2.8.2 5 2.5 5 5.3 0 2.9-2.3 5.3-5.3 5.3-2.8 0-5.1-2.2-5.3-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  if (icon === "singleOwner")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <circle cx="10" cy="6.5" r="2.3" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M5 15.3c.6-2.1 2.5-3.6 5-3.6s4.4 1.5 5 3.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  if (icon === "airConditioning")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <path d="M5 6.5h10M10 4.5v2M7.2 10.2l2.8-1.7 2.8 1.7M10 8.5V15.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  if (icon === "keys")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <circle cx="7" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M9.5 10h6M13.5 10v1.8M15.5 10v1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  if (icon === "traction")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <circle cx="6" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
-        <circle cx="14" cy="14" r="1.7" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M5.5 12h9l-1-3.2H7.1L5.5 12Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    );
-  if (icon === "airbags")
-    return (
-      <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#4f6b88]" fill="none" aria-hidden>
-        <circle cx="8.2" cy="7" r="2" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M4.8 14.8c.4-2 1.9-3.4 3.9-3.7M10.8 12.2h4.4M13 9.5v5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  return null;
 }
 
 function SearchCardImage({ inventario }: { inventario: InventarioAnyRow }) {
@@ -736,20 +453,7 @@ export function HeroInventorySearch({
                           <p className="line-clamp-2 min-h-[44px] text-[0.82rem] text-[#6c5440]">{vehicleDescription(row.inventario)}</p>
                         </div>
 
-                        {specs.length > 0 ? (
-                          <div className="rounded-lg border border-sky-200/80 bg-[#f3f9ff] p-2.5">
-                            <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-xs text-[#4f5a66]">
-                              {specs.map((spec) => (
-                                <div key={spec.key} className={`flex items-center gap-2 ${spec.wide ? "col-span-2" : ""}`}>
-                                  <SpecIcon icon={spec.icon} />
-                                  <span className={`${spec.wide ? "text-[0.7rem] font-semibold uppercase leading-tight" : "truncate"} text-[#51657d]`}>
-                                    {spec.label}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
+                        {specs.length > 0 ? <VehicleSpecGrid specs={specs} size="sm" /> : null}
                       </div>
 
                       <div className="mt-auto space-y-2.5 pt-2.5">
